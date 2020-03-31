@@ -1,0 +1,13 @@
+receptor = $RECEPTOR
+
+center_x = $CENT_X
+center_y = $CENT_Y
+center_z = $CENT_Z
+
+size_x = $DIST_X
+size_y = $DIST_Y
+size_z = $DIST_Z
+
+exhaustiveness = $EXH
+num_modes = $NUM
+energy_range = 30

@@ -1,0 +1,134 @@
+#CHECK arguments passed and do what user wants to do:
+# - files for first part (merging all ligands and creating folders)
+# - rdock for all rdock calculations including grid generation
+# - glide for glide steps,
+# - glidefix for fixed glide grid generation to avoid nodes SCHRODINGER errors
+### BY DEFAULT, no arguments passed, it will do files, rdock and glide
+if [ $# -eq 0 ];
+then
+        #default parameters
+        rdock=true
+        glide=true
+else
+        #if there are some arguments, all the parameters will be false but the ones the user adds
+        rdock=false
+        glide=false
+
+        #now check which one of them user wants to do
+        for  a in $*
+        do
+                if [ $a == rdock ];
+                then
+                        rdock=true
+                elif [ $a == glide ];
+                then
+                        glide=true
+                else
+                        echo UNKNOWN OPTIONS, please use rdock, glide or glidefix!
+                        exit 1;
+                fi;
+        done;
+fi;
+
+dudsys=$(perl -e '@F=split(/\//,$ENV{PWD});print "$F[5]\n"')
+
+
+##RDOCK###################################################
+	if $rdock; then
+		#makes folders for the results and the splitted ligands (if more than 200)
+		mkdir rdock/results
+		mkdir rdock/results/logs
+		mkdir rdock/split_ligands
+		#first of all, if the ligands are in a sdfile with more than 200 ligands, split it into different files
+		#otherwise, just make a copy of this sd file to the folder, for making easy following steps
+		#if [ $(grep -c '$$$$' $dudsys\_all_ligands.sd) -gt 200 ]
+		#for ligprep ligands
+		if [ $(grep -c '$$$$' $dudsys\_ligprep.sdf) -gt 200 ]
+		then 
+			sdsplit -200 -ordock/split_ligands/$dudsys\_split $dudsys\_ligprep.sdf > runDock_$dudsys.log
+		#	echo The ligands have been splitted into 200 molecules sd files, they can be found in rdock/split_ligands 
+		else
+			cp $dudsys\_ligprep.sdf rdock/split_ligands
+		fi
+
+		#add 0s to files for sorting
+		for f in rdock/split_ligands/$dudsys\_split[0-9].sd; do $(echo -n mv $f ''; echo $f | sed s/$dudsys\_split/$dudsys\_split000/); done
+	        for f in rdock/split_ligands/$dudsys\_split[0-9][0-9].sd; do $(echo -n mv $f ''; echo $f | sed s/$dudsys\_split/$dudsys\_split00/); done
+	        for f in rdock/split_ligands/$dudsys\_split[0-9][0-9][0-9].sd; do $(echo -n mv $f ''; echo $f | sed s/$dudsys\_split/$dudsys\_split0/); done
+
+
+		#foreach file in rdock split_ligands.. run createQin and save it in rdock folder.
+		cp $SCRIPTS/files/rdock_filter.txt rdock #copy filter txt to running folder
+		cd rdock/split_ligands/
+		#parameters:
+		#template.q in files, pathway to 
+		for file in *; 
+			do
+			python $SCRIPTS/rdock/createQin.py -t $SCRIPTS/files/qsub_rdock_template.sh -p /xpeople/sruiz/DUDe/$dudsys/rdock/$file -i $dudsys\_rdock.prm -r 100 -a $dudsys\_rdock.as -m $dudsys\_rdock.mol2 -l xtal-lig.sd -s dock.prm -n $file;
+			done
+		mv qsub_*.sh ../
+		cd ../../
+	
+		cp $SCRIPTS/addtoQ.csh rdock
+	
+		echo Files for rdock can be found in its folder.
+		echo To run it in marc:
+		echo -e "\tscptomarc rdock /xpeople/sruiz/DUDe/$dudsys\n\tmarc \"cd /xpeople/sruiz/DUDe/$dudsys/rdock; ./addtoQ.csh\"\n"
+	fi;
+		##next step is copying to marc and running both glide and rdock in there
+##GLIDE DOCKING##########################################
+	if $glide; then
+		##files needed for glide docking 
+		##Parameters:
+		# grid found in DUD folder in marc
+		# ligands also in DUD folder
+		# name stantardized for 'DUD'_glide_out.maegz
+		# 100 poses, NO cutoff of -4, and (nligans*nposes) best reported
+				
+		#nligands is the number of ligands in the input file and nrep is the maximum of poses to write in the output
+		#nligands=`grep -c '$$$$' $dudsys\_all_ligands.sd`
+		#ligprep is performed to all starting ligands
+		#nligands=`grep -c '$$$$' $dudsys\_ligprep.sdf`
+		#nrep=`echo $nligands*5000 | bc`
+
+		mkdir glide/input_files
+
+		#for each ligandfile splitted for rdock, create a job for running with glide	
+		for ligfilename in rdock/split_ligands/*;
+		do	
+			ligfile=`basename $ligfilename`	
+			ligname=`basename $ligfilename .sd`
+			#creates glide.in file to run docking
+			python $SCRIPTS/createGlideIn.py -g /xpeople/sruiz/DUDe/$dudsys/glide/$dudsys\_grid.zip -l /xpeople/sruiz/DUDe/$dudsys/rdock/split_ligands/$ligfile -f glide/input_files/$ligname\_glide.in -e -p 5000 -n 1000000 -o
+		done;
+		
+		#for each file created above, create a queue input file (one cpu each) steps of 5 cpus at the same time.	
+		for infile in glide/input_files/*.in;
+		do
+			inlig=`basename $infile`
+			lig_n=`basename $infile .in`
+			#creates q input file to submit in marc (5 cpus)
+			python $SCRIPTS/createQin_glide.py -t $SCRIPTS/files/qsub_glide_template.sh -c 1 -i $inlig -n glide/input_files/qsub_$lig_n.q -p /xpeople/sruiz/DUDe/$dudsys/glide/input_files
+		done
+		#moves both files to glide folder
+	fi;
+	
+	#sort of instructions to the user
+	echo "Files for running glide in marc named "$dudsys"_glide.in qsub_"$dudsys"_glide.sh (using 5CPUS), to run in marc:"
+		echo -e "\tscptomarc \"glide/"$dudsys"_glide.in glide/qsub_"$dudsys"_glide.sh\" /xpeople/sruiz/DUDe/$dudsys/glide/\n\tmarc \"cd /xpeople/sruiz/DUDe/$dudsys/glide/; qsub qsub_"$dudsys"_glide.sh\"\n"
+
+	
+
+######################################
+# VINA
+######################################
+
+	#create Q inputs for marc with 8cpus
+        #echo -n Creating queue input files for running VINA in the nodes...
+        mkdir vina/q_files
+        python $SCRIPTS/vina_Qin.py $dudsys $SCRIPTS/files/qsub_vina_serial_tmp.sh
+        #echo -e "\t\t\t\e[1;32mDone\e[0m"
+
+        echo For starting VINA docking in marc:
+        echo -e "\tscptomarc \"vina/q_files vina/start_vina.sh\" /xpeople/sruiz/DUDe/$dudsys/vina"
+        echo -e "\tmarc \"cd /xpeople/sruiz/DUDe/$dudsys/vina;sh start_vina.sh;\""

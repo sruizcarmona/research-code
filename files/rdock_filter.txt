@@ -1,0 +1,10 @@
+3
+if - -10 SCORE.INTER 1.0 if - SCORE.NRUNS 9 0.0 -1.0,
+if - -20 SCORE.INTER 1.0 if - SCORE.NRUNS 14 0.0 -1.0,
+if - SCORE.NRUNS 49 0.0 -1.0,
+2
+- SCORE.INTER -20,
+- SCORE.RESTR.CAVITY 1.0,
+
+## First, runs 3 consecutive steps, the first one is 10 runs until reach -15 of SCORE.INTER, if it is the case, then run 5 another runs (until 15 runs) to see if we reach -20 of SCORE.INTER. If it is, run untill 50 runs to freely sample the different conformations the molecule display.
+## For the printing information, only print out all those poses where SCORE.INTER is better than -20 (avoid excessive printing)
