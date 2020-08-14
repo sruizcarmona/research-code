@@ -1,0 +1,879 @@
+---
+title: "GSE26887 Microarray Analysis"
+# output: 
+#   html_notebook:
+#     toc: true
+#     toc_depth: 3
+#     toc_float: 
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     # code_folding: hide
+output:
+  epuRate::BAKER:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+# Human Dataset GSE26887
+
+https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE26887
+
+Study of this data, obtained from Diabetic and Non-Diabetic patients with HF.
+
+*** 
+
+# Preprocess Data
+
+## Load Libraries
+```{r}
+library(oligo)
+library(GEOquery)
+library(limma)
+library(RColorBrewer)
+library(cluster)
+library(biomaRt)
+library(purrr)
+library(gplots)
+library(genefilter)
+library(lattice)
+library(hugene10sttranscriptcluster.db)
+```
+
+## Read Input
+
+```{r}
+library(Biobase)
+library(GEOquery)
+
+# load series and platform data from GEO
+
+gset <- getGEO("GSE26887", GSEMatrix =TRUE, getGPL=FALSE)
+if (length(gset) > 1) idx <- grep("GPL6244", attr(gset, "names")) else idx <- 1
+gset <- gset[[idx]]
+
+# group names for all samples in a series
+gsms <- "000001111111222222222222"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+sml <- paste("G", sml, sep="")  #set group names
+
+# order samples by group
+ex <- exprs(gset)[ , order(sml)]
+sml <- sml[order(sml)]
+fl <- as.factor(sml)
+labels <- c("control","diab","nondiab")
+
+# set parameters and draw the plot
+palette(c("#dfeaf4","#f4dfdf","#f2cb98", "#AABBCC"))
+dev.new(width=4+dim(gset)[[2]]/5, height=6)
+par(mar=c(2+round(max(nchar(sampleNames(gset)))/2),4,2,1))
+title <- paste ("GSE26887", '/', annotation(gset), " selected samples", sep ='')
+boxplot(ex, boxwex=0.6, notch=T, main=title, outline=FALSE, las=2, col=fl)
+legend("topleft", labels, fill=palette(), bty="n")
+```
+
+
+### Compare with local file
+
+Just to double check, I will compare the plot with predownloaded matrix for the same dataset
+
+```{r}
+preprocessedData <- getGEO(filename="GSE26887_series_matrix.txt")
+gsms <- "000001111111222222222222"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+sel <- which(sml != "X")
+preprocessedData <- preprocessedData[ , sel]
+```
+
+Same plots...
+
+```{r}
+boxplot(preprocessedData)
+MAplot(preprocessedData[, 1:5], pairs=TRUE)
+hist(preprocessedData)
+```
+
+```{r}
+head(exprs(preprocessedData) == ex)
+```
+
+# QC Plots
+
+Continue with downstream analysis (DE genes)
+Check if 2 groups can be clustered in different clusters
+
+## Hierarchical Cluster
+
+```{r}
+varFiltered <- varFilter (preprocessedData)
+# dim (varFiltered)
+# nrow (preprocessedData) / nrow (varFiltered)
+euc.dist <- dist (t(exprs(varFiltered)))
+#euc.dist
+corMat <- cor(exprs(varFiltered))
+#corMat
+cor.dist <- as.dist(1 - corMat)
+#cor.dist
+clust <- hclust(cor.dist)
+# clust
+# names(clust)
+# clust$order
+# plot(clust)
+clust.ward <- hclust(cor.dist,method = "ward.D")
+# par(mfrow=c(1,2))
+# plot(clust)
+# plot(clust.ward)
+# plot(clust,labels=paste("Sample", 1:4))
+pd <- pData(preprocessedData)
+# pd
+#View(pd)
+plot(clust,labels=gsub(", HEART FAILURE", "", pd$`disease state:ch1`))
+
+```
+
+## Heatmap
+
+check heatmap to idenfity any possible errors in replicates
+
+```{r}
+geneVar = rowSds(exprs(preprocessedData))
+# sd(exprs(preprocessedData)[1,])
+# geneVar[1]
+# sd(exprs(preprocessedData)[2,])
+# geneVar[2]
+# length(geneVar)
+highVarGenes = order (geneVar, decreasing = TRUE )[1:10]
+SampleGroup <-  gsub(", HEART FAILURE", "", pd$`disease state:ch1`)
+groupColours <-  c(rep("blue",5),rep("red",7),rep("orange",12))
+
+# heatmap.2 (as.matrix(exprs(preprocessedData)[highVarGenes, order(SampleGroup)]),
+         # labCol = SampleGroup[order(SampleGroup)])
+```
+
+```{r}
+hmcol <- rev(brewer.pal(11 , "RdBu"))
+# par(mar=c(10,4,2,1))
+heatmap.2 (as.matrix(exprs(preprocessedData)[highVarGenes, order(SampleGroup)]) ,
+         labCol = SampleGroup,
+         col=hmcol,scale='row',ColSideColors = as.character(groupColours),
+         trace="none", margins=c(8,8),key=T,density.info = "none")
+# heatmap.2 (as.matrix(exprs(preprocessedData)[highVarGenes,]) ,
+#          labCol = SampleGroup,
+#          col=hmcol,scale='row',ColSideColors = as.character(groupColours))
+```
+
+```{r}
+ supervised.clus <- pam(euc.dist,k=2)
+ # clusplot(supervised.clus)
+#supervised.clus$clustering
+```
+ 
+## PCA 
+
+```{r}
+pca.geneExpression <- prcomp(t(exprs(varFiltered)))
+# summary(pca.geneExpression)
+# plot(pca.geneExpression)
+# plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2])
+# plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+#      pch=16,col=as.character(groupColours))
+plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+     pch=16,col=as.character(groupColours))
+legend("topright",fill=unique(groupColours),legend=unique(SampleGroup),cex=0.8)
+text(pca.geneExpression$x[,1]+8,pca.geneExpression$x[,2],labels = pd$geo_accession,cex=0.8)
+# boxplot(pca.geneExpression$x[,1] ~ SampleGroup)
+
+```
+
+# Differential Expression
+
+DE analysis using limma
+create contrast matrix and run eBayes function
+
+```{r}
+# pData(preprocessedData)$source_name_ch1[4] <- pData(preprocessedData)$source_name_ch1[3]
+design <- model.matrix(~0+pData(preprocessedData)$`disease state:ch1`)
+#design
+colnames(design) <- c("CONTROL","DIAB_HF","NOND_HF")
+# design <- design[,1:2]
+design
+```
+
+## Diabetes HF vs Control
+
+```{r}
+fit1<-lmFit(preprocessedData, design)
+contrasts <- makeContrasts(DIAB_HF - CONTROL, levels=design)
+# contrasts <- makeContrasts(DIAB_HF - NOND_HF, levels=design)
+fit2 <- contrasts.fit(fit1, contrasts)
+fit3 <- eBayes(fit2)
+topTable(fit3)
+```
+
+Get results and find ENSEMBL code match for all probeids
+
+```{r}
+tab<-topTable(fit3, number = 3e6, adjust.method = "BH", sort.by = "p")
+pr<-row.names(tab)
+tab$symbol <- rapply(strsplit(tab$gene_assignment," // "), function(x) x[2])
+x <- hugene10sttranscriptclusterENSEMBL
+mapped_genes <- mappedkeys(x)
+xx <- as.list(x[mapped_genes])
+sy <- xx[pr]
+# head(sy,20)
+tab$ensemblid<- as.character(sapply(sy, function(k){k[1]}))
+# length(labels(sy)[!is.na(labels(sy))])
+head(tab,20)
+```
+
+Match also with ENTREZID
+
+```{r}
+xEN <- hugene10sttranscriptclusterENTREZID
+mapped_genesEN <- mappedkeys(xEN)
+xxEN <- as.list(xEN[mapped_genesEN])
+syEN <- xxEN[pr]
+length(labels(syEN)[!is.na(labels(syEN))])
+tab$entrezid<- as.character(sapply(syEN, function(k){k[1]}))
+head(tab,200)
+```
+
+Find the remaining ENSEMBL and ENTREZ codes from the symbol column
+
+```{r}
+human = useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+# genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","chromosome_name","start_position","end_position","description","transcript_length"),mart = human)
+genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","transcript_length"),mart = human)
+```
+```{r}
+library(dplyr)
+library(org.Hs.eg.db)
+ENS_ids.tmp <- mapIds(org.Hs.eg.db,
+                       keys=tab$symbol,
+                       column="ENSEMBL",
+                       keytype="SYMBOL",
+                       multiVals="first")
+ENS_ids.tmp[sapply(ENS_ids.tmp, is.null)] <- NA
+ENS_ids.tmp <- unlist(ENS_ids.tmp)
+tab$ensemblid[tab$ensemblid =="NULL"] <- NA
+tab$ensemblid <- coalesce(tab$ensemblid,ENS_ids.tmp)
+ENTREZ_ids.tmp <- mapIds(org.Hs.eg.db,
+                       keys=tab$symbol,
+                       column="ENTREZID",
+                       keytype="SYMBOL",
+                       multiVals="first")
+ENTREZ_ids.tmp[sapply(ENTREZ_ids.tmp, is.null)] <- NA
+ENTREZ_ids.tmp <- unlist(ENTREZ_ids.tmp)
+tab$entrezid[tab$entrezid =="NULL"] <- NA
+tab$entrezid <- coalesce(tab$entrezid,ENTREZ_ids.tmp)
+```
+
+```{r}
+library(reshape2)
+selGenes <- head(tab$ensemblid[!is.na(tab$symbol)])
+selGenes.names <- head(tab$symbol[!is.na(tab$symbol)])
+selGenes.codes <- head(tab$ID[!is.na(tab$symbol)])
+data <- melt(exprs(preprocessedData)[rownames(preprocessedData) == selGenes.codes[1],])
+data$condition <- SampleGroup
+for (i in selGenes.codes){
+  name = selGenes.names[selGenes.codes == i]
+  data[,name] <- melt(exprs(preprocessedData)[rownames(preprocessedData) == i,])
+}
+# tab[which(tab$symbol == "ANXA1"),]
+# data [,"ANXA1"] <- melt(exprs(preprocessedData)
+#                         [rownames(preprocessedData) == tab$ID[which(tab$symbol == "ANXA1")],])
+# data <- melt(data,id.vars='condition',measure.vars=c(selGenes.names,"ANXA1"))
+data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+```
+
+
+```{r}
+library(ggplot2)
+case <- "DIAB_HF"
+control <- "CONTROL"
+ggplot(data, aes(x=variable, y=value, color=condition)) +
+   geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+   geom_point(position=position_dodge(width=0.3))+
+   labs(x="Gene",y="Array Expression",
+        title=paste0("Expression of most DE genes: ",case," vs ", control)) +
+   facet_wrap( ~ variable, scales="free") +
+   theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+```
+
+
+Finally, a Volcano Plot with the results comparing the two groups:
+
+```{r}
+volcanoplot(fit3,highlight=40,names=rapply(strsplit(fit3$genes$gene_assignment," // "), function(x) x[2]),main=paste0("Volcano Plot: ",case," vs ", control))
+```
+```{r}
+
+# resorder <- res[order(res$padj), ]
+## Merge with normalized count data
+# resdata <- merge(as.data.frame(resorder), as.data.frame(counts(dds, normalized=TRUE)), by="row.names", sort=FALSE)
+# names(resdata)[1] <- "Gene"
+# resdata$GeneENS <- resdata$Gene
+# resdata$Gene <- gene_list[match(resdata$Gene,gene_list[,1]),2]
+```
+
+### Heatmap 
+
+Top50 logfc expressed genes
+
+* Upregulated genes in case samples
+
+```{r}
+myGenesDF.logFCsort <- tab[order(tab$logFC,decreasing=T),][,c(1,13:21)]
+# myGenesDF.logFCsort <- myGenesDF.logFCsort[myGenesDF.logFCsort$adj.P.Val < 0.05,]
+# head(myGenesDF.logFCsort)
+# myGenesDF.logFCsort[1:30,]
+# match(selgenes,rownames(exprs(preprocessedData)))
+# exprs(preprocessedData)[28158,]
+selgenes <- as.numeric(myGenesDF.logFCsort$ID[1:20])
+selgenes.sym <- myGenesDF.logFCsort$symbol[1:20]
+bk = unique(c(seq(-2,-0.5, length=50),seq(-0.5,0.5, length=50), seq(0.5,2,length=50)))
+# hmcol<- colorRampPalette(c("white","red2", "red4"))(length(bk)-1)
+hmcol <- rev(brewer.pal(11 , "RdBu"))
+heatmap.2(as.matrix(exprs(preprocessedData))[match(selgenes,rownames(exprs(preprocessedData))),],
+          labCol = SampleGroup,col=hmcol,labRow=selgenes.sym,trace='none',
+          scale='row',ColSideColors = as.character(groupColours),
+          margins=c(8,8),key=T,density.info = "none",main=paste0("Upregulated genes: ",case," vs ", control))
+```
+
+* Downregulated genes in case samples
+
+```{r}
+myGenesDF.logFCsort <- tab[order(tab$logFC),][,c(1,13:21)]
+# myGenesDF.logFCsort <- myGenesDF.logFCsort[myGenesDF.logFCsort$adj.P.Val < 0.05,]
+# head(myGenesDF.logFCsort)
+# myGenesDF.logFCsort[1:30,]
+# match(selgenes,rownames(exprs(preprocessedData)))
+# exprs(preprocessedData)[28158,]
+selgenes <- as.numeric(myGenesDF.logFCsort$ID[1:20])
+selgenes.sym <- myGenesDF.logFCsort$symbol[1:20]
+bk = unique(c(seq(-2,-0.5, length=50),seq(-0.5,0.5, length=50), seq(0.5,2,length=50)))
+# hmcol<- colorRampPalette(c("white","red2", "red4"))(length(bk)-1)
+hmcol <- rev(brewer.pal(11 , "RdBu"))
+heatmap.2(as.matrix(exprs(preprocessedData))[match(selgenes,rownames(exprs(preprocessedData))),],
+          labCol = SampleGroup,col=hmcol,labRow=selgenes.sym,trace='none',
+          scale='row',ColSideColors = as.character(groupColours),
+          margins=c(8,8),key=T,density.info = "none",main=paste0("Downregulated genes: ",case," vs ", control))
+```
+
+### Pathway Analysis
+
+#### GSEA Analysis
+
+Prepare input, get gene ids from ensembl
+
+#### Hallmark pathways
+
+* Get all pathways from MSigDB
+```{r}
+library(msigdbr)
+raw.hs.paths.HALLMARK = msigdbr(species = "Homo sapiens",category="H")
+raw.hs.paths.HALLMARK.names <- unique(raw.hs.paths.HALLMARK$gs_name)
+pathways.HS.H <- list()
+for (i in raw.hs.paths.HALLMARK.names){
+  tmp <- as.list(raw.hs.paths.HALLMARK[raw.hs.paths.HALLMARK$gs_name == i,"entrez_gene"])
+  pathways.HS.H[i] <- tmp
+}
+pathways.HS.H <- lapply(pathways.HS.H, as.character)
+```
+
+* And check with our data
+
+```{r}
+resdata <- tab[order(tab$adj.P.Val),][,c(1,13:21)]
+gseaDat <- resdata[!is.na(resdata$entrezid),]
+# ranks <- gseaDat$log2FoldChange
+ranks <- abs(gseaDat$B)*gseaDat$logFC/abs(gseaDat$logFC)
+names(ranks) <- gseaDat$entrezid
+# barplot(sort(ranks, decreasing = T))
+```
+
+```{r}
+# gseaDat
+#                   Gene     baseMean log2FoldChange      lfcSE          stat
+# 1                  HGF 2.591488e+02  -4.447397e+00 0.50087828 -8.8791963988
+# 2               DIRAS3 1.467752e+02  -4.108531e+00 0.46520213 -8.8317119043
+# 3                LOXL2 2.752829e+03   8.066317e-01 0.09257046  8.7137052831
+# 4               SSX2IP 5.667300e+02  -1.107374e+00 0.12942938 -8.5558201954
+# 5              PPP1R3B 3.945862e+02   1.392785e+00 0.17804617  7.8226083797
+# 6             TP53INP2 1.865193e+02   1.090092e+00 0.14087464  7.7380256382
+# 7                EPAS1 2.396986e+03   2.222608e+00 0.29318884  7.5808067230
+# 8                 CAP2 2.934590e+02   6.914306e-01 0.09229018  7.4919201889
+# 9                STX12 8.128785e+02   9.436273e-01 0.12769290  7.3898178790
+# 10               YPEL2 1.441815e+02   1.604710e+00 0.21848971  7.3445548012
+# 11              SQSTM1 2.945031e+03   1.037304e+00 0.14237722  7.2856004678
+```
+
+
+```{r}
+library(fgsea)
+fgseaRes <- fgsea(pathways.HS.H, ranks, minSize=15, maxSize = 500, nperm=1000)
+head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+```
+
+```{r}
+ggplot(fgseaRes[order(pval, -abs(NES)), ][1:37], aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=pval<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title=paste0("Hallmark pathways: ",case," vs ", control)) + 
+  theme_minimal() +
+  theme(plot.title = element_text(size=10))
+```
+
+#### KEGG pathways
+
+* Get all pathways from KEGG
+
+```{r}
+raw.mouse.paths.KEGG = msigdbr(species = "Homo sapiens",category="C2", subcategory = "CP:KEGG")
+raw.mouse.paths.KEGG.names <- unique(raw.mouse.paths.KEGG$gs_name)
+pathways.MM.K <- list()
+for (i in raw.mouse.paths.KEGG.names){
+  tmp <- as.list(raw.mouse.paths.KEGG[raw.mouse.paths.KEGG$gs_name == i,"entrez_gene"])
+  pathways.MM.K[i] <- tmp
+}
+pathways.MM.K <- lapply(pathways.MM.K, as.character)
+```
+
+* And check with our data
+
+```{r}
+fgseaRes <- fgsea(pathways.MM.K, ranks, minSize=30, maxSize = 500, nperm=1000)
+head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+```
+
+```{r}
+ggplot(fgseaRes[order(pval, -abs(NES)), ][1:38], aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=pval<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title=paste0("KEGG pathways: ",case," vs ", control)) + 
+  theme_minimal() +
+  theme(plot.title = element_text(size=10))
+```
+
+***
+### Adiponectin pathway genes
+
+```{r}
+library(cowplot)
+selected_pathways <- c("HALLMARK_ADIPOGENESIS","HALLMARK_HEDGEHOG_SIGNALING","KEGG_ADIPOCYTOKINE_SIGNALING_PATHWAY","HALLMARK_MYC_TARGETS_V1")
+p1 <- plotEnrichment(pathways.HS.H[[selected_pathways[1]]], ranks[1:10000]) + labs(title=selected_pathways[1])
+p2 <- plotEnrichment(pathways.HS.H[[selected_pathways[2]]], ranks[1:10000]) + labs(title=selected_pathways[2])
+p3 <- plotEnrichment(pathways.MM.K[[selected_pathways[3]]], ranks[1:10000]) + labs(title=selected_pathways[3])
+p4 <- plotEnrichment(pathways.HS.H[[selected_pathways[4]]], ranks[1:10000]) + labs(title=selected_pathways[4])
+plot_grid(p1,p2,p3,p4,ncol=4)
+```
+
+#### Hallmark
+
+Select particular pathway: `HALLMARK_ADIPOGENESIS`
+
+```{r}
+library(tidyverse)
+pathwaysH_INT <- lapply(pathways.HS.H, as.character)
+kk <- pathwaysH_INT %>%
+  enframe("pathway", "entrezid") %>%
+  unnest() %>%
+  inner_join(resdata, by="entrezid")
+
+adipogenes <- kk[which (kk$pathway == "HALLMARK_ADIPOGENESIS"),]
+adipogenes <- adipogenes[order(abs(adipogenes$B)),]
+adipogenes$B <- abs(adipogenes$B)*adipogenes$logFC/abs(adipogenes$logFC)
+```
+
+Plot raw expression of 15 mostly DE genes in Adipogenesis pathway
+
+```{r}
+selGenes <- adipogenes[1:12,]
+selGenes.names <- selGenes$symbol
+selGenes.codes <- selGenes$ID
+data <- melt(exprs(preprocessedData)[rownames(preprocessedData) == selGenes.codes[1],])
+data$condition <- SampleGroup
+for (i in selGenes.codes){
+  name = selGenes.names[selGenes.codes == i]
+  data[,name] <- melt(exprs(preprocessedData)[rownames(preprocessedData) == i,])
+}
+data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+```
+
+```{r}
+library(ggplot2)
+ggplot(data, aes(x=variable, y=value, color=condition)) +
+   geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+   geom_point(position=position_dodge(width=0.3))+
+   labs(x="Gene",y="Array Expression",
+        title=paste0("Adipogenesis DE genes (HALLMARK): ",case," vs ", control)) +
+   facet_wrap( ~ variable, scales="free") +
+   theme(axis.text.x = element_text(angle = 9,hjust=1,size =0),
+         plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"),
+         axis.text.y = element_text(size =10),
+         axis.ticks.x= element_blank())
+```
+
+#### KEGG
+
+Select particular pathway: `KEGG_ADIPOCYTOKINE_SIGNALING_PATHWAY`
+
+```{r}
+pathwaysK_INT <- lapply(pathways.MM.K, as.character)
+kk <- pathwaysK_INT %>%
+  enframe("pathway", "entrezid") %>%
+  unnest() %>%
+  inner_join(resdata, by="entrezid")
+
+adipogenes <- kk[which (kk$pathway == "KEGG_ADIPOCYTOKINE_SIGNALING_PATHWAY"),]
+adipogenes <- adipogenes[order(abs(adipogenes$B)),]
+adipogenes$B <- abs(adipogenes$B)*adipogenes$logFC/abs(adipogenes$logFC)
+```
+
+Plot raw expression of 15 mostly DE genes in KEGG Acipocytokine pathway
+
+```{r}
+selGenes <- adipogenes[1:12,]
+selGenes.names <- selGenes$symbol
+selGenes.codes <- selGenes$ID
+data <- melt(exprs(preprocessedData)[rownames(preprocessedData) == selGenes.codes[1],])
+data$condition <- SampleGroup
+for (i in selGenes.codes){
+  name = selGenes.names[selGenes.codes == i]
+  data[,name] <- melt(exprs(preprocessedData)[rownames(preprocessedData) == i,])
+}
+data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+```
+
+```{r}
+library(ggplot2)
+ggplot(data, aes(x=variable, y=value, color=condition)) +
+   geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+   geom_point(position=position_dodge(width=0.3))+
+   labs(x="Gene",y="Array Expression",
+        title=paste0("Adipogenesis DE genes (KEGG): ",case," vs ", control)) +
+   facet_wrap( ~ variable, scales="free") +
+   theme(axis.text.x = element_text(angle = 9,hjust=1,size =0),
+         plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"),
+         axis.text.y = element_text(size =10),
+         axis.ticks.x= element_blank())
+```
+
+### Pathway Enrichment
+
+```{r}
+library(pathview)
+select <- AnnotationDbi::select
+logFC <- gseaDat$logFC
+names(logFC) <- gseaDat$entrezid
+pathview(gene.data = logFC, 
+         pathway.id = "hsa04920", 
+         species = "hsa", 
+         limit = list(gene=1, cpd=1))
+```
+
+```{r}
+# logFC <- gseaDat$log2FoldChange
+# names(logFC) <- gseaDat$entrez
+# pathview(gene.data = logFC, 
+#          pathway.id = "mmu05414", 
+#          species = "hsa", 
+#          limit = list(gene=1, cpd=1))
+```
+
+```{r}
+library(knitr)
+files <- list.files(pattern = 'hsa04920.pathview.png')
+include_graphics(files)
+```
+
+***
+
+## Wrap All in function
+
+```{r}
+make_all <- function(case,control) {
+    fit1<-lmFit(preprocessedData, design)
+    # contrasts <- makeContrasts(DIAB_HF - CONTROL, levels=design)
+    contrasts <- eval(
+    parse(text=paste("makeContrasts(", case," - ", control, ",levels=design)",sep=""))
+    )
+    fit2 <- contrasts.fit(fit1, contrasts)
+    fit3 <- eBayes(fit2)
+    # topTable(fit3)
+    
+    tab<-topTable(fit3, number = 3e6, adjust.method = "BH", sort.by = "p")
+    pr<-row.names(tab)
+    tab$symbol <- rapply(strsplit(tab$gene_assignment," // "), function(x) x[2])
+    x <- hugene10sttranscriptclusterENSEMBL
+    mapped_genes <- mappedkeys(x)
+    xx <- as.list(x[mapped_genes])
+    sy <- xx[pr]
+    tab$ensemblid<- as.character(sapply(sy, function(k){k[1]}))
+    # head(tab,20)
+    
+    xEN <- hugene10sttranscriptclusterENTREZID
+    mapped_genesEN <- mappedkeys(xEN)
+    xxEN <- as.list(xEN[mapped_genesEN])
+    syEN <- xxEN[pr]
+    length(labels(syEN)[!is.na(labels(syEN))])
+    tab$entrezid<- as.character(sapply(syEN, function(k){k[1]}))
+    # head(tab,200)
+    
+    ENS_ids.tmp <- mapIds(org.Hs.eg.db,
+                           keys=tab$symbol,
+                           column="ENSEMBL",
+                           keytype="SYMBOL",
+                           multiVals="first")
+    ENS_ids.tmp[sapply(ENS_ids.tmp, is.null)] <- NA
+    ENS_ids.tmp <- unlist(ENS_ids.tmp)
+    tab$ensemblid[tab$ensemblid =="NULL"] <- NA
+    tab$ensemblid <- coalesce(tab$ensemblid,ENS_ids.tmp)
+    ENTREZ_ids.tmp <- mapIds(org.Hs.eg.db,
+                           keys=tab$symbol,
+                           column="ENTREZID",
+                           keytype="SYMBOL",
+                           multiVals="first")
+    ENTREZ_ids.tmp[sapply(ENTREZ_ids.tmp, is.null)] <- NA
+    ENTREZ_ids.tmp <- unlist(ENTREZ_ids.tmp)
+    tab$entrezid[tab$entrezid =="NULL"] <- NA
+    tab$entrezid <- coalesce(tab$entrezid,ENTREZ_ids.tmp)
+    #save csv with all the data
+    write.csv(tab[,c(1:9,12:21)],paste0("raw_STATS_",case,"_vs_",control,".csv"))
+    
+    selGenes <- head(tab$ensemblid[!is.na(tab$symbol)])
+    selGenes.names <- head(tab$symbol[!is.na(tab$symbol)])
+    selGenes.codes <- head(tab$ID[!is.na(tab$symbol)])
+    data <- melt(exprs(preprocessedData)[rownames(preprocessedData) == selGenes.codes[1],])
+    data$condition <- SampleGroup
+    for (i in selGenes.codes){
+      name = selGenes.names[selGenes.codes == i]
+      data[,name] <- melt(exprs(preprocessedData)[rownames(preprocessedData) == i,])
+    }
+    data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+    
+    p <- ggplot(data, aes(x=variable, y=value, color=condition)) +
+       geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+       geom_point(position=position_dodge(width=0.3))+
+       labs(x="Gene",y="Array Expression",
+        title=paste0("Expression of most DE genes: ",case," vs ", control)) +
+       facet_wrap( ~ variable, scales="free") +
+       theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"),axis.text.y = element_text(size =10),axis.ticks.x= element_blank())
+    plot(p)
+    
+    volcanoplot(fit3,highlight=40,names=rapply(strsplit(fit3$genes$gene_assignment," // "), function(x) x[2]),main=paste0("Volcano Plot: ",case," vs ", control))
+    
+    myGenesDF.logFCsort <- tab[order(tab$logFC,decreasing=T),][,c(1,13:21)]
+    selgenes <- as.numeric(myGenesDF.logFCsort$ID[1:20])
+    selgenes.sym <- myGenesDF.logFCsort$symbol[1:20]
+    bk = unique(c(seq(-2,-0.5, length=50),seq(-0.5,0.5, length=50), seq(0.5,2,length=50)))
+    hmcol <- rev(brewer.pal(11 , "RdBu"))
+    heatmap.2(as.matrix(exprs(preprocessedData))[match(selgenes,rownames(exprs(preprocessedData))),],
+              labCol = SampleGroup,col=hmcol,labRow=selgenes.sym,trace='none',
+              scale='row',ColSideColors = as.character(groupColours),
+              margins=c(8,8),key=T,density.info = "none",main=paste0("Upregulated genes: ",case," vs ", control))
+    
+    myGenesDF.logFCsort <- tab[order(tab$logFC),][,c(1,13:21)]
+    selgenes <- as.numeric(myGenesDF.logFCsort$ID[1:20])
+    selgenes.sym <- myGenesDF.logFCsort$symbol[1:20]
+    bk = unique(c(seq(-2,-0.5, length=50),seq(-0.5,0.5, length=50), seq(0.5,2,length=50)))
+    heatmap.2(as.matrix(exprs(preprocessedData))[match(selgenes,rownames(exprs(preprocessedData))),],
+              labCol = SampleGroup,col=hmcol,labRow=selgenes.sym,trace='none',
+              scale='row',ColSideColors = as.character(groupColours),
+              margins=c(8,8),key=T,density.info = "none",main=paste0("Downregulated genes: ",case," vs ", control))
+    
+    raw.hs.paths.HALLMARK = msigdbr(species = "Homo sapiens",category="H")
+    raw.hs.paths.HALLMARK.names <- unique(raw.hs.paths.HALLMARK$gs_name)
+    pathways.HS.H <- list()
+    for (i in raw.hs.paths.HALLMARK.names){
+      tmp <- as.list(raw.hs.paths.HALLMARK[raw.hs.paths.HALLMARK$gs_name == i,"entrez_gene"])
+      pathways.HS.H[i] <- tmp
+    }
+    pathways.HS.H <- lapply(pathways.HS.H, as.character)
+    
+    resdata <- tab[order(tab$adj.P.Val),][,c(1,13:21)]
+    gseaDat <- resdata[!is.na(resdata$entrezid),]
+    ranks <- abs(gseaDat$B)*gseaDat$logFC/abs(gseaDat$logFC)
+    names(ranks) <- gseaDat$entrezid
+    
+    fgseaRes <- fgsea(pathways.HS.H, ranks, minSize=15, maxSize = 500, nperm=1000)
+    head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+    
+    p <- ggplot(fgseaRes[order(pval, -abs(NES)), ][1:37], aes(reorder(pathway, NES), NES)) +
+      geom_col(aes(fill=pval<0.05)) +
+      coord_flip() +
+      labs(x="Pathway", y="Normalized Enrichment Score",
+           title=paste0("Hallmark pathways: ",case," vs ", control)) + 
+      theme_minimal() +
+      theme(plot.title = element_text(size=10))
+    plot(p)
+    raw.mouse.paths.KEGG = msigdbr(species = "Homo sapiens",category="C2", subcategory = "CP:KEGG")
+    raw.mouse.paths.KEGG.names <- unique(raw.mouse.paths.KEGG$gs_name)
+    pathways.MM.K <- list()
+    for (i in raw.mouse.paths.KEGG.names){
+      tmp <- as.list(raw.mouse.paths.KEGG[raw.mouse.paths.KEGG$gs_name == i,"entrez_gene"])
+      pathways.MM.K[i] <- tmp
+    }
+    pathways.MM.K <- lapply(pathways.MM.K, as.character)
+    
+    fgseaRes <- fgsea(pathways.MM.K, ranks, minSize=30, maxSize = 500, nperm=1000)
+    head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+    
+    p <- ggplot(fgseaRes[order(pval, -abs(NES)), ][1:38], aes(reorder(pathway, NES), NES)) +
+      geom_col(aes(fill=pval<0.05)) +
+      coord_flip() +
+      labs(x="Pathway", y="Normalized Enrichment Score",
+           title=paste0("Hallmark pathways: ",case," vs ", control)) + 
+      theme_minimal() +
+      theme(plot.title = element_text(size=10))
+    plot(p)
+
+    selected_pathways <- c("HALLMARK_ADIPOGENESIS","HALLMARK_HEDGEHOG_SIGNALING","KEGG_ADIPOCYTOKINE_SIGNALING_PATHWAY","HALLMARK_MYC_TARGETS_V1")
+    p1 <- plotEnrichment(pathways.HS.H[[selected_pathways[1]]], ranks[1:10000]) + labs(title=selected_pathways[1])
+    p2 <- plotEnrichment(pathways.HS.H[[selected_pathways[2]]], ranks[1:10000]) + labs(title=selected_pathways[2])
+    p3 <- plotEnrichment(pathways.MM.K[[selected_pathways[3]]], ranks[1:10000]) + labs(title=selected_pathways[3])
+    p4 <- plotEnrichment(pathways.HS.H[[selected_pathways[4]]], ranks[1:10000]) + labs(title=selected_pathways[4])
+    p<- plot_grid(p1,p2,p3,p4,ncol=4)
+    plot(p)
+    
+    pathwaysH_INT <- lapply(pathways.HS.H, as.character)
+    kk <- pathwaysH_INT %>%
+      enframe("pathway", "entrezid") %>%
+      unnest() %>%
+      inner_join(resdata, by="entrezid")
+    
+    adipogenes <- kk[which (kk$pathway == "HALLMARK_ADIPOGENESIS"),]
+    adipogenes <- adipogenes[order(abs(adipogenes$B)),]
+    adipogenes$B <- abs(adipogenes$B)*adipogenes$logFC/abs(adipogenes$logFC)
+    
+    selGenes <- adipogenes[1:12,]
+    selGenes.names <- selGenes$symbol
+    selGenes.codes <- selGenes$ID
+    data <- melt(exprs(preprocessedData)[rownames(preprocessedData) == selGenes.codes[1],])
+    data$condition <- SampleGroup
+    for (i in selGenes.codes){
+      name = selGenes.names[selGenes.codes == i]
+      data[,name] <- melt(exprs(preprocessedData)[rownames(preprocessedData) == i,])
+    }
+    data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+    
+    p<- ggplot(data, aes(x=variable, y=value, color=condition)) +
+       geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+       geom_point(position=position_dodge(width=0.3))+
+       labs(x="Gene",y="Array Expression",
+            title=paste0("Adipogenesis DE genes (HALLMARK): ",case," vs ", control)) +
+       facet_wrap( ~ variable, scales="free") +
+       theme(axis.text.x = element_text(angle = 9,hjust=1,size =0),
+             plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"),
+             axis.text.y = element_text(size =10),
+             axis.ticks.x= element_blank())
+    plot(p)
+    
+    pathwaysK_INT <- lapply(pathways.MM.K, as.character)
+    kk <- pathwaysK_INT %>%
+      enframe("pathway", "entrezid") %>%
+      unnest() %>%
+      inner_join(resdata, by="entrezid")
+    
+    adipogenes <- kk[which (kk$pathway == "KEGG_ADIPOCYTOKINE_SIGNALING_PATHWAY"),]
+    adipogenes <- adipogenes[order(abs(adipogenes$B)),]
+    adipogenes$B <- abs(adipogenes$B)*adipogenes$logFC/abs(adipogenes$logFC)
+    
+    selGenes <- adipogenes[1:12,]
+    selGenes.names <- selGenes$symbol
+    selGenes.codes <- selGenes$ID
+    data <- melt(exprs(preprocessedData)[rownames(preprocessedData) == selGenes.codes[1],])
+    data$condition <- SampleGroup
+    for (i in selGenes.codes){
+      name = selGenes.names[selGenes.codes == i]
+      data[,name] <- melt(exprs(preprocessedData)[rownames(preprocessedData) == i,])
+    }
+    data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+    
+    p<- ggplot(data, aes(x=variable, y=value, color=condition)) +
+       geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+       geom_point(position=position_dodge(width=0.3))+
+       labs(x="Gene",y="Array Expression",
+            title=paste0("Adipogenesis DE genes (KEGG): ",case," vs ", control)) +
+       facet_wrap( ~ variable, scales="free") +
+       theme(axis.text.x = element_text(angle = 9,hjust=1,size =0),
+             plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"),
+             axis.text.y = element_text(size =10),
+             axis.ticks.x= element_blank())
+    plot(p)
+    
+    select <- AnnotationDbi::select
+    logFC <- gseaDat$logFC
+    names(logFC) <- gseaDat$entrezid
+    pathview(gene.data = logFC, 
+             pathway.id = "hsa04920", 
+             species = "hsa", 
+             limit = list(gene=1, cpd=1))
+    
+    files <- list.files(pattern = 'hsa04920.pathview.png')
+    include_graphics(files)
+}
+```
+
+## Diabetes HF vs Control
+
+Repeat plots to double check with the automatic generator
+
+```{r message=FALSE, warning=FALSE}
+make_all("DIAB_HF","CONTROL")
+```
+
+## Non-Diabetes HF vs Control
+
+```{r message=FALSE, warning=FALSE}
+make_all("NOND_HF","CONTROL")
+```
+
+## Diabetes HF vs Non-Diabetes HF
+
+```{r message=FALSE, warning=FALSE}
+make_all("DIAB_HF","NOND_HF")
+```
+
+
+
+## Session info
+
+```{r}
+sessionInfo()
+```
+
+
+***
+
+## References and useful links
+
+* https://bioinformatics-core-shared-training.github.io/cruk-summer-school-2018/RNASeq2018/html/06_Gene_set_testing.nb.html
+
+* https://www.bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#heatmap-of-the-count-matrix
+
+* https://stephenturner.github.io/deseq-to-fgsea/
+* --> map ensembl to symbol and run gsea
+
+* https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
+* msigdbr to run gsea with KEGG and others
+
+***

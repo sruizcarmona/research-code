@@ -1,0 +1,165 @@
+---
+title: "Jenny Ooi lncRNA"
+author: "[Baker Bioinformatics (Sergio)](https://intranet.baker.edu.au/research-resources/platform-technologies/bioinformatics-program/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "bioinformatics@baker.edu.au"
+# output:
+#   html_notebook:
+#     toc: true
+#     toc_depth: 3
+#     toc_float:
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     # code_folding: hide
+output:
+  epuRate::BAKER:
+    toc: TRUE
+    number_sections: FALSE
+    # code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+```{r opts, echo = FALSE}
+knitr::opts_chunk$set(
+  fig.path = "plots/",
+  dev = c('jpeg', 'png'), 
+  # fig.align = 'center', fig.height = 8, fig.width = 12
+  fig.align = 'center', fig.height = 5, fig.width = 8.5
+  # pdf.options(encoding = "ISOLatin9.enc")
+)
+```
+
+
+*** 
+
+## Load Libraries
+```{r message=FALSE}
+# library(TissueEnrich)
+```
+
+***
+
+# Tissue enrichment
+
+load files
+
+```{r}
+# genes <- read.table("lncrna_swim_tac_ENSEMBL.txt")
+genes <- read.table("final_version/allsheets_ENSEMBL.txt")
+names(genes) <- 'symbol'
+genes$symbol <- as.character(genes$symbol)
+genes <- rbind(genes,'Igf1r')
+# gs <- GeneSet(geneIds=genes.ensembl,organism="Mus Musculus",geneIdType=SymbolIdentifier())
+# output <- teEnrichment(inputGenes = gs)
+```
+
+http://chromosome.sdsc.edu/mouse/download.html
+
+```{r}
+# library(biomaRt)
+# mart <- useMart("ensembl", dataset="mmusculus_gene_ensembl")
+# attributes <- c("ensembl_gene_id","gene_biotype","external_gene_name","entrezgene_id","mgi_id")
+# g <- getBM(attributes=attributes,filters="ensembl_gene_id",values=rownames(ddsOK),mart=mart,uniqueRows = T)
+
+library(org.Mm.eg.db)
+
+genes$ensembl <- mapIds(org.Mm.eg.db,
+                     keys=genes$symbol,
+                     column="ENSEMBL",
+                     keytype="SYMBOL",
+                     multiVals="first")
+genes$entrez <- mapIds(org.Mm.eg.db,
+                     keys=genes$symbol,
+                     column="ENTREZID",
+                     keytype="SYMBOL",
+                     multiVals="first")
+genes$refseq <- mapIds(org.Mm.eg.db,
+                     keys=genes$symbol,
+                     column="REFSEQ",
+                     keytype="SYMBOL",
+                     multiVals="first")
+save(genes,file='genes_list.rda')
+```
+
+```{r}
+library(XML)
+library(tidyr)
+library(dplyr)
+library(tidyverse)
+cols <- c("id","gene","sample_id","tissue","var","full_rpkm","exp_rpkm","exp_total","project_desc")
+# k <- xmlToDataFrame('test.xml')
+tst <-
+  exp %>% dplyr::filter(gene=='102636491') %>% dplyr::select(gene, tissue, full_rpkm) %>% mutate(full_rpkm=as.numeric(as.character(full_rpkm)))
+# ggplot(tst, aes(x=tissue,y=full_rpkm)) + geom_col() +
+#   theme(axis.text.x = element_text(angle = 30,hjust=1),
+#         plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+```
+
+Download PRJNA file from ftp in NCBI:
+https://ftp.ncbi.nih.gov/gene/DATA/expression/Mammalia/Mus_musculus/
+
+```{r}
+# expression <- xmlToDataFrame("PRJNA66167_GRCm38.p4_106_expression.xml")
+load("expression.rda")
+cols <- c("id","gene","sample_id","tissue","var","full_rpkm","exp_rpkm","exp_total","project_desc")
+names(exp) <- cols
+```
+
+```{r}
+gene.expression <- tst[1,]
+for (geneid in genes$entrez){
+  if(geneid %in% exp$gene) {
+    tst <- exp %>% filter(gene==geneid) %>% dplyr::select(gene, tissue, full_rpkm) %>% mutate(full_rpkm=as.numeric(as.character(full_rpkm)))
+    gene.expression <- rbind(gene.expression,tst)
+  }
+}
+
+gene.expression <- gene.expression[c(2:dim(gene.expression)[1]),]
+gene.expression$symbol <- genes$symbol[match(gene.expression$gene,genes$entrez)]
+```
+
+
+```{r}
+coalesce_by_column <- function(df) {
+  return(coalesce(df[1], df[2]))
+}
+```
+
+
+```{r}
+gene.expression %>% dplyr::select(symbol,tissue,full_rpkm) %>% mutate(row=row_number()) %>% group_by(symbol) %>%  pivot_wider(names_from = tissue,values_from=full_rpkm) %>% dplyr::select (-row) %>% summarise_all(coalesce_by_column) %>%   ungroup()
+```
+
+
+```{r}
+final.gene.expression <- gene.expression %>% 
+  dplyr::select(symbol,tissue,full_rpkm) %>% 
+  # mutate(row=row_number()) %>%
+  group_by(symbol) %>%
+  pivot_wider(names_from = tissue,values_from=full_rpkm) %>% 
+  # summarise_all(coalesce_by_column) %>%
+  # ungroup() %>%
+  # dplyr::select(-row) %>%
+  data.frame()
+```
+
+```{r}
+# write.csv(final.gene.expression, file="final_version/lncrna_swim_tac_ENSEMBL_TISSUEINFO.csv")
+write.csv(final.gene.expression, file="final_version/allsheets_ENSEMBL_TISSUE.csv")
+
+```
+
+

@@ -1,0 +1,1138 @@
+---
+title: "Jenny Ooi lncRNA"
+# output: 
+#   html_notebook:
+#     toc: true
+#     toc_depth: 3
+#     toc_float: 
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     # code_folding: hide
+output:
+  epuRate::BAKER:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "hide"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+# lncRNA analysis by RNAseq 
+
+
+
+*** 
+
+## Load Libraries
+```{r message=FALSE}
+library(edgeR)
+library(DESeq2)
+library(ggplot2)
+library(gplots)
+library(RColorBrewer)
+library(stringr)
+library(cowplot)
+library(scales)
+library(pheatmap)
+library(org.Mm.eg.db)
+```
+
+***
+
+## Code (import with edgeR)
+
+1) Loading targets table:
+
+```{r}
+targets <- read.delim("samplesheetJenny_OK.txt", header = T, sep = "\t")
+targets
+```
+
+2) Loading count data from featureCounts:
+
+```{r}
+fcounts.ensembl.raw <- readRDS("fcounts.JENNYGTF.rds")
+```
+
+3) Creating DGEList (an object from edgeR package)
+
+```{r}
+fcounts.ensembl <- DGEList(counts=fcounts.ensembl.raw$counts, 
+                           genes = fcounts.ensembl.raw$annotation, 
+                           samples = targets$sample, group=targets$genotype)
+colnames(fcounts.ensembl) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+fcounts.ensembl <- calcNormFactors(fcounts.ensembl)
+```
+
+* Same for noncode data:
+
+```{r}
+fcounts.noncode.raw <- readRDS("fcounts_ensembl_noncode_gene.rds")
+fcounts.noncode <- DGEList(counts=fcounts.noncode.raw$counts, 
+                           genes = fcounts.noncode.raw$annotation, 
+                           samples = targets$sample, group=targets$genotype)
+colnames(fcounts.noncode) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+fcounts.noncode <- calcNormFactors(fcounts.noncode)
+```
+
+
+4) Quick look at the library sizes in the samples:
+
+For the plot --> https://github.com/tidyverse/ggplot2/wiki/legend-attributes
+
+```{r}
+bplot <- fcounts.ensembl$samples[c(11,22,30:36,1:10,12:21,23:29),]
+bplot$ids <- str_extract(targets$sample,"JM[0-9]{1,2}")
+bplot$ids <- factor(paste0("JM",c(1:36)),levels=paste0("JM",c(1:36)))
+p <- ggplot(bplot,aes(x=ids,y=lib.size*1e-6,fill=group)) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5)) +
+    geom_abline(intercept=70, slope=0) +
+    ggtitle("Library Size per sample (ensembl mm10)") +
+    xlab ("Sample ID") +
+    ylab ("Library size (millions)") +
+    theme(legend.text = element_text(size = 10),legend.key.size = unit(0.5, "lines"))
+
+```
+```{r}
+bplot <- fcounts.noncode$samples[c(11,22,30:36,1:10,12:21,23:29),]
+bplot$ids <- str_extract(targets$sample,"JM[0-9]{1,2}")
+bplot$ids <- factor(paste0("JM",c(1:36)),levels=paste0("JM",c(1:36)))
+pnoncode <- ggplot(bplot,aes(x=ids,y=lib.size*1e-6,fill=group)) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5)) +
+    geom_abline(intercept=50, slope=0) +
+    ggtitle("Library Size per sample (noncode data)") +
+    xlab ("Sample ID") +
+    ylab ("Library size (millions)") +
+    #guides(color = guide_legend(override.aes = list(size = 0.2))) +
+    theme(legend.text = element_text(size = 10),legend.key.size = unit(0.5, "lines"))
+plot_grid(p,pnoncode,nrow=2)
+```
+
+5) Filter out unrepresented features (genes)
+
+* CPM > 1 in at least 4 rows (number of replicates)
+```{r}
+dgList <- fcounts.ensembl
+dim(dgList)
+dgList.noncode <- fcounts.noncode
+dim(dgList.noncode)
+```
+
+```{r}
+countsPerMillion <- cpm(dgList)
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 4)
+dgList <- dgList[keep,]
+dim(dgList)
+```
+```{r}
+countsPerMillion.nc <- cpm(dgList.noncode)
+countCheck.nc <- countsPerMillion.nc > 1
+keep.nc <- which(rowSums(countCheck.nc) >= 4)
+dgList.noncode <- dgList.noncode[keep.nc,]
+dim(dgList.noncode)
+```
+
+## Quality Check plots
+
+* MDS libsize check (removed for DEseq2 PCA later)
+
+```{r}
+# dgList$samples$lib.size <- colSums(dgList$counts)
+# dgList <- calcNormFactors(dgList, method="TMM")
+# colnames_OK <- targets$sample
+#plotMDS(dgList, method="bcv", col=as.numeric(dgList$samples$group),labels=str_extract(targets$sample,"JM[0-9]{1,2}"),main=paste("MDS all samples - ",dim(dgList)[1]," genes",sep=""))
+```
+
+
+*  EdgeR normalization check (removed for DEseq2 later)
+
+```{r}
+# plot_cpm_boxplot <- function(my_countdata, my_condition, my_fcounts) {
+#   logcounts <- log2(my_countdata + 1)
+#   statusCol <- as.numeric(factor(my_condition))
+#   logcounts <- logcounts[,c(11,22,30:36,1:10,12:21,23:29)]
+#   statusCol <- statusCol[order(statusCol)]
+#   col <- hue_pal()(9)[statusCol]
+#   # Check distributions of samples using boxplots
+#   par(mfrow=c(2,1),oma=c(1,0,0,0) + 0.1, mar=c(2,5,1,1) + 0.1)
+#   boxplot(logcounts, 
+#           xlab="", 
+#           cex.axis=0.7,
+#           ylab="Log2(Counts)",
+#           las=2,
+#           col=col)
+#   # Let's add a blue horizontal line that corresponds to the median logCPM
+#   abline(h=median(as.matrix(logcounts)), col="blue")
+#   fcounts.ensembl.norm <- cpm(my_fcounts, normalized.lib.sizes=TRUE, log = TRUE)
+#   fcounts.ensembl.norm.reorder <- fcounts.ensembl.norm[,c(11,22,30:36,1:10,12:21,23:29)]
+#   boxplot(fcounts.ensembl.norm.reorder, col=col, las=2, cex.axis=0.7, ylab="log2CPM")
+#   abline(h=0, col="blue")
+# }
+```
+
+```{r}
+# countdata <- as.matrix(fcounts.ensembl.raw$counts)
+# colnames(countdata) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+# condition <- factor(targets$genotype,levels=levels(targets$genotype)[c(1,2,3,5,4,7,6,8,9)])
+# plot_cpm_boxplot(countdata,condition,fcounts.ensembl)
+```
+```{r}
+# countdata.nc <- as.matrix(fcounts.noncode.raw$counts)
+# colnames(countdata.nc) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+# plot_cpm_boxplot(countdata.nc,condition,fcounts.noncode)
+```
+
+***
+
+# DESeq2 Analysis
+
+## Transform edgeR data to DEseq2
+https://bioconductor.org/packages/devel/bioc/vignettes/DEFormats/inst/doc/DEFormats.html
+
+```{r}
+countdata <- as.matrix(fcounts.ensembl.raw$counts)
+colnames(countdata) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+condition <- factor(targets$genotype,levels=levels(targets$genotype)[c(1,2,3,5,4,7,6,8,9)])
+coldata <- data.frame(row.names=colnames(countdata), condition)
+dds <- DESeqDataSetFromMatrix(countData=countdata, colData=coldata, design=~condition)
+```
+
+Reorder dds to have the data correctly sorted
+
+```{r}
+dds <- dds[,c(11,22,30:36,1:10,12:21,23:29)]
+condition <- condition[c(11,22,30:36,1:10,12:21,23:29)]
+```
+
+Run the DESeq pipeline
+  *  Remove first the "uncounted" genes: cpm > 1 at least in 4 samples
+
+```{r}
+dds <- dds[rowSums(fpm(dds)>1)>=4]
+dds <- DESeq(dds)
+ddsBACKUP <- dds
+```
+
+
+```{r}
+plot_cpm_boxplot <- function(my_dds, my_condition) {
+  mycols <- hue_pal()(9)[as.numeric(factor(condition))]
+  # logcounts <- log2(assay(my_dds) + 1)
+  logcounts <- log2(counts(my_dds,normalized=FALSE) + 1)
+  par(mfrow=c(2,1),oma=c(1,0,0,0) + 0.1, mar=c(2,5,1,1) + 0.1)
+  boxplot(logcounts, 
+        xlab="Sample ID", 
+        ylab="Log2(Counts)",
+        las=2, cex.axis=0.7,
+        col=mycols)
+  abline(h=median(as.matrix(logcounts)), col="black")
+  logcounts <- log2(counts(dds,normalized=TRUE) + 1)
+  boxplot(logcounts, 
+        xlab="Sample ID", 
+        ylab="Log2(Counts) - Norm",
+        las=2, cex.axis=0.7,
+        col=mycols)
+  abline(h=median(as.matrix(logcounts)), col="black")
+}
+```
+```{r}
+plot_cpm_boxplot(dds,condition)
+```
+
+### Same for NONCODE dataset
+
+```{r}
+countdata.nc <- as.matrix(fcounts.noncode.raw$counts)
+colnames(countdata.nc) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+condition <- factor(targets$genotype,levels=levels(targets$genotype)[c(1,2,3,5,4,7,6,8,9)])
+coldata.nc <- data.frame(row.names=colnames(countdata.nc), condition)
+dds.nc <- DESeqDataSetFromMatrix(countData=countdata.nc, colData=coldata.nc, design=~condition)
+```
+
+Reorder dds to have the data correctly sorted
+
+```{r}
+dds.nc <- dds.nc[,c(11,22,30:36,1:10,12:21,23:29)]
+condition <- condition[c(11,22,30:36,1:10,12:21,23:29)]
+```
+
+Run the DESeq pipeline
+  *  Remove first the "uncounted" genes: cpm > 1 at least in 4 samples
+
+```{r}
+dds.nc <- dds.nc[rowSums(fpm(dds.nc)>1)>=4]
+dds.nc <- DESeq(dds.nc)
+ddsBACKUP.nc <- dds.nc
+```
+
+```{r}
+plot_cpm_boxplot(dds.nc,condition)
+```
+
+## Heatmap
+
+Sample distance heatmap
+
+```{r}
+vst <- vst(dds)
+mycols <- hue_pal()(9)[1:length(unique(condition))]
+sampleDists_vst <- as.matrix(dist(t(assay(vst))))
+```
+
+```{r}
+heatmap.2(as.matrix(sampleDists_vst), key=F, trace="none",
+           col=colorpanel(100, "black", "white"),
+           ColSideColors=mycols[condition], RowSideColors=mycols[condition],
+           margin=c(5, 5), main="Sample Distance Matrix")
+legend("topleft", legend=unique(condition), col=mycols,lty=1,lwd=5,cex=0.4)
+```
+```{r}
+n_controls <- c(13:20,25:28) #controls
+n_controls <- c(1:12) #gene_trans
+n_controls <- c(17:24) #swim vs non-swim
+myvst <- vst(dds[,n_controls])
+cd <- condition[n_controls]
+mycols <- hue_pal()(9)[1:length(unique(cd))]
+# Sample distance heatmap
+mysampleDists_vst <- as.matrix(dist(t(assay(myvst))))
+heatmap.2(as.matrix(mysampleDists_vst), key=F, trace="none",
+           col=colorpanel(100, "black", "white"),
+           ColSideColors=mycols[as.numeric(factor(as.character(cd),levels=unique(as.character(cd))))],
+           RowSideColors=mycols[as.numeric(factor(as.character(cd),levels=unique(as.character(cd))))],
+           margin=c(5, 5), main="Sample Distance Matrix")
+legend("topleft", legend=unique(cd), col=mycols,lty=1,lwd=5,cex=0.4)
+```
+
+```{r}
+vst.nc <- vst(dds.nc)
+sampleDists_vst.nc <- as.matrix(dist(t(assay(vst.nc))))
+```
+
+```{r}
+mycols <- hue_pal()(9)[1:length(unique(condition))]
+heatmap.2(as.matrix(sampleDists_vst.nc), key=F, trace="none",
+           col=colorpanel(100, "black", "white"),
+           ColSideColors=mycols[vst.nc$condition], RowSideColors=mycols[vst.nc$condition],
+           margin=c(5, 5), main="Sample Distance Matrix")
+legend("topleft", legend=unique(vst.nc$condition), col=mycols,lty=1,lwd=5,cex=0.4)
+```
+```{r}
+n_controls <- c(13:20,25:28) #controls
+n_controls <- c(1:12) #gene_trans
+n_controls <- c(17:24) #swim vs non-swim
+myvst <- vst(dds.nc[,n_controls])
+cd <- condition[n_controls]
+mycols <- hue_pal()(9)[1:length(unique(cd))]
+# Sample distance heatmap
+mysampleDists_vst <- as.matrix(dist(t(assay(myvst))))
+heatmap.2(as.matrix(mysampleDists_vst), key=F, trace="none",
+           col=colorpanel(100, "black", "white"),
+           ColSideColors=mycols[as.numeric(factor(as.character(cd),levels=unique(as.character(cd))))],
+           RowSideColors=mycols[as.numeric(factor(as.character(cd),levels=unique(as.character(cd))))],
+           margin=c(5, 5), main="Sample Distance Matrix")
+legend("topleft", legend=unique(cd), col=mycols,lty=1,lwd=5,cex=0.4)
+```
+
+## Get Biomart Ensembl Info
+
+Get info from biomart and combine with the "genes" variable
+
+```{r}
+library(biomaRt)
+mart <- useMart("ensembl", dataset="mmusculus_gene_ensembl")
+attributes <- c("ensembl_gene_id","gene_biotype","external_gene_name","entrezgene_id","mgi_id")
+g <- getBM(attributes=attributes,filters="ensembl_gene_id",values=rownames(dds.nc),mart=mart,uniqueRows = T)
+# g[which(g$ensembl_gene_id == "ENSMUSG00000113178"),]
+# g[which(g$ensembl_gene_id == "ENSMUSG00000097383"),]
+# g[which(g$entrezgene_id == 15455),]
+# g[which(g$mgi_id == "MGI:96220"),]
+```
+
+## Top variable Genes
+
+* Not really useful now, as we don't know what to compare yet
+
+```{r}
+res.nc <- results(dds.nc)
+res.nc$symbol <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res.nc),
+                     column="SYMBOL",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+```
+
+* Refs for mapping ids and whole process:
+https://bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/doc/rnaseqGene.html
+
+```{r}
+topVarGenes <- head(order(rowVars(assay(vst.nc)), decreasing = TRUE), 20)
+mat  <- assay(vst.nc)[ topVarGenes, ]
+mat  <- mat - rowMeans(mat)
+rownames(mat) <- res.nc$symbol[topVarGenes]
+anno <- as.data.frame(colData(vst.nc)[, "condition"])
+rownames(anno) <- colnames(mat)
+colnames(anno) <- "Condition"
+pheatmap(mat, annotation_col = anno)
+```
+
+## PCA plots
+
+Plot all groups and also depending on the subset (e.g. Swim vs Non-swim)
+
+```{r}
+plot_PCA <- function(my_vst){
+  z0 <- DESeq2::plotPCA(my_vst, intgroup="condition",ntop=2000) +
+    theme(legend.text = element_text(size = 7),
+          legend.key.size = unit(0.3, "lines"),
+          legend.title = element_blank(),
+          axis.text.x=element_text(size=rel(0.8)),
+          axis.title.x=element_text(size=rel(0.8)),
+          axis.text.y=element_text(size=rel(0.8)),
+          axis.title.y=element_text(size=rel(0.8)),
+          plot.margin = unit(c(0.3, 0.2, 0, 0.2), "cm"),
+          legend.position="bottom")
+  z1 <- DESeq2::plotPCA(my_vst[,c(1:16)], intgroup="condition",ntop=2000) + geom_text(show.legend=F,aes(label = colnames(vst[,c(1:16)])),nudge_y=c(rep(1,8))) + labs(color="Sample")+
+    theme(legend.text = element_text(size = 7),
+          legend.key.size = unit(0.3, "lines"),
+          legend.title = element_blank(),
+          axis.text.x=element_text(size=rel(0.8)),
+          axis.title.x=element_text(size=rel(0.8)),
+          axis.text.y=element_text(size=rel(0.8)),
+          axis.title.y=element_text(size=rel(0.8)),
+          plot.margin = unit(c(0.3, 0.2, 0, 0.2), "cm"),
+          legend.position="bottom")
+  z2 <- DESeq2::plotPCA(my_vst[,c(17:24)], intgroup="condition",ntop=2000) + geom_text(show.legend=F,aes(label = colnames(vst[,c(17:24)])),nudge_y=c(rep(1,8))) + labs(color="Sample")+
+    theme(legend.text = element_text(size = 7),
+          legend.key.size = unit(0.3, "lines"),
+          legend.title = element_blank(),
+          axis.text.x=element_text(size=rel(0.8)),
+          axis.title.x=element_text(size=rel(0.8)),
+          axis.text.y=element_text(size=rel(0.8)),
+          axis.title.y=element_text(size=rel(0.8)),
+          plot.margin = unit(c(0.3, 0.2, 0, 0.2), "cm"),
+          legend.position="bottom")
+  z3 <- DESeq2::plotPCA(my_vst[,c(25:36)], intgroup="condition",ntop=2000) + geom_text(show.legend=F,aes(label = colnames(vst[,c(25:36)])),nudge_y=c(rep(1,8))) + labs(color="Sample")+
+    theme(legend.text = element_text(size = 7),
+          legend.key.size = unit(0.3, "lines"),
+          legend.title = element_blank(),
+          axis.text.x=element_text(size=rel(0.8)),
+          axis.title.x=element_text(size=rel(0.8)),
+          axis.text.y=element_text(size=rel(0.8)),
+          axis.title.y=element_text(size=rel(0.8)),
+          plot.margin = unit(c(0.3, 0.2, 0, 0.2), "cm"),
+          legend.position="bottom")
+  #all controls
+  z4 <- DESeq2::plotPCA(my_vst[,c(13:20,25:28)], intgroup="condition",ntop=2000) + geom_text(show.legend=F,aes(label = colnames(vst[,c(13:20,25:28)])),nudge_y=c(rep(1,8))) + labs(color="Sample")+
+    theme(legend.text = element_text(size = 7),
+          legend.key.size = unit(0.3, "lines"),
+          legend.title = element_blank(),
+          axis.text.x=element_text(size=rel(0.8)),
+          axis.title.x=element_text(size=rel(0.8)),
+          axis.text.y=element_text(size=rel(0.8)),
+          axis.title.y=element_text(size=rel(0.8)),
+          plot.margin = unit(c(0.3, 0.2, 0, 0.2), "cm"),
+          legend.position="bottom")
+  #swim vs igf1r vs tacsev
+  z5 <- DESeq2::plotPCA(my_vst[,c(9:12,21:24,33:36)], intgroup="condition",ntop=2000) + geom_text(show.legend=F,aes(label = colnames(vst[,c(9:12,21:24,33:36)])),nudge_y=c(rep(1,8))) + labs(color="Sample")+
+    theme(legend.text = element_text(size = 7),
+          legend.key.size = unit(0.3, "lines"),
+          legend.title = element_blank(),
+          axis.text.x=element_text(size=rel(0.8)),
+          axis.title.x=element_text(size=rel(0.8)),
+          axis.text.y=element_text(size=rel(0.8)),
+          axis.title.y=element_text(size=rel(0.8)),
+          plot.margin = unit(c(0.3, 0.2, 0, 0.2), "cm"),
+          legend.position="bottom")
+  # z2 + geom_text(show.legend=F,aes(label = colnames(vst[,c(17:24)])),nudge_y=c(rep(1,8))) + labs(color="Sample")
+  plot_grid(z0,z1,z2,z3,z4,z5,ncol=3,nrow=2)
+}
+```
+
+```{r warning=FALSE}
+plot_PCA(vst)
+```
+```{r warning=FALSE}
+plot_PCA(vst.nc)
+```
+
+And the associated Screeplot
+
+```{r}
+plot_PCA_screeplot <- function (my_vst) {
+  rv = rowVars(assay(my_vst))
+   selgenes=dim(my_vst)[1]
+   select = order(rv, decreasing = TRUE)[seq_len(min(selgenes, length(rv)))]
+   pca = prcomp(t(assay(my_vst)[select, ]))
+   ## the contribution to the total variance for each component
+   percentVar <- pca$sdev^2 / sum( pca$sdev^2 )
+   ##plot the "percentVar"
+  scree_plot=data.frame(percentVar)
+  scree_plot[,2]<- c(1:36)
+  colnames(scree_plot)<-c("variance","component_number")
+  p <- ggplot(scree_plot[1:5,], mapping=aes(x=component_number, y=variance))+geom_bar(stat="identity")+labs(x="PC")+ scale_x_continuous(breaks=c(1:5),labels=c(1:5)) +
+    geom_segment(aes(x=1,y=scree_plot$variance[1],xend=2,yend=sum(scree_plot$variance[1:2]))) +
+    geom_segment(aes(x=2,y=sum(scree_plot$variance[1:2]),xend=3,yend=sum(scree_plot$variance[1:3]))) + 
+    geom_segment(aes(x=3,y=sum(scree_plot$variance[1:3]),xend=4,yend=sum(scree_plot$variance[1:4]))) +
+    geom_segment(aes(x=4,y=sum(scree_plot$variance[1:4]),xend=5,yend=sum(scree_plot$variance[1:5])))
+  return (p)
+}
+```
+
+```{r}
+p1 <- plot_PCA_screeplot(vst) + ggtitle("Screeplot for Ensembl data")
+p2 <- plot_PCA_screeplot(vst.nc) + ggtitle("Screeplot for Noncode data")
+plot_grid(p1,p2,nrow=1)
+```
+
+# Differential expression analysis
+
+Ideally, I will finish the differential analysis for all the different groups:
+
+* First of all, I will check the differences between each of the conditions:
+  * 3 genetic mods vs Ntg
+  * Swim vs NonSwim
+  * TAC vs Sham
+  
+https://bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/doc/rnaseqGene.html
+
+Explanation about how to call "results" and how to extract all different comparisons:
+https://support.bioconductor.org/p/98346/
+https://rstudio-pubs-static.s3.amazonaws.com/329027_593046fb6d7a427da6b2c538caf601e1.html
+https://www.biostars.org/p/145211/
+
+* It came out to me as the resultsNames(dds) only returns comparisons with respect to first condition, however, according to the comments, everything is included in dds and "results" is able to extract the correct information.
+
+## Step 0.1: IGF1R vs Ntg
+
+To see how an "easy case" works
+
+```{r}
+# res <- results(dds,alpha=0.05,lfcThreshold = 1)
+res <- results(dds)
+table(res$padj<0.05)
+summary(res)
+# head(res[order(res$pvalue),])
+```
+
+Without anything, is the same than the first column vs the last one:
+
+```{r}
+res <- results(dds,contrast=c("condition","caPI3K","TACSEV"),alpha=0.05,lfcThreshold = 0)
+table(res$padj<0.05)
+summary(res)
+# head(res[order(res$pvalue),])
+```
+
+But we want to specify which columns to compare:
+
+```{r}
+res <- results(dds,contrast=c("condition","IGF1R","Ntg"),alpha=0.05,lfcThreshold = 0)
+res$symbol <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res),
+                     column="SYMBOL",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+res$entrezid <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res),
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+res$refseq <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res),
+                     column="REFSEQ",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+table(res$padj<0.05)
+# summary(res)
+```
+
+### Heatmap of the most DE genes
+
+Change colors from heatmap to highlight the ones you want to compare
+
+```{r}
+library(colorspace)   ## hsv colorspace manipulations
+desat <- function(cols, sat=0.5) {
+X <- diag(c(1, sat, 1)) %*% rgb2hsv(col2rgb(cols))
+hsv(X[1,], X[2,], X[3,])
+}
+mycols <- hue_pal()(9)[1:length(unique(condition))]
+mycols_desat <- desat(mycols,0.3)
+```
+
+
+```{r}
+anno.neworder <- union(which(colData(vst)[, "condition"] %in% c("IGF1R","Ntg")),c(1:dim(colData(vst))[1]))
+mat <- assay(vst)[ head(order(res$padj),20), anno.neworder]
+mat  <- mat - rowMeans(mat)
+rownames(mat) <- res[match(rownames(mat),rownames(res)),"symbol"]
+anno <- as.data.frame(colData(vst)[anno.neworder, "condition"])
+rownames(anno) <- colnames(mat)
+colnames(anno) <- "Condition"
+anno_colors <- c(hue_pal()(2),rev(mycols_desat[3:length(mycols_desat)]))
+names(anno_colors) <- unique(anno[,1])
+anno_colors <- list(Condition=anno_colors)
+pheatmap(mat, cluster_cols=F, annotation_col = anno, annotation_colors=anno_colors)
+```
+
+```{r}
+mcols(res, use.names = TRUE)
+```
+```{r}
+summary(res)
+```
+
+```{r}
+topGenes <- rownames(res)[head(order(res$padj),10)]
+topGenes <- res$symbol[head(order(res$padj),10)]
+topGene <- topGenes[1]
+data<-plotCounts(dds, names(topGene), "condition",returnData=T)
+# data$count <- log2(fpm(dds)[which(rownames(res) == topGene),])
+data$count <- log2(fpm(dds)[which(res$symbol == topGene),])
+ggplot(data, aes(x=condition, y=count, color=condition))+
+     geom_boxplot(alpha=0,width=0.2,show.legend=FALSE) +
+     #scale_y_log10() +
+     geom_point(position=position_jitter(width=.1,height=0))+
+     labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+     ggtitle(paste(topGene,": Gene Expression")) +
+     ylim(c(-10,15))
+```
+
+```{r}
+topGene <- "Igf1r"
+names(topGene) <- "ENSMUSG00000005533"
+# topGene <- "1500026H17Rik"
+# names(topGene) <- "ENSMUSG00000097383"
+data<-plotCounts(dds, names(topGene), "condition",returnData=T)
+data$count <- log2(fpm(dds)[which(res$symbol == topGene),])
+ggplot(data, aes(x=condition, y=count, color=condition))+
+   geom_boxplot(alpha=0,width=0.2,show.legend=FALSE) +
+   #scale_y_log10() +
+   geom_point(position=position_jitter(width=.1,height=0))+
+   labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+   ggtitle(paste(topGene,": Gene Expression")) +
+   ylim(c(0,15))
+```
+
+#### Example with a specific lncRNA
+
+Gets filtered out because not fpm vs IGFR very big
+
+```{r}
+k <- DESeqDataSetFromMatrix(countData=countdata, colData=coldata, design=~condition)
+sum(rownames(k) == "ENSMUSG00000097383")
+which(rownames(k) == "ENSMUSG00000097383")
+k[28462]
+k<-k[,c(11,22,30:36,1:10,12:21,23:29)]
+counts(k)[28462,]
+fpm(k)[28462,]
+```
+
+Now with IGFR1:
+
+
+```{r}
+n <- which(rownames(k) == "ENSMUSG00000005533")
+k[n]
+# k<-k[,c(11,22,30:36,1:10,12:21,23:29)]
+counts(k)[n,]
+fpm(k)[n,]
+```
+
+
+``` {r}
+volcanoplot <- function (res, lfcthresh=1, sigthresh=0.05, main="Volcano Plot", legendpos="bottomright",       labelsig=TRUE, textcx=1, ...) {
+     with(res, plot(log2FoldChange, -log10(pvalue), pch=20, main=main, ...))
+     with(subset(res, padj<sigthresh ), points(log2FoldChange, -log10(pvalue), pch=20, col="red", ...))
+     with(subset(res, abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue), pch=20,            col="orange", ...))
+     with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue),   pch=20, col="green", ...))
+     if (labelsig) {
+         require(calibrate)
+         with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=textcx, ...))
+
+     }
+     legend(legendpos, xjust=1, yjust=1, legend=c(paste("FDR<",sigthresh,sep=""), paste("|LogFC|>",lfcthresh,   sep=""), "both"), pch=20, col=c("red","orange","green"))
+
+}
+resorder <- res[order(res$padj), ]
+## Merge with normalized count data
+resdata <- merge(as.data.frame(resorder), as.data.frame(counts(dds, normalized=TRUE)), by="row.names", sort=FALSE)
+names(resdata)[1] <- "Gene"
+resdata$GeneENS <- resdata$Gene
+resdata$Gene <- res$symbol[match(resdata$Gene,rownames(res))]
+# volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10),ylim=c(0,30))
+volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10))
+```
+
+## Repeat the same for LNCRNA dataset
+
+* Find NC-RNA from the noncode dataset
+To map ids:
+https://support.bioconductor.org/p/63502/
+
+```{r}
+library(dplyr)
+res.nc <- results(dds.nc,contrast=c("condition","IGF1R","Ntg"),alpha=0.05,lfcThreshold = 0)
+res.nc$symbol <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res.nc),
+                     column="SYMBOL",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+res.nc$symbol <- coalesce(res.nc$symbol,g$external_gene_name[match(rownames(res.nc),g$ensembl_gene_id,)])
+res.nc$entrezid <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res.nc),
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+res.nc$refseq <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res.nc),
+                     column="REFSEQ",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+table(res.nc$padj < 0.05)
+summary(res.nc)
+# head(res.nc[str_detect(rownames(res.nc),"NONMMU"),])
+```
+
+```{r}
+anno.neworder <- union(which(colData(vst.nc)[, "condition"] %in% c("IGF1R","Ntg")),c(1:dim(colData(vst.nc))[1]))
+mat <- assay(vst.nc)[ head(order(res.nc$padj),20), anno.neworder]
+mat  <- mat - rowMeans(mat)
+rownames(mat) <- res.nc[match(rownames(mat),rownames(res.nc)),"symbol"]
+anno <- as.data.frame(colData(vst.nc)[anno.neworder, "condition"])
+rownames(anno) <- colnames(mat)
+colnames(anno) <- "Condition"
+anno_colors <- c(hue_pal()(2),rev(mycols_desat[3:length(mycols_desat)]))
+names(anno_colors) <- unique(anno[,1])
+anno_colors <- list(Condition=anno_colors)
+pheatmap(mat, cluster_cols=F, annotation_col = anno, annotation_colors=anno_colors)
+```
+
+```{r}
+topGenes <- rownames(res.nc)[head(order(res.nc$padj),10)]
+topGenes <- res.nc$symbol[head(order(res.nc$padj),10)]
+topGene <- topGenes[1]
+data<-plotCounts(dds.nc, names(topGene), "condition",returnData=T)
+data$count <- log2(fpm(dds.nc)[which(res.nc$symbol == topGene),])
+ggplot(data, aes(x=condition, y=count, color=condition))+
+     geom_boxplot(alpha=0,width=0.2,show.legend=FALSE) +
+     #scale_y_log10() +
+     geom_point(position=position_jitter(width=.1,height=0))+
+     labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+     ggtitle(paste(topGene,": Gene Expression")) +
+     ylim(c(-10,15))
+```
+
+``` {r}
+resorder.nc <- res.nc[order(res.nc$padj), ]
+## Merge with normalized count data
+resdata.nc <- merge(as.data.frame(resorder.nc), as.data.frame(counts(dds.nc, normalized=TRUE)), by="row.names", sort=FALSE)
+names(resdata.nc)[1] <- "Gene"
+resdata.nc$GeneENS <- resdata.nc$Gene
+resdata.nc$Gene <- res.nc$symbol[match(resdata.nc$Gene,rownames(res.nc))]
+# volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10),ylim=c(0,30))
+volcanoplot(resdata.nc, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10))
+```
+
+# DE genes study
+
+## lncRNA?
+
+Which genes are different between the mm10 gtf set and the one with noncode?
+
+```{r}
+k1 <- rownames(res)
+k2 <- rownames(res.nc)
+head(k2[!k2 %in% k1])
+```
+
+## Get genes and their biotypes
+
+```{r}
+# summarizeProteinCodingGenes <- function(txdb)
+# {
+#     stopifnot(is(txdb, "TxDb"))
+#     protein_coding_tx <- names(cdsBy(txdb, use.names=TRUE))
+#     all_tx <- mcols(transcripts(txdb, columns=c("gene_id", "tx_name")))
+#     all_tx$gene_id <- as.character(all_tx$gene_id)
+#     all_tx$is_coding <- all_tx$tx_name %in% protein_coding_tx
+#     tmp <- splitAsList(all_tx$is_coding, all_tx$gene_id)
+#     gene <- names(tmp)
+#     nb_tx <- unname(elementNROWS(tmp))
+#     nb_coding <- unname(sum(tmp))
+#     nb_non_coding <- nb_tx - nb_coding
+#     data.frame(gene, nb_tx, nb_coding, nb_non_coding, stringsAsFactors=FALSE)
+# }
+```
+```{r}
+# library(TxDb.Mmusculus.UCSC.mm10.knownGene)
+# txdb <- TxDb.Mmusculus.UCSC.mm10.knownGene
+# df <- summarizeProteinCodingGenes(txdb)
+# head(df)
+```
+```{r}
+# df$symbol <- mapIds(org.Mm.eg.db,
+#                      keys=df$gene,
+#                      column="SYMBOL",
+#                      keytype="ENTREZID",
+#                      multiVals="first")
+# df$ensembl <- mapIds(org.Mm.eg.db,
+#                      keys=df$gene,
+#                      column="ENSEMBL",
+#                      keytype="ENTREZID",
+#                      multiVals="first")
+# df[which( df$symbol == "Pik3ca"),]
+# df [which(df$gene == 13221),]
+# df[which(df$ensembl == "ENSMUSG00000097383"),]
+# df[which(df$ensembl == "ENSMUSG00000113178"),]
+# head(df)
+# dim(df)
+```
+
+other options, some errors with the one above:
+https://support.bioconductor.org/p/63502/
+https://www.biostars.org/p/178726/
+
+```{r}
+genes<-read.table("geneInfo.txt",sep="\t",quote="\"",na.strings="-",fill=TRUE,col.names=c("GeneID","Symbol","TypeOfGene"))
+# dim(genes)
+```
+```{r}
+genes$ensembl <- mapIds(org.Mm.eg.db,
+                     keys=as.character(genes$GeneID),
+                     column="ENSEMBL",
+                     keytype="ENTREZID",
+                     multiVals="first")
+genes$ensemblSYM <- mapIds(org.Mm.eg.db,
+                     keys=as.character(genes$Symbol),
+                     column="ENSEMBL",
+                     keytype="SYMBOL",
+                     multiVals="first")
+# head(genes)
+# genes[which(genes$GeneID== 13221),]
+# genes[which(genes$GeneENS == "ENSMUSG00000094497"),]
+```
+
+
+```{r}
+genes$ensemblMART <- g$ensembl_gene_id[match(genes$Symbol,g$external_gene_name,)]
+# genes[which(genes$GeneID== 17902),]
+# length(genes$ensembl)
+# sum(is.na(genes$ensembl))
+genes <- genes %>% 
+  mutate(GeneENS = coalesce(ensembl,ensemblSYM, ensemblMART))%>%
+  select(GeneID, Symbol, TypeOfGene,GeneENS)
+```
+
+* Some tests, just to check it worked
+
+```{r}
+# t <- genes
+# t[which(t$GeneID== 17902),]
+# sum(is.na(t$GeneENS))
+# t[which(t$GeneENS == "ENSMUSG00000113178"),]
+# t[which(t$GeneENS == "ENSMUSG00000097383"),]
+# t[which(t$GeneID == 69002),]
+# t[which(t$Symbol == "Igf1r"),]
+# tprotcod <- t[which(t$TypeOfGene == "protein-coding"),]
+# tprotcod[is.na(tprotcod$GeneENS),]
+```
+
+## Get biotype from the set of genes
+
+```{r}
+resdata.nc$biotype <- genes$TypeOfGene[match(resdata.nc$entrezid,genes$GeneID)]
+resdata.nc$biotype <- coalesce(resdata.nc$biotype,genes$TypeOfGene[match(resdata.nc$GeneENS,genes$GeneENS)])
+resdata.nc[str_detect(resdata.nc$GeneENS,"NONMMU"),"biotype"] <- "ncRNA"
+# head(resdata.nc)
+```
+```{r}
+plot_resdata.nc <- resdata.nc[resdata.nc$padj < 0.05,]
+plot_resdata.nc$expression <- "up"
+plot_resdata.nc$expression[plot_resdata.nc$log2FoldChange < 0] <- "down"
+# df3 <- data_summary(plot_data, varname="DM", groupnames="group")
+pTitle <- "Biotype and expression Barplot"
+pxLab <- "Biotypes"
+pyLab <- "Count"
+ggplot(plot_resdata.nc,aes(biotype,fill=expression)) +
+  geom_bar(stat="count", width=0.8, aes(fill=expression),position=position_dodge(.9)) +
+  ggtitle(pTitle) +
+  xlab (pxLab) +
+  ylab (pyLab) +
+  geom_text(stat='count', aes(label=..count..), hjust=-0.15,position = position_dodge(0.9)) +
+  ylim(c(0,2500)) +
+  coord_flip() +
+  theme_minimal()
+```
+
+https://www.r-graph-gallery.com/spider-or-radar-chart.html
+
+```{r}
+library(fmsb)
+data <- matrix(table(plot_resdata.nc$biotype,exclude=NULL),nrow=1)
+colnames(data) <- names(table(plot_resdata.nc$biotype,exclude=NULL))
+data <-t(as.matrix(data[,data > 1]))
+data <- as.data.frame(rbind(rep(4000,length(data)) , rep(0,length(data)) , data))
+colnames(data)[is.na(colnames(data))] = "NA"
+radarchart(data,axistype=1,
+    pcol=rgb(0.2,0.5,0.5,0.9) , pfcol=rgb(0.2,0.5,0.5,0.5) , plwd=4 , 
+ 
+    #custom the grid
+    cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,4000,1000), cglwd=0.8,
+ 
+    #custom labels
+    vlcex=0.8 
+    )
+```
+
+## DE genes just with lncRNA
+```{r}
+resLNC <- resdata.nc %>%
+   # filter(biotype != "protein-coding" & !is.na(biotype))
+   filter(biotype == "ncRNA")
+table(resLNC$padj<0.05)
+
+```
+
+```{r}
+# kknoncode <- dds.nc[str_detect(rownames(dds.nc),"NONMMU"),]
+# reskk <- results(kknoncode,contrast=c("condition","IGF1R","Ntg"),alpha=0.05,lfcThreshold = 0)
+# table(reskk$padj<0.05)
+```
+```{r}
+# summary(reskk)
+# summary(resLNC)
+```
+
+```{r}
+topGenes <- resLNC$GeneENS[head(order(resLNC$padj),10)]
+# topGenes <- res$symbol[head(order(res$padj),10)]
+topGene <- topGenes[3]
+ data<-plotCounts(dds.nc, topGene, "condition",returnData=T)
+ data$count <- log2(fpm(dds.nc)[which(rownames(res.nc) == topGene),])
+# data$count <- log2(fpm(dds.nc)[which(res$symbol == topGene),])
+
+ ggplot(data, aes(x=condition, y=count, color=condition))+
+     geom_boxplot(alpha=0,width=0.2,show.legend=FALSE) +
+     #scale_y_log10() +
+     geom_point(position=position_jitter(width=.1,height=0))+
+     labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+     ggtitle(paste(topGene,": Gene Expression")) +
+     ylim(c(-5,10))
+```
+
+# Calculate the same for all groups
+
+```{r}
+run_all_process <- function (case,control,gene_matrix=genes){
+  myres <- results(dds.nc,contrast=c("condition",case,control),alpha=0.05,lfcThreshold = 0)
+  myres$symbol <- mapIds(org.Mm.eg.db,
+                       keys=row.names(myres),
+                       column="SYMBOL",
+                       keytype="ENSEMBL",
+                       multiVals="first")
+  myres$symbol <- coalesce(myres$symbol,g$external_gene_name[match(rownames(myres),g$ensembl_gene_id,)])
+  myres$entrezid <- mapIds(org.Mm.eg.db,
+                       keys=row.names(myres),
+                       column="ENTREZID",
+                       keytype="ENSEMBL",
+                       multiVals="first")
+  myres$refseq <- mapIds(org.Mm.eg.db,
+                       keys=row.names(myres),
+                       column="REFSEQ",
+                       keytype="ENSEMBL",
+                       multiVals="first")
+  print(table(myres$padj < 0.05))
+  
+  #PLOT HEATMAP
+  anno.neworder <- union(which(colData(vst.nc)[, "condition"] %in% 
+                                 c(case,control)),c(1:dim(colData(vst.nc))[1]))
+  mat <- assay(vst.nc)[ head(order(myres$padj),20), anno.neworder]
+  mat <- mat - rowMeans(mat)
+  rownames(mat) <- myres[match(rownames(mat),rownames(myres)),"symbol"]
+  anno <- as.data.frame(colData(vst.nc)[anno.neworder, "condition"])
+  rownames(anno) <- colnames(mat)
+  colnames(anno) <- "Condition"
+  anno_colors <- c(hue_pal()(2),rev(mycols_desat[3:length(mycols_desat)]))
+  names(anno_colors) <- unique(anno[,1])
+  anno_colors <- list(Condition=anno_colors)
+  pheatmap(mat, cluster_cols=F, annotation_col = anno,
+           annotation_colors=anno_colors)
+  
+  #PLOT BOXPLOT MAX DIFF
+  topGenes <- rownames(myres)[head(order(myres$padj),10)]
+  topGenes <- myres$symbol[head(order(myres$padj),10)]
+  topGene <- topGenes[1]
+  data<-plotCounts(dds.nc, names(topGene), "condition",returnData=T)
+  data$count <- log2(fpm(dds.nc)[which(myres$symbol == topGene),])
+  p <- ggplot(data, aes(x=condition, y=count, color=condition))+
+       geom_boxplot(alpha=0,width=0.2,show.legend=FALSE) +
+       #scale_y_log10() +
+       geom_point(position=position_jitter(width=.1,height=0))+
+       labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+       ggtitle(paste(topGene,": Gene Expression")) +
+       ylim(c(-10,15)) +
+       theme_minimal() + 
+       theme(axis.text.x = element_text(angle = 18,hjust=1),
+             plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+  plot(p)
+  
+  #ORDER AND GET DATA
+  resorder.nc <- myres[order(myres$padj), ]
+  resdata.nc <- merge(as.data.frame(resorder.nc),
+                      as.data.frame(counts(dds.nc, normalized=TRUE)),
+                      by="row.names", sort=FALSE)
+  names(resdata.nc)[1] <- "Gene"
+  resdata.nc$GeneENS <- resdata.nc$Gene
+  resdata.nc$Gene <- myres$symbol[match(resdata.nc$Gene,rownames(myres))]
+  genes <- gene_matrix
+  resdata.nc$biotype <- genes$TypeOfGene[match(resdata.nc$entrezid,genes$GeneID)]
+  resdata.nc$biotype <- coalesce(resdata.nc$biotype,
+                                 genes$TypeOfGene[match(resdata.nc$GeneENS,genes$GeneENS)])
+  resdata.nc[str_detect(resdata.nc$GeneENS,"NONMMU"),"biotype"] <- "ncRNA"
+  plot_resdata.nc <- resdata.nc[resdata.nc$padj < 0.05,]
+  plot_resdata.nc <- plot_resdata.nc[!is.na(plot_resdata.nc$padj),]
+  plot_resdata.nc$expression <- "up"
+  plot_resdata.nc$expression[plot_resdata.nc$log2FoldChange < 0] <- "down"
+  pTitle <- paste0("Biotype and expression - ",case," vs ",control)
+  pxLab <- "Biotypes"
+  pyLab <- "Count"
+  ylimmax <- round(max(table(plot_resdata.nc$expression))*1.1/5000,1)*5000
+  if (ylimmax == 0) {ylimmax <- 500}
+  p <- ggplot(plot_resdata.nc,aes(biotype,fill=expression)) +
+    geom_bar(stat="count", width=0.8,
+             aes(fill=expression),position=position_dodge(.9)) +
+    ggtitle(pTitle) +
+    xlab (pxLab) +
+    ylab (pyLab) +
+    geom_text(stat='count', aes(label=..count..), hjust=-0.15,
+              position = position_dodge(0.9)) +
+    ylim(c(0,ylimmax)) +
+    coord_flip() +
+    theme_minimal()
+  plot(p)
+
+  #PLOT RADARCHART
+  data <- matrix(table(plot_resdata.nc$biotype,exclude=NULL),nrow=1)
+  colnames(data) <- names(table(plot_resdata.nc$biotype,exclude=NULL))
+  data <-t(as.matrix(data[,data > 1]))
+  data <- as.data.frame(rbind(rep(4000,length(data)) , rep(0,length(data)) , data))
+  colnames(data)[is.na(colnames(data))] = "NA"
+  # radarchart(data,axistype=1,
+  #     pcol=rgb(0.2,0.5,0.5,0.9) , pfcol=rgb(0.2,0.5,0.5,0.5) , plwd=4 , 
+  #     #custom the grid
+  #     cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,4000,1000), cglwd=0.8,
+  #     #custom labels
+  #     vlcex=0.8)
+  # return(resorder.nc)
+}
+```
+
+```{r}
+run_all_process("IGF1R","Ntg")
+```
+
+
+```{r}
+run_all_process("caPI3K","Ntg")
+```
+
+
+```{r}
+run_all_process("dnPI3K","Ntg")
+```
+
+
+```{r}
+run_all_process("SWIM","NONSWIM")
+```
+
+
+```{r}
+run_all_process("TACSEV","Sham")
+```
+
+
+```{r}
+run_all_process("TACMOD","Sham")
+```
+
+
+```{r}
+run_all_process("IGF1R","Sham")
+```
+
+
+```{r}
+run_all_process("IGF1R","NONSWIM")
+```
+
+# GSEA & Pathway analysis
+
+Prepare input, get gene ids from ensembl
+
+```{r}
+library(biomaRt)
+mouse = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+biom.genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","chromosome_name","start_position","end_position","description","transcript_length"),mart = mouse)
+resdata.nc$entrez<-biom.genes[match(resdata.nc$GeneENS,biom.genes$ensembl_gene_id),]$entrezgene_id
+resdata.nc$gene_name<-biom.genes[match(resdata.nc$GeneENS,biom.genes$ensembl_gene_id),]$external_gene_name
+resdata.nc$length<-biom.genes[match(resdata.nc$GeneENS,biom.genes$ensembl_gene_id),]$transcript_length
+```
+
+## Hallmark pathways
+
+Get all pathways from msigdb
+
+```{r}
+library(msigdbr)
+raw.mouse.paths.HALLMARK = msigdbr(species = "Mus musculus",category="H")
+raw.mouse.paths.HALLMARK.names <- unique(raw.mouse.paths.HALLMARK$gs_name)
+pathways.MM.H <- list()
+for (i in raw.mouse.paths.HALLMARK.names){
+  tmp <- as.list(raw.mouse.paths.HALLMARK[raw.mouse.paths.HALLMARK$gs_name == i,"entrez_gene"])
+  pathways.MM.H[i] <- tmp
+}
+pathways.MM.H <- lapply(pathways.MM.H, as.character)
+```
+```{r}
+library(fgsea)
+gseaDat <- resdata.nc[!is.na(resdata.nc$entrezid),]
+# ranks <- gseaDat$log2FoldChange
+ranks <- gseaDat$stat
+names(ranks) <- gseaDat$entrez
+fgseaRes <- fgsea(pathways.MM.H, ranks, minSize=15, maxSize = 500, nperm=1000)
+head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+```
+```{r}
+ggplot(fgseaRes[order(padj, -abs(NES)), ][1:20], aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=padj<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title="Hallmark pathways NES from GSEA") + 
+  theme_minimal()
+```
+
+# Summary of session
+
+Loaded packages and other parameters
+
+```{r}
+sessionInfo()
+```
+

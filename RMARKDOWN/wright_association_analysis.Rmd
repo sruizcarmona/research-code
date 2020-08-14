@@ -1,0 +1,718 @@
+---
+title: "Leah Wright - Lipidomics"
+author: "[Baker Bioinformatics (Artika and Sergio)](https://intranet.baker.edu.au/research-resources/platform-technologies/bioinformatics-program/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "bioinformatics@baker.edu.au"
+# output:
+#   html_notebook:
+#     # css:
+#     # - !expr system.file("rmarkdown/templates/html_vignette/resources/vignette.css",
+#     #                     package = "rmarkdown")
+#     toc: true
+#     toc_depth: 3
+#     toc_float:
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     code_folding: show
+#     # fig_width: 12
+#     # fig_height: 12
+output:
+  epuRate::BAKER:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# Initial setup
+## Load libraries
+
+```{r warning=FALSE, results='hide'}
+# library(fit)
+library(ggplot2)
+# library(leaflet)
+library(dplyr)
+# library(cetcolor)
+library(stringr)
+library(readxl)
+# library(summarytools)
+# 2nd part
+library(rmarkdown)    # install.packages("rmarkdown")
+library(tidyr)
+library(epuRate)      # devtools::install_github("holtzy/epuRate", force=TRUE)
+```
+
+## Configure output
+
+```{r setup}
+library(knitr)
+opts_chunk$set(results = 'asis',      # Can also be set at the chunk-level
+               comment = NA,
+               prompt  = FALSE,
+               cache   = FALSE)
+library(summarytools)
+st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           style        = "rmarkdown", # Always use this option in Rmd documents
+           footnote     = NA,          # Makes html-rendered results more concise
+           subtitle.emphasis = FALSE)  # Improves layout with some rmardown themes
+```
+
+```{r, echo=FALSE}
+st_css()
+```
+
+***
+# Read input
+
+Read file with 2016 and 2017 patients data together:
+
+* Already QCd and mediancentered by lipidomics people
+* 2017 individuals lack personal info and CVD measurements
+  * __Corrected in the last update sent by Leah__
+  
+```{r}
+# file <- "Echo_Lipids no CVD.xlsx"
+file <- "final_dataset.xlsx"
+mydata <- read_xlsx(file)
+```
+
+***
+
+# Data Cleaning
+## Preprocess and summarize
+
+Here, we will select and group files in order to get a basic summary of all the dataset.
+
+* Personal info
+* Health and disease info
+* Cardiac info
+* Lipid info (to do separately later)
+
+We will use these results to sort and filter out the patients without enough data in each of the groups (e.g. _not enough cardiac info or lack of health measurements_)
+
+More details about the summarytools library here:  
+https://cran.r-project.org/web/packages/summarytools/vignettes/Introduction.html
+
+Divide all fields in the different groups:
+
+```{r}
+# fields_to_summarize <- paste(colnames(mydata)[1:128],collapse="', '")
+fields_nolipids <- c(1:101)
+fields_lipids <- c(1,102:716)
+fields_personal <- c(1:23)
+fields_health <- c(24:53)
+fields_cardiac <- c(54:101)
+# # exclude uninformative fields for the report, such as sno 1, site_name 2, date_enrol 4, pt_initials 5, dob 6, repeated ID 54
+# fields_excluded <- c(1,2,4,5,6,54)
+fields_excluded <- NULL
+```
+
+### Personal info
+
+Corrections:
+
+* Change pregnant == 2 (not-pregnant), to 0, as it makes more sense.
+  * Men will still have NA and women will have 0 or 1.
+  * Add waist to hip ratio
+
+```{r}
+mydata$pregnant[mydata$pregnant == 2] <- 0
+mydata <- mydata %>% mutate(waist_hip_ratio = waist/hip)
+```
+
+Summary:
+
+```{r, warning=F}
+fields_personal_OK <- setdiff(fields_personal,fields_excluded)
+print(dfSummary(mydata[,fields_personal_OK],style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp"),method='render')
+print(dfSummary(mydata$waist_hip_ratio,style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp"),method='render')
+```
+
+### Health and disease info
+
+Some columns have missing data but does not appear critical:
+
+* Some blood pressure values and category classifications (1-3%).
+  * We will use average SBP (mainly) and DBP which are complete.
+* Alc_quantity (25% missing), but will keep as Leah wants to include it when we have the data.
+  * Refers to quantity alcohol column in 1:day, 2:week and 3:month.
+  * Would it make sense to standardize all to month? Considering the missing values here as if they were month?
+* ldlmmolL has 28 missing values (5.73%), we will keep it and check when analysing later on.
+
+Removing patients with >% of missing data might decrease the amount of column missingness.
+
+```{r, warning=F}
+fields_health_OK <- setdiff(fields_health,fields_excluded)
+print(dfSummary(mydata[,fields_health_OK],style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp"),method='render')
+```
+
+### Cardiac info
+
+Some columns have missing data but we will keep them as Leah wants it to be included:
+
+* Remove column with ID (54), as it's a repetition of column 5.
+* ValveReplacement and the following columns have high missing data, but will keep them.
+* Special focus on columns GLS_Peak, Esepta, Elat, eavg, Eemed, EELat, EEavg, LA_Index and LVMass_Index, as they are the most interesting ones for Leah's analysis.
+  * All of them have low missingness.
+
+As section before, removing patients with >% of missing data might decrease the amount of column missingness.
+
+
+```{r, warning=F}
+fields_cardiac_OK <- setdiff(fields_cardiac,fields_excluded)
+print(dfSummary(mydata[,fields_cardiac_OK],style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp"),method='render')
+```
+
+***
+
+## Data by patient
+
+### Missing fields
+
+In this section, we will check missing data for each of the patients. 
+
+* We will decide whether we discard some of the patients based on a threshold % of missing values.
+* For the moment, not checking on lipid values yet.
+
+```{r}
+patient.missing.data <- rowSums(is.na(mydata[fields_nolipids]))/length(fields_nolipids)*100
+data.breaks <- c(0,5,10,15,20,40,60,100)
+data.breaks.chr <- c('(0,5%]','(5,10%]','(10,15%]','(15,20%]','(20,40%]','(40,60%]','(60,100%]')
+hist.data <- hist(patient.missing.data,plot=F,breaks=data.breaks)
+df.missing.data <- as.data.frame(hist.data$counts)
+colnames(df.missing.data) <- "patients"
+df.missing.data <- df.missing.data %>%
+  mutate(
+    missing = data.breaks.chr,
+    perc.patients = round(patients/length(patient.missing.data)*100,2),
+    cum.patients = cumsum(patients),
+    cum.perc = cumsum(perc.patients)
+  ) %>%
+  select(
+    missing,patients,cum.patients,perc.patients,cum.perc,
+  )
+df.missing.data
+```
+
+So, if we discarted all patients with **more than 15%** missing data, we would only lose 2% of them.
+
+An example of >40% missing data (all data and missing fields), looks like patient missed the ultrasound test:
+
+```{r}
+mydata[1,fields_nolipids]
+mydata[1,fields_nolipids][as.logical(is.na(mydata[1,fields_nolipids]))]
+```
+
+And an example of ~10%, missing some values (common with most patients):
+
+```{r}
+mydata[11,fields_nolipids]
+mydata[11,fields_nolipids][as.logical(is.na(mydata[11,fields_nolipids]))]
+```
+
+## Final clean set
+
+To summarize:
+
+* Remove individuals with >15% missing variables
+* Get clean data with only no-lipid variables (including W2H ratio and removing repeated ID)
+
+```{r}
+dim(mydata)
+mydata.clean <- mydata[patient.missing.data < 15,]
+dim(mydata.clean)
+# get nolipids and W2H Ratio
+mydata.clean.metadata <- mydata.clean[,c(fields_nolipids,717)]
+dim(mydata.clean.metadata)
+# remove repeated ID
+mydata.clean.metadata$ID <- NULL
+dim(mydata.clean.metadata)
+```
+
+* Summarize again all the variables and see missingness:
+  * No big changes, but a bit of cleanup on some variables
+
+```{r message=FALSE, warning=FALSE}
+# colSums(is.na(mydata.clean.metadata))
+# descr(mydata.clean.metadata, stats = c("mean", "min", "max","n.valid"),headings=F,plain.ascii = F,style="rmarkdown")
+missingness.summary <- round(t(as.data.frame(colSums(is.na(mydata.clean.metadata))))/dim(mydata.clean.metadata)[1]*100,2)
+original.data <- mydata[,c(fields_nolipids,717)]
+original.data$ID <- NULL
+missingness.summary <- rbind(missingness.summary,round(t(as.data.frame(colSums(is.na(original.data))))/dim(original.data)[1]*100,2))
+rownames(missingness.summary) <- c("Miss. clean data (%)","Miss. original data (%)")
+as.data.frame(missingness.summary)
+```
+
+Clean data with __480 individuals and 101 variables__, containing personal, health and disease info and cardiac measurements.
+
+***
+
+# Lipidomics Preliminar analysis
+
+## Preprocess and cleaning
+
+For a first data check, we will keep using the 480 individuals from the clean dataset above.
+
+```{r}
+fields_lipids <- c(1,102:716)
+lipids <- mydata.clean[fields_lipids]
+print(dfSummary(lipids[,1:4],style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp"),method='render')
+```
+
+19 of the remaining patients don't have lipidomics data (doublechecked in excel), will be discarded.
+
+```{r}
+lipid_mask <- !is.na(lipids$Sample)
+lipids <- lipids[lipid_mask,]
+print(dfSummary(lipids[,c(1:4,616)],style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp"),method='render')
+```
+
+Remove same patients from clean dataset (metadata)
+
+```{r}
+mydata.clean.metadata <- mydata.clean.metadata[lipid_mask,]
+dim(mydata.clean.metadata)
+dim(lipids)
+```
+
+
+Lipid PC(O-38:5) is also NULL, will be removed.
+
+```{r}
+colnames(lipids)[ apply(lipids, 2, anyNA) ]
+which( colnames (lipids) == colnames(lipids)[ apply(lipids, 2, anyNA) ])
+lipids <- lipids [,-which( colnames (lipids) == colnames(lipids)[ apply(lipids, 2, anyNA) ])]
+dim(lipids)
+```
+
+Get lipids table as in sample ID (sno) in rows vs all lipid values in columns
+
+```{r}
+library(tibble)
+# remove 'Sample' and 'sample details' columns convert to dataframe with sno as rownames
+lipids <- lipids [,c(-2,-3)]
+lipids <- column_to_rownames(lipids,var="sno")
+dim(lipids)
+```
+
+Save clean dataset in excel format
+
+```{r}
+# library(xlsx)
+# clean.dataset <- cbind(mydata.clean.metadata,lipids)
+# write.xlsx(clean.dataset,file="clean_dataset.xlsx")
+# write.csv(clean.dataset,file="clean_dataset.csv")
+```
+
+
+**Final set of 461 patients with 612 lipids.**
+
+
+## PCA
+
+Check with PCA
+
+Log2 transform first
+
+```{r}
+lipids <- log2(lipids)
+lipids.metadata <- mydata.clean.metadata
+```
+
+
+```{r}
+lipids.pca <- prcomp(lipids,center=TRUE,scale. = T)
+pc1var <- round(summary(lipids.pca)$importance[2,1]*100,1)
+pc2var <- round(summary(lipids.pca)$importance[2,2]*100,1)
+# lipids.pca <- prcomp(lipids[,2:10],center=TRUE, scale. = TRUE)
+# head(summary(lipids.pca))
+```
+
+```{r, echo = F, fig.width=10}
+par(mfrow=c(2,3))
+par(oma = c(4, 4, 0.3, 0)) # make room (i.e. the 4's) for the overall x and y axis titles
+par(mar = c(2, 2, 2, 1)) # make the plots be closer together
+mycex.text=0.7
+mycex.legend=0.8
+mycex.plot=1.2
+# plot 1
+plot(lipids.pca$x[,1],lipids.pca$x[,2],
+     pch=16,col=lipids.metadata$site_no,
+     xlab=paste0("PC1 (",pc1var,"% explained var.)"),
+     ylab=paste0("PC2 (",pc2var,"% explained var.)"),
+     main="site_name",cex=mycex.plot)
+legend("topright",fill=unique(lipids.metadata$site_no),legend=c("Alice Springs", "Palm Island"),cex=mycex.legend)
+text(lipids.pca$x[,1]+1.5,lipids.pca$x[,2],labels = lipids.metadata$sno,cex=mycex.text)
+# plot 2
+plot(lipids.pca$x[,1],lipids.pca$x[,2],
+     pch=16,col=lipids.metadata$sex+1,
+     xlab=paste0("PC1 (",pc1var,"% explained var.)"),
+     ylab=paste0("PC2 (",pc2var,"% explained var.)"),
+     main="sex",cex=mycex.plot)
+legend("topright",fill=unique(lipids.metadata$sex+1),legend=c("Male", "Female"),cex=mycex.legend)
+text(lipids.pca$x[,1]+1.5,lipids.pca$x[,2],labels = lipids.metadata$sno,cex=mycex.text)
+# plot 3
+plot(lipids.pca$x[,1],lipids.pca$x[,2],
+     pch=16,col=lipids.metadata$agecateg,
+     xlab=paste0("PC1 (",pc1var,"% explained var.)"),
+     ylab=paste0("PC2 (",pc2var,"% explained var.)"),
+     main="agecateg",cex=mycex.plot)
+legend("topright",fill=sort(unique(lipids.metadata$agecateg)),
+       legend=c("< 35", "35 < 44","45 < 54","> 55"),cex=mycex.legend)
+text(lipids.pca$x[,1]+1.5,lipids.pca$x[,2],labels = lipids.metadata$sno,cex=mycex.text)
+# plot 4
+plot(lipids.pca$x[,1],lipids.pca$x[,2],
+     pch=16,col=as.factor(lipids.metadata$BMIClassif),
+     xlab=paste0("PC1 (",pc1var,"% explained var.)"),
+     ylab=paste0("PC2 (",pc2var,"% explained var.)"),
+     main="BMI",cex=mycex.plot)
+legend("topright",fill=unique(as.factor(lipids.metadata$BMIClassif)),
+       legend=paste(unique(as.factor(lipids.metadata$BMIClassif))),cex=mycex.legend)
+text(lipids.pca$x[,1]+1.5,lipids.pca$x[,2],labels = lipids.metadata$sno,cex=mycex.text)
+# plot 5
+sel_var <- lipids.metadata$SBPClassif
+plot(lipids.pca$x[,1],lipids.pca$x[,2],
+     pch=16,col=as.factor(sel_var),
+     xlab=paste0("PC1 (",pc1var,"% explained var.)"),
+     ylab=paste0("PC2 (",pc2var,"% explained var.)"),
+     main="BPClassif",cex=mycex.plot)
+legend("topright",fill=unique(as.factor(sel_var)),
+       legend=paste(unique(as.factor(sel_var))),cex=mycex.legend)
+text(lipids.pca$x[,1]+1.5,lipids.pca$x[,2],labels = lipids.metadata$sno,cex=mycex.text)
+# plot 6
+sel_var <- lipids.metadata$diabetes
+plot(lipids.pca$x[,1],lipids.pca$x[,2],
+     pch=16,col=as.factor(sel_var),
+     xlab=paste0("PC1 (",pc1var,"% explained var.)"),
+     ylab=paste0("PC2 (",pc2var,"% explained var.)"),
+     main="diabetes",cex=mycex.plot)
+legend("topright",fill=unique(as.factor(sel_var)),
+       legend=paste(unique(as.factor(sel_var))),cex=mycex.legend)
+text(lipids.pca$x[,1]+1.5,lipids.pca$x[,2],labels = lipids.metadata$sno,cex=mycex.text)
+# axis text
+mtext(paste0("PC1 (",pc1var,"% explained var.)"), side = 1, outer = TRUE, line = 2)
+mtext(paste0("PC2 (",pc2var,"% explained var.)"), side = 2, outer = TRUE, line = 2)
+```
+
+
+
+```{r}
+# library(ggbiplot)
+# ggbiplot(lipids.pca,labels=rownames(lipids))
+# ggbiplot(lipids.pca)
+# biplot(lipids.pca)
+```
+
+## Heatmap
+
+```{r}
+library(gplots)
+m <- cor(lipids, method = "pearson", use = "complete.obs")
+breaks = seq(-1, 1, length.out=50)
+gradient1 = colorpanel( sum( breaks[-1]<=-0.5 ), "yellow", "green" )
+gradient2 = colorpanel( sum( breaks[-1]>-0.5 & breaks[-1]<=0 ), "green", "blue" )
+gradient3 = colorpanel( sum( breaks[-1]>0 & breaks[-1]<=0.5 ), "blue", "darkblue" )
+gradient4 = colorpanel( sum( breaks[-1]>0.5 ), "darkblue", "black" )
+hm.colors = c(gradient1, gradient2, gradient3, gradient4)
+heatmap.2(m,dendrogram='row',Rowv=T,Colv=T,trace='none',col=hm.colors,breaks=breaks,
+          labRow = F, labCol = F,margins = c(2, 2),
+          xlab="Lipid Correlation")
+
+#FULL matrix
+# mydataFull <- t(mydata)
+# mydataFull[lower.tri(mydataFull)]<-mydata[lower.tri(mydata)]
+# heatmap.2(mat,trace='none',col=col)
+
+```
+
+***
+
+# Lipid Association Analysis
+
+## Background
+Sanity checks with the cleaned filtered data prior to performing downstream analysis  
+- Clean data contains 416 individuals x 612 lipidome + 102 meta/phenodata
+- These 416 inviduals have corresponding lipid and meta/cardiogram data   
+- Raw lipid values were log2 transformed
+
+## Read the data
+```{r, fold.output=TRUE, fold.plot=FALSE}
+dat <- read.csv("clean_dataset_LipidMetaCombined.csv", stringsAsFactors = FALSE, check.names = FALSE)
+lipid <- dat[,102:ncol(dat)]
+lipid$batch <- lipid$batch <- gsub(".*/", "", dat$date_enrol)
+lipid_16 <- lipid[which(lipid$batch == "16"),]
+lipid_17 <- lipid[which(lipid$batch == "17"),]
+```
+
+## Distribution of the lipidome data
+Density distribution plots show that the lipid measures are normally distriuted  
+Also, the distribution of lipids in both batches (year 2016, 2017) overlap  
+Few, example (oxCE (18:2) [+2O]) show bimodal distribution
+
+```{r density plots, fold.output=TRUE, fold.plot=FALSE}
+pdf("Densityplot_log2_lipidome.pdf")
+par(mfrow=c(3,4))
+lipid_names <- colnames(lipid)[1:612]
+for (i in 1:length(lipid_names)){
+  lim=range(lipid[,i])
+  a <- density(lipid_16[,i])
+  b <- density(lipid_17[,i])
+  max <- max(max(a$y), max(b$y))
+  plot(density(lipid_16[,i], na.rm=TRUE), col="red", lwd=2, xlim=c(lim[1] - lim[1]*0.02,lim[2] + lim[2]*0.02), main=lipid_names[i], cex.main=0.8, ylim=c(0,max), xlab="Log2_lipid")
+  lines(density(lipid_17[,i], na.rm=TRUE), col="blue", lwd=2)
+  legend("topright", c("16", "17"), col=c("red", "blue"), lty=1, cex=0.5)
+}
+whatever <- dev.off()
+```
+[Link to a pdf version of the plot](Densityplot_log2_lipidome.pdf)  
+**Few, example (oxCE (18:2) [+2O]), show bimodal distribution**
+
+```{r, fig.width=3, fig.height=3,fig.show='hold',fig.align='left', fold.plot=FALSE}
+lim=range(lipid$`oxCE (18:2) [+2O]`)
+plot(density(lipid_16$`oxCE (18:2) [+2O]`, na.rm=TRUE), col="red", lwd=2, xlim=c(lim[1] - lim[1]*0.01,lim[2] + lim[2]*0.01), main="oxCE (18:2) [+2O]", cex.main=0.8,xlab="Log2_lipid")
+lines(density(lipid_17$`oxCE (18:2) [+2O]`, na.rm=TRUE), col="blue", lwd=2)
+```
+
+## Lipid - Covariate Associations
+Linear regression was used to explore the association between each lipid species and covariate.  
+The P-values of association adjusted using the Benjamini–Hochberg procedure.   
+covariates tested were: Age, Sex, HR, Diabetes status, Famhx_Heart, Blood Pressure (SBP and DBP), BMI, W/H ratio, CVDRisk (5 and 10 yr), batch
+Note: for famhx_heart and diabetes - had individuals with either 0 (No); 1 (Yes); 11 (Unsure); the "Unsure" was changed to NA
+
+```{r, fold.output=FALSE, fold.plot=FALSE}
+cov <- dat[,c("sno", "sex", "age_calc", "HR", "BMIcalc", "waist_hip_ratio", "AvrgeSBP", "AvrgeDBP", "CVDRisk_10_yr","CVD_Risk5_yr", "famhx_heart", "diabetes")]
+cov$batch <- lipid$batch
+cov$diabetes[cov$diabetes == 11] <- NA
+cov$famhx_heart[cov$famhx_heart == 11] <- NA
+
+combined <- data.frame(matrix(ncol = 0, nrow = 612))
+for (i in 2:ncol(cov)){
+cov_name <- colnames(cov)[i]
+d <- data.frame()
+    for (j in 1:612){
+fit <- summary(lm(lipid[,j] ~cov[,i]))
+d[j,1] <- fit$coefficients[2,1]
+d[j,2] <- fit$coefficients[2,4]
+    }
+colnames(d) <- c("beta", "pval")
+d$fdr <- p.adjust(d$pval, method="BH")
+colnames(d) <- paste(cov_name, colnames(d), sep="_")
+rownames(d) <- colnames(lipid)[1:612]
+combined <- cbind(combined, d)
+}
+write.csv(combined, "Assoc_Lipids_Covariates.csv", quote = FALSE, row.names=TRUE)
+```
+[Link to a csv file with the association results: **"Assoc_Lipids_Covariates.csv"** ](Assoc_Lipids_Covariates.csv)  
+```{r, fold.output=FALSE, fold.plot=TRUE}
+combined1 <- combined[,1:4]
+combined1$sex_beta <- round(combined1$sex_beta, 2)
+combined1$sex_pval <- formatC(combined1$sex_pval, format = "e", digits = 2)
+combined1$sex_fdr <- formatC(combined1$sex_fdr, format = "e", digits = 2)
+rownames(combined1) <- NULL
+head(combined1[1:5, 1:3])
+
+```
+
+### Summary Lipid - Covariate Associations
+The table summarises the number of lipids significantly (FDR < 0.05) associated with each covariate. The top lipid (lowest FDR) associated with each covariate is given together the beta estimate and FDR value. 
+```{r, fold.output=FALSE, fold.plot=FALSE}
+
+covlipid_summ <- data.frame()
+for(i in 2:ncol(cov)){
+names <- c(paste0(colnames(cov)[i], "_beta"), paste0(colnames(cov)[i], "_fdr"))
+sub  <- combined[, names]
+l <- length(which(sub[,2] < 0.05))
+sub1 <- sub[order(sub[,2]),]
+sub2 <- cbind(l, sub1[1,])
+sub2$top <- rownames(sub2)
+sub2$cov <- colnames(cov)[i]
+sub3 <- sub2[, c(5,1,4,2,3)]
+colnames(sub3) <- c("Covariate", "Tot_SigLipids", "TopLipid", "TopLipid_Beta", "TopLipid_FDR")
+covlipid_summ <- rbind(covlipid_summ, sub3)
+covlipid_summ$TopLipid_Beta <- round(covlipid_summ$TopLipid_Beta, 2)
+covlipid_summ$TopLipid_FDR <- as.numeric(as.character(covlipid_summ$TopLipid_FDR))
+covlipid_summ$TopLipid_FDR <- formatC(covlipid_summ$TopLipid_FDR, format = "e", digits = 2)
+rownames(covlipid_summ) <- NULL
+}
+```
+
+```{r}
+library(kableExtra)
+kable(covlipid_summ) %>%
+kable_styling(bootstrap_options = c("striped", "hover"), font_size = 15, full_width = TRUE, position = "left") %>% 
+footnote("oxCE (18:2) [+2O] is the top lipid associated with batch, this is the same lipid which has a strong bimodal distribition - with each peak representing the two year batches",  footnote_as_chunk = T, title_format = c("italic", "underline"), fixed_small_size = TRUE)
+```
+
+## Lipid - Echo Associations (no covariates)
+Linear regression was used to explore the association between each lipid species and echo marker.  
+The P-values of association adjusted using the Benjamini–Hochberg procedure.   
+echo markers analysed are GLS_Peak, Eseptal, ELat, eavg, Eemed, EELat, EEavg, LAVavg, LA_Index, LVOTd, LVIDD, LVmass1, LVMass_Index
+
+```{r, fold.output=FALSE, fold.plot=FALSE}
+echo_sub <- dat[,c("sno", "GLS_Peak", "Eseptal", "ELat", "eavg", "Eemed", "EELat", "EEavg", "LAVavg", "LA_Index", "LVOTd", "LVIDD", "LVmass1", "LVMass_Index")]
+echo_sub1 <- echo_sub[, -1]
+echo <- log2(echo_sub1)
+combined_echo <- data.frame(matrix(ncol = 0, nrow = 612))
+for (i in 1:ncol(echo)){
+echo_name <- colnames(echo)[i]
+d_echo <- data.frame()
+    for (j in 1:612){
+fit_echo <- summary(lm(lipid[,j] ~echo[,i]))
+d_echo[j,1] <- fit_echo$coefficients[2,1]
+d_echo[j,2] <- fit_echo$coefficients[2,4]
+    }
+colnames(d_echo) <- c("beta", "pval")
+d_echo$fdr <- p.adjust(d_echo$pval, method="BH")
+colnames(d_echo) <- paste(echo_name, colnames(d_echo), sep="_")
+rownames(d_echo) <- colnames(lipid)[1:612]
+combined_echo <- cbind(combined_echo, d_echo)
+
+}
+write.csv(combined_echo, "Assoc_Lipids_Echomarkers_NoAdjCovariates.csv", quote = FALSE, row.names=TRUE)
+```
+[Link to a csv file with the association results: **"Assoc_Lipids_Echomarkers_NoAdjCovariates.csv"**](Assoc_Lipids_Echomarkers_NoAdjCovariates.csv)  
+
+### Summary Lipid - Echo Associations (no covariates) 
+The table summarises the number of lipids significantly (FDR < 0.05) associated with each echo marker.  
+The top lipid (lowest FDR) associated with each echo marker is given together the beta estimate and FDR value
+
+```{r, fold.output=FALSE, fold.plot=FALSE}
+echolipid_summary <- data.frame()
+for(i in 1:ncol(echo)){
+names <- c(paste0(colnames(echo)[i], "_beta"), paste0(colnames(echo)[i], "_fdr"))
+sub  <- combined_echo[, names]
+l <- length(which(sub[,2] < 0.05))
+sub1 <- sub[order(sub[,2]),]
+sub2 <- cbind(l, sub1[1,])
+sub2$top <- rownames(sub2)
+sub2$echo <- colnames(echo)[i]
+sub3 <- sub2[, c(5,1,4,2,3)]
+colnames(sub3) <- c("echo_Marker", "TotSigLipids_NoAdjCov", "TopLipid_NoAdjCov", "TopLipid_Beta", "TopLipid_FDR")
+echolipid_summary <- rbind(echolipid_summary, sub3)
+}
+
+echolipid_summary <- data.frame(echolipid_summary)
+echolipid_summary$TopLipid_FDR <- formatC(echolipid_summary$TopLipid_FDR, format = "e", digits = 2)
+echolipid_summary$TopLipid_Beta <- round(echolipid_summary$TopLipid_Beta, 2)
+rownames(echolipid_summary) <- NULL
+```
+
+```{r}
+library(kableExtra)
+kable(echolipid_summary) %>%
+kable_styling(bootstrap_options = c("striped", "hover"), font_size = 15, full_width = TRUE, position = "left")
+```
+
+## Echo - Batch Associations
+
+There seems to be a difference between the distribution of the echo markers between the two collection batches  
+The table shows the association results between each echo marker and batch   
+The boxplot shows the distrbution of the log2 values of the each markers across the two batches (as an examples chose LVMass_Index, Eemed, EELat, Eseptal)
+
+```{r, fold.output=FALSE, fold.plot=FALSE}
+ec_dat <- data.frame()
+for (i in 1:ncol(echo)){
+echo_name <- colnames(echo)[i]
+ec <- summary(lm(echo[,i] ~ cov$batch))
+ec1 <- ec$coefficients[2,]
+ec_dat <- rbind(ec_dat, ec1)
+}
+rownames(ec_dat) <- colnames(echo)
+ec_dat1 <- ec_dat[, c(1, 4)]
+colnames(ec_dat1) <- c("Beta", "Pval")
+ec_dat1$Beta <- round(ec_dat1$Beta, 2)
+ec_dat1$Pval <- formatC(ec_dat1$Pval, format = "e", digits = 2)
+```
+
+```{r}
+library(kableExtra)
+kable(ec_dat1) %>%
+kable_styling(bootstrap_options = c("striped", "hover"), font_size = 15, full_width = TRUE, position = "left")
+```
+
+
+```{r dodge-st, fig.show = "hold", out.width = "40%"}
+boxplot(echo$LVMass_Index ~ cov$batch, main= "LVMass_Index",xlab="Batch", ylab="Log2 echo marker", col=c("gold","lightgreen"))
+
+boxplot(echo$Eemed ~ cov$batch, main= "Eemed",xlab="Batch", ylab="Log2 echo marker", col=c("gold","lightgreen"))
+
+boxplot(echo$EELat ~ cov$batch, main= "EELat",xlab="Batch", ylab="Log2 echo marker", col=c("gold","lightgreen"))
+
+boxplot(echo$Eseptal ~ cov$batch, main= "Eseptal",xlab="Batch", ylab="Log2 echo marker", col=c("gold","lightgreen"))
+
+```
+
+## Lipid - Echo Associations (with covariates)
+Multiple Linear regression was used to explore the association between each lipid species and echo marker, while adjusting for covariates in the model.  
+The P-values of association adjusted using the Benjamini–Hochberg procedure.   
+**Echo markers** analysed are: *GLS_Peak, Eseptal, ELat, eavg, Eemed, EELat, EEavg, LAVavg, LA_Index, LVOTd, LVIDD, LVmass1, LVMass_Index*  
+**Covariates adjusted for** are: *Age, Sex, HR, Diabetes status, Famhx_Heart, Blood Pressure (SBP and DBP), BMI, W/H ratio, CVDRisk (5 and 10 yr), batch* 
+
+```{r, fold.output=FALSE, fold.plot=FALSE}
+c <- cov
+combined_echo_adjCov <- data.frame(matrix(ncol = 0, nrow = 612))
+for (i in 1:ncol(echo)){
+echo_name <- colnames(echo)[i]
+echo_adjCov <- data.frame()
+    for (j in 1:612){
+fit_echo_adjcov <- summary(lm(lipid[,j] ~echo[,i] + c$sex + c$age_calc + c$HR  + c$BMIcalc + c$waist_hip_ratio + c$AvrgeSBP + c$AvrgeDBP + c$CVDRisk_10_yr + c$CVD_Risk5_yr + c$famhx_heart + c$diabetes + c$batch))
+echo_adjCov[j,1] <- fit_echo_adjcov$coefficients[2,1]
+echo_adjCov[j,2] <- fit_echo_adjcov$coefficients[2,4]
+    }
+colnames(echo_adjCov) <- c("beta", "pval")
+echo_adjCov$fdr <- p.adjust(echo_adjCov$pval, method="BH")
+colnames(echo_adjCov) <- paste(echo_name, colnames(echo_adjCov), sep="_")
+rownames(echo_adjCov) <- colnames(lipid)[1:612]
+combined_echo_adjCov <- cbind(combined_echo_adjCov, echo_adjCov)
+}
+write.csv(combined_echo_adjCov, "Assoc_Lipids_Echo_AdjustedForCovariates.csv", quote = FALSE, row.names=TRUE)
+```
+[Link to a csv file with the association results: **"Assoc_Lipids_Echo_AdjustedForCovariates.csv"**](Assoc_Lipids_Echo_AdjustedForCovariates.csv)  
+
+### Summary Lipid - Echo Associations (with covariates)
+The table summarises the number of lipids significantly (FDR < 0.05) associated with each echo marker.  
+The top lipid (lowest FDR) associated with each echo marker (adjusted for covariates) is given together the beta estimate and FDR value
+
+```{r, fold.output=FALSE, fold.plot=FALSE}
+echolipidAdjCov_summary <- data.frame()
+for(i in 1:ncol(echo)){
+names <- c(paste0(colnames(echo)[i], "_beta"), paste0(colnames(echo)[i], "_fdr"))
+sub  <- combined_echo_adjCov[, names]
+l <- length(which(sub[,2] < 0.05))
+sub1 <- sub[order(sub[,2]),]
+sub2 <- cbind(l, sub1[1,])
+sub2$top <- rownames(sub2)
+sub2$echo<- colnames(echo)[i]
+sub3 <- sub2[, c(5,1,4,2,3)]
+colnames(sub3) <- c("echo_Marker", "TotSigLipids_AdjCov", "TopLipid_AdjCov", "TopLipid_Beta", "TopLipid_FDR")
+echolipidAdjCov_summary  <- rbind(echolipidAdjCov_summary, sub3)
+}
+
+echolipidAdjCov_summary <- data.frame(echolipidAdjCov_summary)
+echolipidAdjCov_summary$TopLipid_FDR <- formatC(echolipidAdjCov_summary$TopLipid_FDR, format = "e", digits = 2)
+echolipidAdjCov_summary$TopLipid_Beta <- round(echolipidAdjCov_summary$TopLipid_Beta, 2)
+rownames(echolipidAdjCov_summary) <- NULL
+```
+
+```{r}
+library(kableExtra)
+kable(echolipidAdjCov_summary) %>%
+kable_styling(bootstrap_options = c("striped", "hover"), font_size = 15, full_width = TRUE, position = "left")
+```
+
+

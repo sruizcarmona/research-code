@@ -1,0 +1,162 @@
+---
+title: "Jenny Ooi lncRNA"
+# output: 
+#   html_notebook:
+#     toc: true
+#     toc_depth: 3
+#     toc_float: 
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     # code_folding: hide
+output:
+  epuRate::BAKER:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "hide"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+
+# lncRNA analysis by RNAseq
+
+*** 
+
+## Load Libraries
+```{r}
+library(rmarkdown)    # You need this library to run this template.
+library(epuRate)      # Install with devtools: install_github("holtzy/epuRate", force=TRUE)
+library(edgeR)
+library(DESeq2)
+library(ggplot2)
+library(gplots)
+library(RColorBrewer)
+library(stringr)
+library(cowplot)
+library(scales)
+library(pheatmap)
+library(org.Mm.eg.db)
+```
+
+***
+
+# Code (import with edgeR)
+
+1) Loading targets table:
+
+```{r}
+targets <- read.delim("samplesheetJenny_OK.txt", header = T, sep = "\t")
+targets
+```
+
+2) Loading count data from featureCounts:
+
+```{r}
+fcounts.ensembl.raw <- readRDS("fcounts.JENNYGTF.rds")
+```
+
+3) Creating DGEList (an object from edgeR package)
+
+```{r}
+fcounts.ensembl <- DGEList(counts=fcounts.ensembl.raw$counts, 
+                           genes = fcounts.ensembl.raw$annotation, 
+                           samples = targets$sample, group=targets$genotype)
+colnames(fcounts.ensembl) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+```
+
+* Same for noncode data:
+
+```{r}
+fcounts.noncode.raw <- readRDS("fcounts_ensembl_noncode_gene.rds")
+fcounts.noncode <- DGEList(counts=fcounts.noncode.raw$counts, 
+                           genes = fcounts.noncode.raw$annotation, 
+                           samples = targets$sample, group=targets$genotype)
+colnames(fcounts.noncode) <- str_extract(targets$sample,"JM[0-9]{1,2}")
+```
+
+
+4) Quick look at the library sizes in the samples:
+```{r}
+# barplot(fcounts.ensembl$samples$lib.size*1e-6, names=colnames(fcounts.ensembl), ylab="Library size (millions)",las=2,cex.names=0.8)
+# abline(h=20, lty=2)
+```
+
+For the plot --> https://github.com/tidyverse/ggplot2/wiki/legend-attributes
+
+```{r}
+bplot <- fcounts.ensembl$samples[c(11,22,30:36,1:10,12:21,23:29),]
+bplot$ids <- str_extract(targets$sample,"JM[0-9]{1,2}")
+bplot$ids <- factor(paste0("JM",c(1:36)),levels=paste0("JM",c(1:36)))
+p <- ggplot(bplot,aes(x=ids,y=lib.size*1e-6,fill=group)) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5)) +
+    geom_abline(intercept=70, slope=0) +
+    ggtitle("Library Size per sample (ensembl mm10)") +
+    xlab ("Sample ID") +
+    ylab ("Library size (millions)") +
+    theme(legend.text = element_text(size = 10),legend.key.size = unit(0.5, "lines"))
+
+```
+```{r}
+bplot <- fcounts.noncode$samples[c(11,22,30:36,1:10,12:21,23:29),]
+bplot$ids <- str_extract(targets$sample,"JM[0-9]{1,2}")
+bplot$ids <- factor(paste0("JM",c(1:36)),levels=paste0("JM",c(1:36)))
+pnoncode <- ggplot(bplot,aes(x=ids,y=lib.size*1e-6,fill=group)) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5)) +
+    geom_abline(intercept=50, slope=0) +
+    ggtitle("Library Size per sample (noncode data)") +
+    xlab ("Sample ID") +
+    ylab ("Library size (millions)") +
+    #guides(color = guide_legend(override.aes = list(size = 0.2))) +
+    theme(legend.text = element_text(size = 10),legend.key.size = unit(0.5, "lines"))
+plot_grid(p,pnoncode,nrow=2)
+```
+
+## Filter out unrepresented features (genes)
+
+* CPM > 1 in at least 4 rows (number of replicates)
+```{r}
+dgList <- fcounts.ensembl
+dim(dgList)
+dgList.noncode <- fcounts.noncode
+dim(dgList.noncode)
+```
+
+```{r}
+countsPerMillion <- cpm(dgList)
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 4)
+dgList <- dgList[keep,]
+dim(dgList)
+```
+```{r}
+countsPerMillion.nc <- cpm(dgList.noncode)
+countCheck.nc <- countsPerMillion.nc > 1
+keep.nc <- which(rowSums(countCheck.nc) >= 4)
+dgList.noncode <- dgList.noncode[keep.nc,]
+dim(dgList.noncode)
+```
+
+
+```{r}
+# dgList$samples$lib.size <- colSums(dgList$counts)
+# dgList <- calcNormFactors(dgList, method="TMM")
+# colnames_OK <- targets$sample
+#plotMDS(dgList, method="bcv", col=as.numeric(dgList$samples$group),labels=str_extract(targets$sample,"JM[0-9]{1,2}"),main=paste("MDS all samples - ",dim(dgList)[1]," genes",sep=""))
+```
+
+***
+

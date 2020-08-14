@@ -1,0 +1,136 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+https://rawgit.com/bioinformatics-core-shared-training/microarray-analysis/master/downstream-tutorial.nb.html
+
+```{r}
+library(GEOquery)
+colonData <- getGEO(filename="GSE67492_series_matrix.txt")
+colonData
+exprs (colonData) <- log2 (exprs(colonData))
+boxplot(exprs(colonData),outline=FALSE)
+```
+
+```{r}
+library (genefilter)
+dim (colonData)
+varFiltered <- varFilter (colonData)
+dim (varFiltered)
+nrow (colonData) / nrow (varFiltered)
+
+```
+
+```{r}
+euc.dist <- dist (t(exprs(varFiltered)))
+euc.dist
+corMat <- cor(exprs(varFiltered))
+corMat
+cor.dist <- as.dist(1 - corMat)
+cor.dist
+```
+
+```{r}
+clust <- hclust(cor.dist)
+clust
+names(clust)
+clust$order
+plot(clust)
+```
+
+```{r}
+clust.ward <- hclust(cor.dist,method = "ward.D")
+par(mfrow=c(1,2))
+plot(clust)
+plot(clust.ward)
+```
+
+```{r}
+plot(clust,labels=paste("Sample", 1:6))
+pd <- pData(colonData)
+#View(pd)
+plot(clust,labels=pd$description)
+```
+
+```{r}
+library(WGCNA)
+```
+
+```{r}
+SampleGroup <- pData(colonData)$source_name_ch1
+SampleGroup[6]<- "control_heart"
+SampleGroup
+groupColours <- rep("yellow",length(SampleGroup))
+groupColours[SampleGroup != "control_heart"] <- "blue"
+groupColours
+clust.euclid = hclust(euc.dist)
+plotDendroAndColors(clust.euclid,colors=groupColours)
+```
+
+```{r}
+library (cluster)
+plot(clust.euclid)
+abline (h = 17, col = " red ")
+```
+
+```{r}
+cutree (clust.euclid , h =17)
+cutree (clust.euclid , k = 3)
+table (cutree(clust.euclid , k = 3) , SampleGroup)
+
+```
+
+
+```{r}
+geneVar = rowSds(exprs(colonData))
+sd(exprs(colonData)[1,])
+geneVar[1]
+sd(exprs(colonData)[2,])
+geneVar[2]
+length(geneVar)
+highVarGenes = order (geneVar, decreasing = TRUE )[1:100]
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]),labCol = SampleGroup)
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]),
+         labCol = SampleGroup,
+         ColSideColors = as.character(groupColours))
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]),
+         labCol = SampleGroup , Colv=NA)
+heatmap (as.matrix(exprs(colonData)[highVarGenes, order(SampleGroup)]),
+         labCol = SampleGroup[order(SampleGroup)], Colv = NA)
+```
+
+```{r}
+library (RColorBrewer)
+display.brewer.all()
+hmcol <- brewer.pal(11 , "RdBu")
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]) ,
+  ColSideColors = as.character(groupColours) , col=hmcol)
+```
+
+```{r}
+library(cluster)
+supervised.clus <- pam(euc.dist,k=2)
+clusplot(supervised.clus)
+supervised.clus$clustering
+```
+```{r}
+pca.geneExpression <- prcomp(t(exprs(varFiltered)))
+summary(pca.geneExpression)
+plot(pca.geneExpression)
+plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2])
+plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+     pch=16,col=as.character(groupColours))
+plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+     pch=16,col=as.character(groupColours))
+legend("bottomright",fill=c("blue","yellow"),legend=c("tumour","normal"))
+text(pca.geneExpression$x[,1],pca.geneExpression$x[,2]-0.01,labels = pd$geo_accession)
+
+```
+
+```{r}
+boxplot(pca.geneExpression$x[,1] ~ SampleGroup)
+
+```
+

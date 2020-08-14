@@ -1,0 +1,1677 @@
+---
+title: "Lipoxin Pathway Analysis"
+author: "[Baker Bioinformatics](https://intranet.baker.edu.au/research-resources/platform-technologies/bioinformatics-program/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "bioinformatics@baker.edu.au"
+# output:
+#   html_notebook:
+#     toc: true
+#     toc_depth: 2
+#     toc_float:
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+# code_folding: hide
+output:
+  epuRate::BAKER:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# GEO Dataset GSE107942 
+
+Study of Lipoxin Pathways in Mouse Kidney Dataset GSE107942
+
+https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE107942
+
+The overall idea of this analysis is to see which genes or pathways are over/down regulated in the particular mouse models of this dataset, and see whether it is related with Lipoxin Pathways.
+
+*** 
+
+## Get data from GEO
+
+### 1) Load Libraries
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(edgeR)
+library(DESeq2)
+library(RColorBrewer)
+library(ggplot2)
+library(gplots)
+library(pheatmap)
+library(cowplot)
+library(scales)
+library(org.Hs.eg.db)
+library(biomaRt)
+library(fgsea)
+library(goseq)
+library(GO.db)
+library(clusterProfiler)
+library(pathview)
+library(reshape2)
+library(msigdbr)
+library(knitr)
+library(tidyr)
+```
+
+
+### 2) Matrix Data from GEO
+Load data matrix from GEO webpage:
+
+* Remove unwanted columns (XXXXX in the `gsms` line)
+* Assign Control and Case groups to the samples (0s and 1s in the `gsms` line)
+* Case = DIABETIC LIPOXIN
+* Control = DIABETIC VEHICLE
+
+```{r}
+datain <- read.delim("GSE107942_lipoxin_gbod2_countmx.txt",header=TRUE,row.names=1)
+datain <- cbind(gsub(".*_","",rownames(datain)),datain)
+colnames(datain)[1] <- "Gene"
+rownames(datain) <- gsub("_.*","",rownames(datain))
+datain.bkp <- datain
+gene_list <- cbind(rownames(datain),as.character(datain[,1]))
+colnames(gene_list) <- c("GeneENS","GeneName")
+# gsms <- "XXXXXXXXXXXXX000000XXXXXXXXXXXX111111"
+gsms <- "X000000000000000000111111111111111111"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+sel <- which(sml != "X")
+sml <- sml[sel]
+datain <-datain [,sel]
+```
+
+Process data and assign it to an edgeR DGElist format
+```{r}
+DataGroups <- colnames(datain)
+DataGroups <- c(paste("ND-BLP",seq(1:6),sep="_"),paste("ND-VEH",seq(1:6),sep="_"),paste("ND-LPX",seq(1:6),sep="_"),paste("D-BLP",seq(1:6),sep="_"),paste("D-VEH",seq(1:6),sep="_"),paste("D-LPX",seq(1:6),sep="_"))
+#dgList <- DGEList(counts=datain,group=factor(substr(DataGroups,1,3)))
+DataGroups
+```
+***
+# DE  Pre-Analysis
+
+*  DESeq2 package analysis
+  *  (I like it more than edgeR)
+
+## Standard processing
+
+* get cpm
+* and filter genes to have more than 1 in at least 7 replicates (each group has 7 replicates)
+* Normalize and plot counts per sample
+
+```{r}
+countdata <- as.matrix(datain)
+colnames(countdata) <- DataGroups
+condition <- factor(c(rep("ND",18),rep("D",18)),levels=c("ND","D"))
+coldata <- data.frame(row.names=colnames(countdata), condition)
+dds <- DESeqDataSetFromMatrix(countData=countdata, colData=coldata, design=~condition)
+dds <- dds[rowSums(fpm(dds)>1)>=6]
+dim(dds)
+```
+
+
+```{r}
+dds <- DESeq(dds)
+dds.backup <- dds
+dim(dds)
+```
+
+## Sanity check plots
+ 
+ * Library Size
+ 
+```{r}
+mycols <- rev(hue_pal()(2)[as.numeric(factor(condition))])
+bbplot <- as.data.frame(colSums(assay(dds)))
+bbplot$ids <- rownames(bbplot)
+bbplot$group <- condition
+colnames(bbplot)[1] <- "lib.size"
+ggplot(bbplot,aes(x=ids,y=lib.size*1e-6,fill=group)) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5)) +
+    geom_abline(intercept=20, slope=0) +
+    ggtitle("Library Size per sample") +
+    xlab ("Sample ID") +
+    ylab ("Library size (millions)") +
+    theme(legend.text = element_text(size = 10),legend.key.size = unit(0.5, "lines")) +
+    scale_fill_manual(values=unique(mycols))
+```
+
+* Boxplot of count data
+
+```{r}
+logcounts <- log2(counts(dds,normalized=T) + 1)
+# Check distributions of samples using boxplots
+boxplot(logcounts, 
+        xlab="Sample ID", 
+        ylab="Log2(Counts)",
+        las=2, cex.axis=0.7,
+        col=mycols)
+legend("topleft", legend=c("DCTR", "DLPX"),
+       fill=unique(mycols),
+       #lty=1,
+       cex=0.9, inset = 0.0005,
+       title="group",text.font=1, bg='white', border='transparent',box.lty=1)
+abline(h=median(as.matrix(logcounts)), col="black")
+```
+
+* Estimation of dispersions
+  * https://support.bioconductor.org/p/78507/
+  * https://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#dispersion-plot-and-fitting-alternatives
+  
+```{r }
+ plotDispEsts(dds, main="Dispersion plot")
+```
+
+## Groups Heatmap
+Analysis by groups: Control vs T2D
+
+* Calculate distance matrix with heatmap for all samples
+* Taking into account raw counts
+
+```{r}
+vst <- vst(dds)
+# vst <- vst(dds)[,c(1:11)]
+# Sample distance heatmap
+sampleDists_vst <- as.matrix(dist(t(assay(vst))))
+```
+
+```{r}
+heatmap.2(as.matrix(sampleDists_vst), key=F, trace="none",
+           col=colorpanel(100, "black", "white"),
+           ColSideColors=mycols, RowSideColors=mycols,
+           margin=c(6,6), main="Sample Distance Matrix")
+ legend("topleft", legend=unique(condition), col=unique(mycols),lty=1,lwd=5,cex=1)
+```
+
+#### PCA Plot
+
+```{r}
+z <- DESeq2::plotPCA(vst, intgroup="condition",ntop=dim(vst)[1])
+z + geom_text(show.legend=F,aes(label = DataGroups),nudge_y=4) + 
+   scale_color_manual(values=unique(mycols))
+```
+
+Remove DLPX6 and NDVEH3!!
+
+```{r}
+gsms <- "X00000000X00000000011111111111111111X"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+sel <- which(sml != "X")
+sml <- sml[sel]
+datain <-datain.bkp [,sel]
+```
+
+```{r}
+DataGroups <- DataGroups[-9][-35]
+countdata <- as.matrix(datain)
+colnames(countdata) <- DataGroups
+condition <- factor(c(rep("ND",17),rep("D",17)),levels=c("ND","D"))
+coldata <- data.frame(row.names=colnames(countdata), condition, gsub("_.*","",DataGroups))
+colnames(coldata) <- c("group","condition")
+dds <- DESeqDataSetFromMatrix(countData=countdata, colData=coldata, design=~condition)
+dds <- dds[rowSums(fpm(dds)>1)>=6]
+dim(dds)
+```
+
+
+```{r}
+dds <- DESeq(dds)
+dim(dds)
+```
+
+```{r}
+mycols <- rev(hue_pal()(2)[as.numeric(factor(condition))])
+bbplot <- as.data.frame(colSums(assay(dds)))
+bbplot$ids <- rownames(bbplot)
+bbplot$group <- condition
+colnames(bbplot)[1] <- "lib.size"
+p1 <- ggplot(bbplot,aes(x=ids,y=lib.size*1e-6,fill=group)) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5)) +
+    geom_abline(intercept=20, slope=0) +
+    ggtitle("Library Size per sample") +
+    xlab ("Sample ID") +
+    ylab ("Library size (millions)") +
+    theme(legend.text = element_text(size = 10),legend.key.size = unit(0.5, "lines")) +
+    scale_fill_manual(values=unique(mycols))
+mycols <- rev(hue_pal()(6)[as.numeric(factor(gsub("_.*","",DataGroups)))])
+bbplot <- as.data.frame(colSums(assay(dds)))
+bbplot$ids <- rownames(bbplot)
+bbplot$group <- gsub("_.*","",DataGroups)
+colnames(bbplot)[1] <- "lib.size"
+p2 <- ggplot(bbplot,aes(x=ids,y=lib.size*1e-6,fill=group)) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,vjust=0.5)) +
+    geom_abline(intercept=20, slope=0) +
+    ggtitle("Library Size per sample") +
+    xlab ("Sample ID") +
+    ylab ("Library size (millions)") +
+    theme(legend.text = element_text(size = 10),legend.key.size = unit(0.5, "lines")) +
+    scale_fill_manual(values=unique(mycols))
+plot_grid(p1,p2,nrow=2)
+```
+
+
+```{r}
+vst <- vst(dds)
+# Sample distance heatmap
+sampleDists_vst <- as.matrix(dist(t(assay(vst))))
+```
+
+```{r}
+mycols <- rev(hue_pal()(2)[as.numeric(factor(condition))])
+heatmap.2(as.matrix(sampleDists_vst), key=F, trace="none",
+           col=colorpanel(100, "black", "white"),
+           ColSideColors=mycols,RowSideColors=mycols,
+           margin=c(6,6), main="Sample Distance Matrix")
+ legend("topleft", legend=unique(condition), col=unique(mycols),lty=1,lwd=5,cex=1)
+```
+```{r}
+mycols6 <- rev(hue_pal()(6)[as.numeric(factor(gsub("_.*","",DataGroups)))])
+z <- DESeq2::plotPCA(vst, intgroup="condition",ntop=dim(vst)[1])
+z + geom_text(show.legend=F,aes(label = DataGroups),nudge_y=2) + 
+   scale_color_manual(values=unique(mycols6))
+```
+```{r}
+mycols2 <- rev(hue_pal()(2)[as.numeric(factor(condition))])
+z <- DESeq2::plotPCA(vst, intgroup="group",ntop=dim(vst)[1])
+z + geom_text(show.legend=F,aes(label = DataGroups),nudge_y=2) + 
+   scale_color_manual(values=unique(mycols2))
+```
+
+
+And its associated Screeplot
+
+```{r}
+rv = rowVars(assay(vst))
+selgenes=dim(vst)[1]
+select = order(rv, decreasing = TRUE)[seq_len(min(selgenes, length(rv)))]
+pca = prcomp(t(assay(vst)[select, ]))
+## the contribution to the total variance for each component
+percentVar <- pca$sdev^2 / sum( pca$sdev^2 )
+
+##plot the "percentVar"
+scree_plot=data.frame(percentVar)
+scree_plot[,2]<- c(1:34)
+colnames(scree_plot)<-c("variance","component_number")
+ggplot(scree_plot[1:5,], mapping=aes(x=component_number, y=variance))+geom_bar(stat="identity")+labs(x="PC")+ scale_x_continuous(breaks=c(1:5),labels=c(1:5)) +
+  geom_segment(aes(x=1,y=scree_plot$variance[1],xend=2,yend=sum(scree_plot$variance[1:2]))) +
+  geom_segment(aes(x=2,y=sum(scree_plot$variance[1:2]),xend=3,yend=sum(scree_plot$variance[1:3]))) + 
+  geom_segment(aes(x=3,y=sum(scree_plot$variance[1:3]),xend=4,yend=sum(scree_plot$variance[1:4]))) +
+  geom_segment(aes(x=4,y=sum(scree_plot$variance[1:4]),xend=5,yend=sum(scree_plot$variance[1:5])))
+```
+
+# D-VEH vs D-LPX
+
+## Heatmap of the most DE genes
+
+* Most significant DE genes Control vs T2D
+* Adjusted p-value < 0.05
+
+```{r}
+library(org.Mm.eg.db)
+res <- results(dds, contrast=c("condition","D-LPX","D-VEH"),alpha=0.05,lfcThreshold = 0)
+table(res$padj<0.05)
+res$symbol <- gene_list[match(rownames(res),gene_list[,1]),2]
+res$entrezid <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res),
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+```
+
+```{r}
+anno.neworder <- union(which(colData(vst)[, "condition"] %in% 
+                                 c("D-VEH","D-LPX")),c(1:dim(colData(vst))[1]))
+mat <- assay(vst)[ head(order(res$padj),20), anno.neworder]
+mat <- mat - rowMeans(mat)
+rownames_mat_match <- gene_list[match(rownames(mat),gene_list[,1]),]
+rownames(mat) <- rownames_mat_match[,2]
+anno <- as.data.frame(colData(vst)[anno.neworder, "condition"])
+rownames(anno) <- colnames(mat)
+colnames(anno) <- "Condition"
+# pheatmap(mat, cluster_cols=F, annotation_col = anno,
+#          annotation_colors=anno_colors)
+  
+pheatmap(mat, annotation_col=anno,cluster_cols=F)
+```
+
+And the boxplot of the raw expression of the most DE gene
+
+```{r}
+topGene <- rownames(res)[which.min(res$padj)]
+data<-plotCounts(dds, topGene, "condition",returnData=T)
+data$count <- log2(fpm(dds)[which.min(res$padj),])
+plt <- ggplot(data, aes(x=condition, y=count, color=condition))+
+   geom_boxplot(alpha=0,width=0.1,show.legend=FALSE) +
+   #scale_y_log10() +
+   geom_point(position=position_jitter(width=.1,height=0))+
+   labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+   scale_color_manual(values=unique(mycols6)) +
+   ggtitle(paste(topGene," - ", gene_list[match(topGene,gene_list[,1]),][2],": Gene Expression"))
+plot(plt)
+```
+
+
+
+```{r eval=FALSE, include=FALSE}
+---
+# Also, some "interesting" genes for the project (edit as needed)
+---
+# selGenes <- c("ENSG00000157500","ENSG00000118046","ENSG00000132356","ENSG00000186951","ENSG00000131791")
+# # Appl1,STK11 (LKB1), prkaa1(AMPK),pparA
+# selGenes.names <- c("Appl1","LKB1","AMPK","pparA","prkab2")
+# data<-plotCounts(dds, selgenes[1], "condition",returnData=T)
+# for (i in selGenes){
+#   data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+#   data
+# }
+# data <- melt(data,id.vars='condition',measure.vars=selGenes)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# ggplot(data, aes(x=variable, y=value, color=condition)) +
+#    geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+#    #scale_y_log10() +
+#    scale_color_manual(values=unique(mycols)) +
+#    geom_point(position=position_dodge(width=0.3))+
+#    labs(x="Gene",y="CPM (log2 transformed)") +
+#   # facet_wrap( ~ variable, scales="free") +
+#    ggtitle(paste("Gene Expression:", paste(selGenes.names,collapse=", "))) + 
+#    theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+```
+
+Finally, a Volcano Plot with the results comparing the two groups:
+
+```{r}
+volcanoplot <- function (res, lfcthresh=1, sigthresh=0.05, main="Volcano Plot", legendpos="bottomright",       labelsig=TRUE, textcx=1, ...) {
+     with(res, plot(log2FoldChange, -log10(pvalue), pch=20, main=main, ...))
+     with(subset(res, padj<sigthresh ), points(log2FoldChange, -log10(pvalue), pch=20, col="red", ...))
+     with(subset(res, abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue), pch=20,            col="orange", ...))
+     with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue),   pch=20, col="green", ...))
+     if (labelsig) {
+         require(calibrate)
+         with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=textcx, ...))
+
+     }
+     legend(legendpos, xjust=1, yjust=1, legend=c(paste("FDR<",sigthresh,sep=""), paste("|LogFC|>",lfcthresh,   sep=""), "both"), pch=20, col=c("red","orange","green"))
+
+}
+resorder <- res[order(res$padj), ]
+## Merge with normalized count data
+#resdata <- merge(as.data.frame(resorder), as.data.frame(counts(dds, normalized=TRUE)), by="row.names", sort=FALSE)
+resdata <- merge(as.data.frame(resorder),
+                 as.data.frame(counts(dds,normalized=TRUE)
+                               [,c(paste("D-LPX",seq(1:5),sep="_"),
+                                   paste("D-VEH",seq(1:6),sep="_"))]),by="row.names", sort=FALSE)
+
+names(resdata)[1] <- "Gene"
+resdata$GeneENS <- resdata$Gene
+resdata$Gene <- gene_list[match(resdata$Gene,gene_list[,1]),2]
+# volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-15, 15),ylim=c(0,60))
+volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10))
+```
+
+```{r}
+selGenes.names <- resdata[order(-abs(resdata$stat)),1]
+selGenes <- resdata[order(-abs(resdata$stat)),'GeneENS']
+selGenes.names <- selGenes.names[!is.na(selGenes)][c(1:10)]
+selGenes <- selGenes[!is.na(selGenes)][c(1:10)]
+data<-plotCounts(dds, selGenes[1], "condition",returnData=T)
+for (i in selGenes){
+  data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+  data
+}
+colnames(data) <- c(colnames(data)[1:2],as.character(selGenes.names))
+data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+
+myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+  geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.7)) +
+  #scale_y_log10() +
+  scale_color_manual(values=unique(mycols6)) +
+  geom_point(position=position_dodge(width=0.7))+
+  labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+  ggtitle(paste0("Gene Expression: top DE genes")) + 
+  theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+plot(myplot)
+```
+
+Save data into csv:
+
+```{r}
+write.csv(resdata,'raw_stats_gse107942_dveh-vs-dlpx.csv')
+```
+
+
+***
+
+## GSEA Analysis
+
+Prepare input, get gene ids from ensembl
+
+```{r}
+human = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+# genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","chromosome_name","start_position","end_position","description","transcript_length"),mart = human)
+genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","transcript_length"),mart = human)
+resdata$entrez<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$entrezgene_id
+resdata$gene_name<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$external_gene_name
+resdata$length<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$transcript_length
+```
+
+## KEGG pathways
+
+* Get all pathways from KEGG
+
+```{r}
+raw.mouse.paths.KEGG = msigdbr(species = "Mus musculus",category="C2", subcategory = "CP:KEGG")
+raw.mouse.paths.KEGG.names <- unique(raw.mouse.paths.KEGG$gs_name)
+pathways.MM.K <- list()
+for (i in raw.mouse.paths.KEGG.names){
+  tmp <- as.list(raw.mouse.paths.KEGG[raw.mouse.paths.KEGG$gs_name == i,"entrez_gene"])
+  pathways.MM.K[i] <- tmp
+}
+pathways.MM.K <- lapply(pathways.MM.K, as.character)
+```
+
+
+```{r}
+gseaDat <- resdata[!is.na(resdata$entrez),]
+# ranks <- gseaDat$log2FoldChange
+ranks <- gseaDat$stat
+names(ranks) <- gseaDat$entrez
+ranks <- ranks[-which(duplicated(names(ranks)))]
+#barplot(sort(ranks, decreasing = T))
+```
+
+* And check with our data
+
+```{r}
+set.seed(42)
+fgseaRes <- fgsea(pathways.MM.K, ranks, minSize=30, maxSize = 500, nperm=1000)
+head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+```
+
+```{r}
+fgseaRes_to_csv <- fgseaRes
+fgseaRes_to_csv$genes.names<-apply(fgseaRes_to_csv,1,function(x){resdata$gene_name[match(unlist(x$leadingEdge), resdata$entrez)]})
+# fgseaRes$genes.entrez<-apply(fgseaRes,1,function(x){resdata$entrez[match(unlist(x$leadingEdge), resdata$entrez)]})
+fgseaRes_to_csv$genes.ens<-apply(fgseaRes_to_csv,1,function(x){resdata$GeneENS[match(unlist(x$leadingEdge), resdata$entrez)]})
+set_lists_to_chars <- function(x) {
+    if(class(x) == 'list') {
+    y <- paste(unlist(x[1]), sep='', collapse=', ')
+    } else {
+    y <- x 
+    }
+    return(y)
+}
+# new_frame <- data.frame(lapply(fgseaRes_to_csv, set_lists_to_chars), stringsAsFactors = F)
+# t(apply(tibb,1,function(x){t(apply(x,2,set_lists_to_chars))}))
+n <- NULL
+for (line in c(1:dim(fgseaRes_to_csv)[1])){
+  n <- rbind(n,t(apply(fgseaRes_to_csv[line,],2,set_lists_to_chars)))
+}
+write.csv(n,'pathway_stats_gse107942_dveh-vs-dlpx.csv')
+```
+
+```{r}
+ggplot(fgseaRes[order(padj, -abs(NES)), ][1:38], aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=padj<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title="KEGG pathways NES from GSEA") + 
+  theme_minimal()
+```
+
+## Gene Ontology terms
+
+```{r include=F}
+isSigGene <- resdata$pvalue < 0.01 & !is.na(resdata$pvalue)
+genes <- as.integer(isSigGene)
+names(genes) <- resdata$GeneENS
+pwf <- nullp(genes, "mm10", "ensGene", bias.data=resdata$length)
+```
+
+```{r}
+goResults <- goseq(pwf, "mm10","ensGene", test.cats=c("GO:BP"))
+goResults %>%
+    top_n(10, wt=-over_represented_pvalue) %>%
+    mutate(hitsPerc=numDEInCat*100/numInCat) %>%
+    ggplot(aes(x=hitsPerc,
+               y=term,
+               colour=over_represented_pvalue,
+               size=numDEInCat)) +
+        geom_point() +
+        expand_limits(x=0) +
+        labs(x="Hits (%)", y="GO term", colour="p value", size="Count")
+```
+
+```{r}
+GOTERM[[goResults$category[1]]]
+```
+
+***
+
+## Lipoxin pathway genes
+
+```{r}
+selected_pathways <- c("KEGG_CHEMOKINE_SIGNALING_PATHWAY","nNF-kappa B signaling pathway", "nKEGG_TNF_SIGNALING_PATHWAY","nKEGG_PI3KAKT_SIGNALING_PATHWAY","KEGG_JAK_STAT_SIGNALING_PATHWAY","KEGG_MTOR_SIGNALING_PATHWAY","KEGG_PPAR_SIGNALING_PATHWAY","nKEGG_PHOSPOLIPASED_SIGNALING_PATHWAY","KEGG_HEDGEHOG_SIGNALING_PATHWAY","KEGG_NEUROACTIVE_LIGAND_RECEPTOR_INTERACTION","KEGG_ARACHIDONIC_ACID_METABOLISM")
+p1 <- plotEnrichment(pathways.MM.K[[selected_pathways[1]]], ranks) + labs(title=selected_pathways[1])
+p2 <- plotEnrichment(pathways.MM.K[[selected_pathways[5]]], ranks) + labs(title=selected_pathways[5])
+p3 <- plotEnrichment(pathways.MM.K[[selected_pathways[9]]], ranks) + labs(title=selected_pathways[9])
+p3a <- plotEnrichment(pathways.MM.K[[selected_pathways[10]]], ranks) + labs(title=selected_pathways[10])
+p3b <- plotEnrichment(pathways.MM.K[[selected_pathways[11]]], ranks) + labs(title=selected_pathways[11])
+p4 <- plotEnrichment(pathways.MM.K$KEGG_SPLICEOSOME, ranks) + labs(title="KEGG_SPLICEOSOME")
+p5 <- plotEnrichment(pathways.MM.K$KEGG_LYSOSOME, ranks) + labs(title="KEGG_LYSOSOME")
+
+plot_grid(p1,p2,p3,p3a,p3b,p4,p5,ncol=7)
+```
+
+### KEGG Genes
+
+Select particular pathways, from the list Ting sent.
+
+```{r}
+selected_pathways_ok <- selected_pathways[c(1,5,6,7,9,10,11)]
+# add spliceosome and lysosome as controls and cell cycle as they want it
+selected_pathways_ok <- c(selected_pathways_ok,"KEGG_SPLICEOSOME","KEGG_LYSOSOME","KEGG_CELL_CYCLE")
+```
+
+Plot raw expression of 15 mostly DE genes in each of the selected pathways
+
+```{r}
+library(tidyverse)
+for (p in selected_pathways_ok) {
+  pathwaysK_INT <- lapply(pathways.MM.K, as.integer)
+  kk <- pathwaysK_INT %>%
+  enframe("pathway", "entrez") %>%
+  unnest() %>%
+  inner_join(resdata, by="entrez")
+
+  adipogenes <- kk[which (kk$pathway == p),]
+  adipogenes <- adipogenes[order(-abs(adipogenes$stat)),]
+  
+  selGenes <- adipogenes[1:15,]
+  selGenes.names <- selGenes[order(selGenes$stat),3]
+  selGenes <- selGenes[order(selGenes$stat),]$GeneENS
+  # selGenes <- selGenes[order(selGenes$stat),22]
+  # selGenes <- lapply(selGenes,as.character)[[1]]
+  selGenes.names <- lapply(selGenes.names,as.character)[[1]]
+  data<-plotCounts(dds, selgenes[1], "condition",returnData=T)
+  for (i in selGenes){
+    data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+    data
+  }
+  colnames(data) <- c(colnames(data)[1:2],unique(selGenes.names))
+  data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+  data <- data[str_detect(data$condition, eval(expression(paste("^D-LPX","^D-VEH",sep="|")))),]
+
+  myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+   geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+   #scale_y_log10() +
+   scale_color_manual(values=rev(unique(mycols2))) +
+   geom_point(position=position_dodge(width=0.3))+
+   labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+   ggtitle(paste0("Gene Expression: DE genes in ",p)) + 
+   theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+  plot(myplot)
+}
+
+```
+
+## Pathway Enrichment
+
+List of KEGG codes
+
+```{r}
+pathway_codes <- c("mmu04064","mmu04668","mmu04151","mmu04630","mmu04150","mmu03320","mmu04072","mmu04080","mmu04218","mmu00590")
+```
+
+```{r message=FALSE, warning=FALSE, comment=""}
+knit_hooks$set(output = function(x,options) x)
+ctrl='dveh'
+case='dlpx'
+outsuffix=paste0("pathview.",ctrl,"-vs-",case)
+for (mypath in pathway_codes) {
+  select <- AnnotationDbi::select
+  logFC <- gseaDat$log2FoldChange
+  names(logFC) <- gseaDat$entrez
+  pathview(gene.data = logFC, 
+         pathway.id = mypath, 
+         species = "mmu",
+         out.suffix = outsuffix,
+         limit = list(gene=1, cpd=1))
+  
+  files <- list.files(pattern = paste0(mypath,".",outsuffix,".png"))
+  # include_graphics(files)
+  cat(paste0("![](",getwd(),"/",files,")"),"\n")
+}
+```
+```{r}
+# files
+# # include_graphics(files)
+# cat(paste0("![](",getwd(),"/",files,")"),"\n")
+```
+
+***
+
+# ND-VEH vs D-VEH
+
+## Heatmap of the most DE genes
+
+* Most significant DE genes Control vs T2D
+* Adjusted p-value < 0.05
+
+```{r comment=""}
+res <- results(dds, contrast=c("condition","D-VEH","ND-VEH"),alpha=0.05,lfcThreshold = 0)
+res$symbol <- gene_list[match(rownames(res),gene_list[,1]),2]
+res$entrezid <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res),
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+table(res$padj<0.05)
+```
+
+```{r}
+anno.neworder <- union(which(colData(vst)[, "condition"] %in% 
+                                 c("D-VEH","ND-VEH")),c(1:dim(colData(vst))[1]))
+mat <- assay(vst)[ head(order(res$padj),20), anno.neworder]
+mat <- mat - rowMeans(mat)
+rownames_mat_match <- gene_list[match(rownames(mat),gene_list[,1]),]
+rownames(mat) <- rownames_mat_match[,2]
+anno <- as.data.frame(colData(vst)[anno.neworder, "condition"])
+rownames(anno) <- colnames(mat)
+colnames(anno) <- "Condition"
+# pheatmap(mat, cluster_cols=F, annotation_col = anno,
+#          annotation_colors=anno_colors)
+  
+pheatmap(mat, annotation_col=anno,cluster_cols=F)
+```
+
+And the boxplot of the raw expression of the most DE gene
+
+```{r}
+topGene <- rownames(res)[which.min(res$padj)]
+data<-plotCounts(dds, topGene, "condition",returnData=T)
+data$count <- log2(fpm(dds)[which.min(res$padj),])
+plt <- ggplot(data, aes(x=condition, y=count, color=condition))+
+   geom_boxplot(alpha=0,width=0.1,show.legend=FALSE) +
+   #scale_y_log10() +
+   geom_point(position=position_jitter(width=.1,height=0))+
+   labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+   scale_color_manual(values=unique(mycols6)) +
+   ggtitle(paste(topGene," - ", gene_list[match(topGene,gene_list[,1]),][2],": Gene Expression"))
+plot(plt)
+```
+
+Finally, a Volcano Plot with the results comparing the two groups:
+
+```{r}
+volcanoplot <- function (res, lfcthresh=1, sigthresh=0.05, main="Volcano Plot", legendpos="bottomright",       labelsig=TRUE, textcx=1, ...) {
+     with(res, plot(log2FoldChange, -log10(pvalue), pch=20, main=main, ...))
+     with(subset(res, padj<sigthresh ), points(log2FoldChange, -log10(pvalue), pch=20, col="red", ...))
+     with(subset(res, abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue), pch=20,            col="orange", ...))
+     with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue),   pch=20, col="green", ...))
+     if (labelsig) {
+         require(calibrate)
+         with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=textcx, ...))
+
+     }
+     legend(legendpos, xjust=1, yjust=1, legend=c(paste("FDR<",sigthresh,sep=""), paste("|LogFC|>",lfcthresh,   sep=""), "both"), pch=20, col=c("red","orange","green"))
+
+}
+resorder <- res[order(res$padj), ]
+## Merge with normalized count data
+#resdata <- merge(as.data.frame(resorder), as.data.frame(counts(dds, normalized=TRUE)), by="row.names", sort=FALSE)
+resdata <- merge(as.data.frame(resorder),
+                 as.data.frame(counts(dds,normalized=TRUE)
+                               [,c(paste("D-LPX",seq(1:5),sep="_"),
+                                   paste("D-VEH",seq(1:6),sep="_"))]),by="row.names", sort=FALSE)
+
+names(resdata)[1] <- "Gene"
+resdata$GeneENS <- resdata$Gene
+resdata$Gene <- gene_list[match(resdata$Gene,gene_list[,1]),2]
+# volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-15, 15),ylim=c(0,60))
+volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10))
+```
+
+```{r}
+selGenes.names <- resdata[order(-abs(resdata$stat)),1]
+selGenes <- resdata[order(-abs(resdata$stat)),'GeneENS']
+selGenes.names <- selGenes.names[!is.na(selGenes)][c(1:10)]
+selGenes <- selGenes[!is.na(selGenes)][c(1:10)]
+data<-plotCounts(dds, selGenes[1], "condition",returnData=T)
+for (i in selGenes){
+  data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+  data
+}
+colnames(data) <- c(colnames(data)[1:2],as.character(selGenes.names))
+data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+
+myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+  geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.7)) +
+  #scale_y_log10() +
+  scale_color_manual(values=unique(mycols6)) +
+  geom_point(position=position_dodge(width=0.7))+
+  labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+  ggtitle(paste0("Gene Expression: top DE genes")) + 
+  theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+plot(myplot)
+```
+
+Save data into csv:
+
+```{r}
+write.csv(resdata,'raw_stats_gse107942_ndveh-vs-dveh.csv')
+```
+
+***
+
+## GSEA Analysis
+
+Prepare input, get gene ids from ensembl
+
+```{r}
+# human = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+# genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","chromosome_name","start_position","end_position","description","transcript_length"),mart = human)
+genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","transcript_length"),mart = human)
+resdata$entrez<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$entrezgene_id
+resdata$gene_name<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$external_gene_name
+resdata$length<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$transcript_length
+```
+
+## KEGG pathways
+
+```{r}
+gseaDat <- resdata[!is.na(resdata$entrez),]
+# ranks <- gseaDat$log2FoldChange
+ranks <- gseaDat$stat
+names(ranks) <- gseaDat$entrez
+ranks <- ranks[-which(duplicated(names(ranks)))]
+#barplot(sort(ranks, decreasing = T))
+```
+
+* And check with our data
+
+```{r}
+set.seed(42)
+fgseaRes <- fgsea(pathways.MM.K, ranks, minSize=30, maxSize = 500, nperm=1000)
+head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+```
+
+```{r}
+fgseaRes_to_csv <- fgseaRes
+fgseaRes_to_csv$genes.names<-apply(fgseaRes_to_csv,1,function(x){resdata$gene_name[match(unlist(x$leadingEdge), resdata$entrez)]})
+# fgseaRes$genes.entrez<-apply(fgseaRes,1,function(x){resdata$entrez[match(unlist(x$leadingEdge), resdata$entrez)]})
+fgseaRes_to_csv$genes.ens<-apply(fgseaRes_to_csv,1,function(x){resdata$GeneENS[match(unlist(x$leadingEdge), resdata$entrez)]})
+set_lists_to_chars <- function(x) {
+    if(class(x) == 'list') {
+    y <- paste(unlist(x[1]), sep='', collapse=', ')
+    } else {
+    y <- x 
+    }
+    return(y)
+}
+# new_frame <- data.frame(lapply(fgseaRes_to_csv, set_lists_to_chars), stringsAsFactors = F)
+# t(apply(tibb,1,function(x){t(apply(x,2,set_lists_to_chars))}))
+n <- NULL
+for (line in c(1:dim(fgseaRes_to_csv)[1])){
+  n <- rbind(n,t(apply(fgseaRes_to_csv[line,],2,set_lists_to_chars)))
+}
+write.csv(n,'pathway_stats_gse107942_ndveh-vs-dveh.csv')
+```
+
+```{r}
+ggplot(fgseaRes[order(padj, -abs(NES)), ][1:38], aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=padj<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title="KEGG pathways NES from GSEA") + 
+  theme_minimal()
+```
+
+## Gene Ontology terms
+
+```{r include=F}
+isSigGene <- resdata$pvalue < 0.01 & !is.na(resdata$pvalue)
+genes <- as.integer(isSigGene)
+names(genes) <- resdata$GeneENS
+pwf <- nullp(genes, "mm10", "ensGene", bias.data=resdata$length)
+```
+
+```{r}
+goResults <- goseq(pwf, "mm10","ensGene", test.cats=c("GO:BP"))
+goResults %>%
+    top_n(10, wt=-over_represented_pvalue) %>%
+    mutate(hitsPerc=numDEInCat*100/numInCat) %>%
+    ggplot(aes(x=hitsPerc,
+               y=term,
+               colour=over_represented_pvalue,
+               size=numDEInCat)) +
+        geom_point() +
+        expand_limits(x=0) +
+        labs(x="Hits (%)", y="GO term", colour="p value", size="Count")
+```
+
+***
+
+## Lipoxin pathway genes
+
+```{r}
+selected_pathways <- c("KEGG_CHEMOKINE_SIGNALING_PATHWAY","nNF-kappa B signaling pathway", "nKEGG_TNF_SIGNALING_PATHWAY","nKEGG_PI3KAKT_SIGNALING_PATHWAY","KEGG_JAK_STAT_SIGNALING_PATHWAY","KEGG_MTOR_SIGNALING_PATHWAY","KEGG_PPAR_SIGNALING_PATHWAY","nKEGG_PHOSPOLIPASED_SIGNALING_PATHWAY","KEGG_HEDGEHOG_SIGNALING_PATHWAY","KEGG_NEUROACTIVE_LIGAND_RECEPTOR_INTERACTION","KEGG_ARACHIDONIC_ACID_METABOLISM")
+p1 <- plotEnrichment(pathways.MM.K[[selected_pathways[1]]], ranks) + labs(title=selected_pathways[1])
+p2 <- plotEnrichment(pathways.MM.K[[selected_pathways[5]]], ranks) + labs(title=selected_pathways[5])
+p3 <- plotEnrichment(pathways.MM.K[[selected_pathways[9]]], ranks) + labs(title=selected_pathways[9])
+p3a <- plotEnrichment(pathways.MM.K[[selected_pathways[10]]], ranks) + labs(title=selected_pathways[10])
+p3b <- plotEnrichment(pathways.MM.K[[selected_pathways[11]]], ranks) + labs(title=selected_pathways[11])
+p4 <- plotEnrichment(pathways.MM.K$KEGG_SPLICEOSOME, ranks) + labs(title="KEGG_SPLICEOSOME")
+p5 <- plotEnrichment(pathways.MM.K$KEGG_LYSOSOME, ranks) + labs(title="KEGG_LYSOSOME")
+
+plot_grid(p1,p2,p3,p3a,p3b,p4,p5,ncol=7)
+```
+
+### KEGG Genes
+
+Select particular pathways, from the list Ting sent.
+
+```{r}
+selected_pathways_ok <- selected_pathways[c(1,5,6,7,9,10,11)]
+# add spliceosome and lysosome as controls and cell cycle as they want it
+selected_pathways_ok <- c(selected_pathways_ok,"KEGG_SPLICEOSOME","KEGG_LYSOSOME","KEGG_CELL_CYCLE")
+```
+
+Plot raw expression of 15 mostly DE genes in each of the selected pathways
+
+```{r}
+library(tidyverse)
+for (p in selected_pathways_ok) {
+  pathwaysK_INT <- lapply(pathways.MM.K, as.integer)
+  kk <- pathwaysK_INT %>%
+  enframe("pathway", "entrez") %>%
+  unnest() %>%
+  inner_join(resdata, by="entrez")
+
+  adipogenes <- kk[which (kk$pathway == p),]
+  adipogenes <- adipogenes[order(-abs(adipogenes$stat)),]
+  
+  selGenes <- adipogenes[1:15,]
+  selGenes.names <- selGenes[order(selGenes$stat),3]
+  selGenes <- selGenes[order(selGenes$stat),]$GeneENS
+  # selGenes <- selGenes[order(selGenes$stat),22]
+  # selGenes <- lapply(selGenes,as.character)[[1]]
+  selGenes.names <- lapply(selGenes.names,as.character)[[1]]
+  data<-plotCounts(dds, selgenes[1], "condition",returnData=T)
+  for (i in selGenes){
+    data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+    data
+  }
+  colnames(data) <- c(colnames(data)[1:2],unique(selGenes.names))
+  data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+  data <- data[str_detect(data$condition, eval(expression(paste("^D-LPX","^D-VEH",sep="|")))),]
+
+  myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+   geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+   #scale_y_log10() +
+   scale_color_manual(values=rev(unique(mycols2))) +
+   geom_point(position=position_dodge(width=0.3))+
+   labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+   ggtitle(paste0("Gene Expression: DE genes in ",p)) + 
+   theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+  plot(myplot)
+}
+
+```
+
+## Pathway Enrichment
+
+List of KEGG codes
+
+```{r}
+pathway_codes <- c("mmu04064","mmu04668","mmu04151","mmu04630","mmu04150","mmu03320","mmu04072","mmu04080","mmu04218","mmu00590")
+```
+
+```{r message=FALSE, warning=FALSE,comment=""}
+knit_hooks$set(output = function(x,options) x)
+ctrl='ndveh'
+case='dveh'
+outsuffix=paste0("pathview.",ctrl,"-vs-",case)
+for (mypath in pathway_codes) {
+  select <- AnnotationDbi::select
+  logFC <- gseaDat$log2FoldChange
+  names(logFC) <- gseaDat$entrez
+  pathview(gene.data = logFC, 
+         pathway.id = mypath, 
+         species = "mmu",
+         out.suffix = outsuffix,
+         limit = list(gene=1, cpd=1))
+  
+  files <- list.files(pattern = paste0(mypath,".",outsuffix,".png"))
+  # include_graphics(files)
+  cat(paste0("![](",getwd(),"/",files,")"),"\n")
+}
+```
+
+***
+
+# ND-VEH vs ND-LPX
+
+## Heatmap of the most DE genes
+
+* Most significant DE genes Control vs T2D
+* Adjusted p-value < 0.05
+
+```{r comment=""}
+res <- results(dds, contrast=c("condition","ND-LPX","ND-VEH"),alpha=0.05,lfcThreshold = 0)
+res$symbol <- gene_list[match(rownames(res),gene_list[,1]),2]
+res$entrezid <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res),
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+table(res$padj<0.05)
+```
+
+```{r}
+anno.neworder <- union(which(colData(vst)[, "condition"] %in% 
+                                 c("D-VEH","ND-VEH")),c(1:dim(colData(vst))[1]))
+mat <- assay(vst)[ head(order(res$padj),20), anno.neworder]
+mat <- mat - rowMeans(mat)
+rownames_mat_match <- gene_list[match(rownames(mat),gene_list[,1]),]
+rownames(mat) <- rownames_mat_match[,2]
+anno <- as.data.frame(colData(vst)[anno.neworder, "condition"])
+rownames(anno) <- colnames(mat)
+colnames(anno) <- "Condition"
+# pheatmap(mat, cluster_cols=F, annotation_col = anno,
+#          annotation_colors=anno_colors)
+  
+pheatmap(mat, annotation_col=anno,cluster_cols=F)
+```
+
+And the boxplot of the raw expression of the most DE gene
+
+```{r}
+topGene <- rownames(res)[which.min(res$padj)]
+data<-plotCounts(dds, topGene, "condition",returnData=T)
+data$count <- log2(fpm(dds)[which.min(res$padj),])
+plt <- ggplot(data, aes(x=condition, y=count, color=condition))+
+   geom_boxplot(alpha=0,width=0.1,show.legend=FALSE) +
+   #scale_y_log10() +
+   geom_point(position=position_jitter(width=.1,height=0))+
+   labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+   scale_color_manual(values=unique(mycols6)) +
+   ggtitle(paste(topGene," - ", gene_list[match(topGene,gene_list[,1]),][2],": Gene Expression"))
+plot(plt)
+```
+
+Finally, a Volcano Plot with the results comparing the two groups:
+
+```{r}
+volcanoplot <- function (res, lfcthresh=1, sigthresh=0.05, main="Volcano Plot", legendpos="bottomright",       labelsig=TRUE, textcx=1, ...) {
+     with(res, plot(log2FoldChange, -log10(pvalue), pch=20, main=main, ...))
+     with(subset(res, padj<sigthresh ), points(log2FoldChange, -log10(pvalue), pch=20, col="red", ...))
+     with(subset(res, abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue), pch=20,            col="orange", ...))
+     with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue),   pch=20, col="green", ...))
+     if (labelsig) {
+         require(calibrate)
+         with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=textcx, ...))
+
+     }
+     legend(legendpos, xjust=1, yjust=1, legend=c(paste("FDR<",sigthresh,sep=""), paste("|LogFC|>",lfcthresh,   sep=""), "both"), pch=20, col=c("red","orange","green"))
+
+}
+resorder <- res[order(res$padj), ]
+## Merge with normalized count data
+#resdata <- merge(as.data.frame(resorder), as.data.frame(counts(dds, normalized=TRUE)), by="row.names", sort=FALSE)
+resdata <- merge(as.data.frame(resorder),
+                 as.data.frame(counts(dds,normalized=TRUE)
+                               [,c(paste("D-LPX",seq(1:5),sep="_"),
+                                   paste("D-VEH",seq(1:6),sep="_"))]),by="row.names", sort=FALSE)
+
+names(resdata)[1] <- "Gene"
+resdata$GeneENS <- resdata$Gene
+resdata$Gene <- gene_list[match(resdata$Gene,gene_list[,1]),2]
+# volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-15, 15),ylim=c(0,60))
+volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10))
+```
+
+```{r}
+selGenes.names <- resdata[order(-abs(resdata$stat)),1]
+selGenes <- resdata[order(-abs(resdata$stat)),'GeneENS']
+selGenes.names <- selGenes.names[!is.na(selGenes)][c(1:10)]
+selGenes <- selGenes[!is.na(selGenes)][c(1:10)]
+data<-plotCounts(dds, selGenes[1], "condition",returnData=T)
+for (i in selGenes){
+  data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+  data
+}
+colnames(data) <- c(colnames(data)[1:2],as.character(selGenes.names))
+data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+
+myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+  geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.7)) +
+  #scale_y_log10() +
+  scale_color_manual(values=unique(mycols6)) +
+  geom_point(position=position_dodge(width=0.7))+
+  labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+  ggtitle(paste0("Gene Expression: top DE genes")) + 
+  theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+plot(myplot)
+```
+
+Save data into csv:
+
+```{r}
+write.csv(resdata,'raw_stats_gse107942_ndveh-vs-ndlpx.csv')
+```
+
+***
+
+## GSEA Analysis
+
+Prepare input, get gene ids from ensembl
+
+```{r}
+# human = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+# genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","chromosome_name","start_position","end_position","description","transcript_length"),mart = human)
+genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","transcript_length"),mart = human)
+resdata$entrez<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$entrezgene_id
+resdata$gene_name<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$external_gene_name
+resdata$length<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$transcript_length
+```
+
+## KEGG pathways
+
+```{r}
+gseaDat <- resdata[!is.na(resdata$entrez),]
+# ranks <- gseaDat$log2FoldChange
+ranks <- gseaDat$stat
+names(ranks) <- gseaDat$entrez
+ranks <- ranks[-which(duplicated(names(ranks)))]
+#barplot(sort(ranks, decreasing = T))
+```
+
+* And check with our data
+
+```{r}
+set.seed(42)
+fgseaRes <- fgsea(pathways.MM.K, ranks, minSize=30, maxSize = 500, nperm=1000)
+head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+```
+
+```{r}
+fgseaRes_to_csv <- fgseaRes
+fgseaRes_to_csv$genes.names<-apply(fgseaRes_to_csv,1,function(x){resdata$gene_name[match(unlist(x$leadingEdge), resdata$entrez)]})
+# fgseaRes$genes.entrez<-apply(fgseaRes,1,function(x){resdata$entrez[match(unlist(x$leadingEdge), resdata$entrez)]})
+fgseaRes_to_csv$genes.ens<-apply(fgseaRes_to_csv,1,function(x){resdata$GeneENS[match(unlist(x$leadingEdge), resdata$entrez)]})
+set_lists_to_chars <- function(x) {
+    if(class(x) == 'list') {
+    y <- paste(unlist(x[1]), sep='', collapse=', ')
+    } else {
+    y <- x 
+    }
+    return(y)
+}
+# new_frame <- data.frame(lapply(fgseaRes_to_csv, set_lists_to_chars), stringsAsFactors = F)
+# t(apply(tibb,1,function(x){t(apply(x,2,set_lists_to_chars))}))
+n <- NULL
+for (line in c(1:dim(fgseaRes_to_csv)[1])){
+  n <- rbind(n,t(apply(fgseaRes_to_csv[line,],2,set_lists_to_chars)))
+}
+write.csv(n,'pathway_stats_gse107942_ndveh-vs-ndlpx.csv')
+```
+
+```{r}
+ggplot(fgseaRes[order(padj, -abs(NES)), ][1:38], aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=padj<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title="KEGG pathways NES from GSEA") + 
+  theme_minimal()
+```
+
+## Gene Ontology terms
+
+```{r include=F}
+isSigGene <- resdata$pvalue < 0.01 & !is.na(resdata$pvalue)
+genes <- as.integer(isSigGene)
+names(genes) <- resdata$GeneENS
+pwf <- nullp(genes, "mm10", "ensGene", bias.data=resdata$length)
+```
+
+```{r}
+goResults <- goseq(pwf, "mm10","ensGene", test.cats=c("GO:BP"))
+goResults %>%
+    top_n(10, wt=-over_represented_pvalue) %>%
+    mutate(hitsPerc=numDEInCat*100/numInCat) %>%
+    ggplot(aes(x=hitsPerc,
+               y=term,
+               colour=over_represented_pvalue,
+               size=numDEInCat)) +
+        geom_point() +
+        expand_limits(x=0) +
+        labs(x="Hits (%)", y="GO term", colour="p value", size="Count")
+```
+
+***
+
+## Lipoxin pathway genes
+
+```{r}
+selected_pathways <- c("KEGG_CHEMOKINE_SIGNALING_PATHWAY","nNF-kappa B signaling pathway", "nKEGG_TNF_SIGNALING_PATHWAY","nKEGG_PI3KAKT_SIGNALING_PATHWAY","KEGG_JAK_STAT_SIGNALING_PATHWAY","KEGG_MTOR_SIGNALING_PATHWAY","KEGG_PPAR_SIGNALING_PATHWAY","nKEGG_PHOSPOLIPASED_SIGNALING_PATHWAY","KEGG_HEDGEHOG_SIGNALING_PATHWAY","KEGG_NEUROACTIVE_LIGAND_RECEPTOR_INTERACTION","KEGG_ARACHIDONIC_ACID_METABOLISM")
+p1 <- plotEnrichment(pathways.MM.K[[selected_pathways[1]]], ranks) + labs(title=selected_pathways[1])
+p2 <- plotEnrichment(pathways.MM.K[[selected_pathways[5]]], ranks) + labs(title=selected_pathways[5])
+p3 <- plotEnrichment(pathways.MM.K[[selected_pathways[9]]], ranks) + labs(title=selected_pathways[9])
+p3a <- plotEnrichment(pathways.MM.K[[selected_pathways[10]]], ranks) + labs(title=selected_pathways[10])
+p3b <- plotEnrichment(pathways.MM.K[[selected_pathways[11]]], ranks) + labs(title=selected_pathways[11])
+p4 <- plotEnrichment(pathways.MM.K$KEGG_SPLICEOSOME, ranks) + labs(title="KEGG_SPLICEOSOME")
+p5 <- plotEnrichment(pathways.MM.K$KEGG_LYSOSOME, ranks) + labs(title="KEGG_LYSOSOME")
+
+plot_grid(p1,p2,p3,p3a,p3b,p4,p5,ncol=7)
+```
+
+### KEGG Genes
+
+Select particular pathways, from the list Ting sent.
+
+```{r}
+selected_pathways_ok <- selected_pathways[c(1,5,6,7,9,10,11)]
+# add spliceosome and lysosome as controls and cell cycle as they want it
+selected_pathways_ok <- c(selected_pathways_ok,"KEGG_SPLICEOSOME","KEGG_LYSOSOME","KEGG_CELL_CYCLE")
+```
+
+Plot raw expression of 15 mostly DE genes in each of the selected pathways
+
+```{r}
+library(tidyverse)
+for (p in selected_pathways_ok) {
+  pathwaysK_INT <- lapply(pathways.MM.K, as.integer)
+  kk <- pathwaysK_INT %>%
+  enframe("pathway", "entrez") %>%
+  unnest() %>%
+  inner_join(resdata, by="entrez")
+
+  adipogenes <- kk[which (kk$pathway == p),]
+  adipogenes <- adipogenes[order(-abs(adipogenes$stat)),]
+  
+  selGenes <- adipogenes[1:15,]
+  selGenes.names <- selGenes[order(selGenes$stat),3]
+  selGenes <- selGenes[order(selGenes$stat),]$GeneENS
+  # selGenes <- selGenes[order(selGenes$stat),22]
+  # selGenes <- lapply(selGenes,as.character)[[1]]
+  selGenes.names <- lapply(selGenes.names,as.character)[[1]]
+  data<-plotCounts(dds, selgenes[1], "condition",returnData=T)
+  for (i in selGenes){
+    data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+    data
+  }
+  colnames(data) <- c(colnames(data)[1:2],unique(selGenes.names))
+  data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+  data <- data[str_detect(data$condition, eval(expression(paste("^D-LPX","^D-VEH",sep="|")))),]
+
+  myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+   geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+   #scale_y_log10() +
+   scale_color_manual(values=rev(unique(mycols2))) +
+   geom_point(position=position_dodge(width=0.3))+
+   labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+   ggtitle(paste0("Gene Expression: DE genes in ",p)) + 
+   theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+  plot(myplot)
+}
+
+```
+
+## Pathway Enrichment
+
+List of KEGG codes
+
+```{r}
+pathway_codes <- c("mmu04064","mmu04668","mmu04151","mmu04630","mmu04150","mmu03320","mmu04072","mmu04080","mmu04218","mmu00590")
+```
+
+```{r message=FALSE, warning=FALSE,comment=""}
+knit_hooks$set(output = function(x,options) x)
+ctrl='ndveh'
+case='ndlpx'
+outsuffix=paste0("pathview.",ctrl,"-vs-",case)
+for (mypath in pathway_codes) {
+  select <- AnnotationDbi::select
+  logFC <- gseaDat$log2FoldChange
+  names(logFC) <- gseaDat$entrez
+  pathview(gene.data = logFC, 
+         pathway.id = mypath, 
+         species = "mmu",
+         out.suffix = outsuffix,
+         limit = list(gene=1, cpd=1))
+  
+  files <- list.files(pattern = paste0(mypath,".",outsuffix,".png"))
+  # include_graphics(files)
+  cat(paste0("![](",getwd(),"/",files,")"),"\n")
+}
+```
+
+
+***
+
+# ND-LPX vs D-LPX
+
+
+## Heatmap of the most DE genes
+
+* Most significant DE genes Control vs T2D
+* Adjusted p-value < 0.05
+
+```{r comment=""}
+res <- results(dds, contrast=c("condition","D-LPX","ND-LPX"),alpha=0.05,lfcThreshold = 0)
+res$symbol <- gene_list[match(rownames(res),gene_list[,1]),2]
+res$entrezid <- mapIds(org.Mm.eg.db,
+                     keys=row.names(res),
+                     column="ENTREZID",
+                     keytype="ENSEMBL",
+                     multiVals="first")
+table(res$padj<0.05)
+```
+
+```{r}
+anno.neworder <- union(which(colData(vst)[, "condition"] %in% 
+                                 c("D-LPX","ND-LPX")),c(1:dim(colData(vst))[1]))
+mat <- assay(vst)[ head(order(res$padj),20), anno.neworder]
+mat <- mat - rowMeans(mat)
+rownames_mat_match <- gene_list[match(rownames(mat),gene_list[,1]),]
+rownames(mat) <- rownames_mat_match[,2]
+anno <- as.data.frame(colData(vst)[anno.neworder, "condition"])
+rownames(anno) <- colnames(mat)
+colnames(anno) <- "Condition"
+# pheatmap(mat, cluster_cols=F, annotation_col = anno,
+#          annotation_colors=anno_colors)
+  
+pheatmap(mat, annotation_col=anno,cluster_cols=F)
+```
+
+And the boxplot of the raw expression of the most DE gene
+
+```{r}
+topGene <- rownames(res)[which.min(res$padj)]
+data<-plotCounts(dds, topGene, "condition",returnData=T)
+data$count <- log2(fpm(dds)[which.min(res$padj),])
+plt <- ggplot(data, aes(x=condition, y=count, color=condition))+
+   geom_boxplot(alpha=0,width=0.1,show.legend=FALSE) +
+   #scale_y_log10() +
+   geom_point(position=position_jitter(width=.1,height=0))+
+   labs(color="Group",x="Group",y="CPM (log2 transformed)") +
+   scale_color_manual(values=unique(mycols6)) +
+   ggtitle(paste(topGene," - ", gene_list[match(topGene,gene_list[,1]),][2],": Gene Expression"))
+plot(plt)
+```
+
+Finally, a Volcano Plot with the results comparing the two groups:
+
+```{r}
+volcanoplot <- function (res, lfcthresh=1, sigthresh=0.05, main="Volcano Plot", legendpos="bottomright",       labelsig=TRUE, textcx=1, ...) {
+     with(res, plot(log2FoldChange, -log10(pvalue), pch=20, main=main, ...))
+     with(subset(res, padj<sigthresh ), points(log2FoldChange, -log10(pvalue), pch=20, col="red", ...))
+     with(subset(res, abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue), pch=20,            col="orange", ...))
+     with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), points(log2FoldChange, -log10(pvalue),   pch=20, col="green", ...))
+     if (labelsig) {
+         require(calibrate)
+         with(subset(res, padj<sigthresh & abs(log2FoldChange)>lfcthresh), textxy(log2FoldChange, -log10(pvalue), labs=Gene, cex=textcx, ...))
+
+     }
+     legend(legendpos, xjust=1, yjust=1, legend=c(paste("FDR<",sigthresh,sep=""), paste("|LogFC|>",lfcthresh,   sep=""), "both"), pch=20, col=c("red","orange","green"))
+
+}
+resorder <- res[order(res$padj), ]
+## Merge with normalized count data
+#resdata <- merge(as.data.frame(resorder), as.data.frame(counts(dds, normalized=TRUE)), by="row.names", sort=FALSE)
+resdata <- merge(as.data.frame(resorder),
+                 as.data.frame(counts(dds,normalized=TRUE)
+                               [,c(paste("D-LPX",seq(1:5),sep="_"),
+                                   paste("D-VEH",seq(1:6),sep="_"))]),by="row.names", sort=FALSE)
+
+names(resdata)[1] <- "Gene"
+resdata$GeneENS <- resdata$Gene
+resdata$Gene <- gene_list[match(resdata$Gene,gene_list[,1]),2]
+# volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-15, 15),ylim=c(0,60))
+volcanoplot(resdata, lfcthresh=1, sigthresh=0.05, textcx=.8, xlim=c(-10, 10))
+```
+
+```{r}
+selGenes.names <- resdata[order(-abs(resdata$stat)),1]
+selGenes <- resdata[order(-abs(resdata$stat)),'GeneENS']
+selGenes.names <- selGenes.names[!is.na(selGenes)][c(1:10)]
+selGenes <- selGenes[!is.na(selGenes)][c(1:10)]
+data<-plotCounts(dds, selGenes[1], "condition",returnData=T)
+for (i in selGenes){
+  data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+  data
+}
+colnames(data) <- c(colnames(data)[1:2],as.character(selGenes.names))
+data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+
+myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+  geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.7)) +
+  #scale_y_log10() +
+  scale_color_manual(values=unique(mycols6)) +
+  geom_point(position=position_dodge(width=0.7))+
+  labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+  ggtitle(paste0("Gene Expression: top DE genes")) + 
+  theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+plot(myplot)
+```
+
+Save data into csv:
+
+```{r}
+write.csv(resdata,'raw_stats_gse107942_ndlpx-vs-dlpx.csv')
+```
+
+***
+
+## GSEA Analysis
+
+Prepare input, get gene ids from ensembl
+
+```{r}
+# human = useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+# genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","chromosome_name","start_position","end_position","description","transcript_length"),mart = human)
+genes <- getBM(attributes=c("ensembl_gene_id","entrezgene_id","external_gene_name","transcript_length"),mart = human)
+resdata$entrez<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$entrezgene_id
+resdata$gene_name<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$external_gene_name
+resdata$length<-genes[match(resdata$GeneENS,genes$ensembl_gene_id),]$transcript_length
+```
+
+## KEGG pathways
+
+```{r}
+gseaDat <- resdata[!is.na(resdata$entrez),]
+# ranks <- gseaDat$log2FoldChange
+ranks <- gseaDat$stat
+names(ranks) <- gseaDat$entrez
+ranks <- ranks[-which(duplicated(names(ranks)))]
+#barplot(sort(ranks, decreasing = T))
+```
+
+* And check with our data
+
+```{r}
+set.seed(42)
+fgseaRes <- fgsea(pathways.MM.K, ranks, minSize=30, maxSize = 500, nperm=1000)
+head(fgseaRes[order(padj, -abs(NES)), ], n=10)
+```
+
+```{r}
+fgseaRes_to_csv <- fgseaRes
+fgseaRes_to_csv$genes.names<-apply(fgseaRes_to_csv,1,function(x){resdata$gene_name[match(unlist(x$leadingEdge), resdata$entrez)]})
+# fgseaRes$genes.entrez<-apply(fgseaRes,1,function(x){resdata$entrez[match(unlist(x$leadingEdge), resdata$entrez)]})
+fgseaRes_to_csv$genes.ens<-apply(fgseaRes_to_csv,1,function(x){resdata$GeneENS[match(unlist(x$leadingEdge), resdata$entrez)]})
+set_lists_to_chars <- function(x) {
+    if(class(x) == 'list') {
+    y <- paste(unlist(x[1]), sep='', collapse=', ')
+    } else {
+    y <- x 
+    }
+    return(y)
+}
+# new_frame <- data.frame(lapply(fgseaRes_to_csv, set_lists_to_chars), stringsAsFactors = F)
+# t(apply(tibb,1,function(x){t(apply(x,2,set_lists_to_chars))}))
+n <- NULL
+for (line in c(1:dim(fgseaRes_to_csv)[1])){
+  n <- rbind(n,t(apply(fgseaRes_to_csv[line,],2,set_lists_to_chars)))
+}
+write.csv(n,'pathway_stats_gse107942_ndlpx-vs-dlpx.csv')
+```
+
+```{r}
+ggplot(fgseaRes[order(padj, -abs(NES)), ][1:38], aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=padj<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title="KEGG pathways NES from GSEA") + 
+  theme_minimal()
+```
+
+## Gene Ontology terms
+
+```{r include=F}
+isSigGene <- resdata$pvalue < 0.01 & !is.na(resdata$pvalue)
+genes <- as.integer(isSigGene)
+names(genes) <- resdata$GeneENS
+pwf <- nullp(genes, "mm10", "ensGene", bias.data=resdata$length)
+```
+
+```{r}
+goResults <- goseq(pwf, "mm10","ensGene", test.cats=c("GO:BP"))
+goResults %>%
+    top_n(10, wt=-over_represented_pvalue) %>%
+    mutate(hitsPerc=numDEInCat*100/numInCat) %>%
+    ggplot(aes(x=hitsPerc,
+               y=term,
+               colour=over_represented_pvalue,
+               size=numDEInCat)) +
+        geom_point() +
+        expand_limits(x=0) +
+        labs(x="Hits (%)", y="GO term", colour="p value", size="Count")
+```
+
+***
+
+## Lipoxin pathway genes
+
+```{r}
+selected_pathways <- c("KEGG_CHEMOKINE_SIGNALING_PATHWAY","nNF-kappa B signaling pathway", "nKEGG_TNF_SIGNALING_PATHWAY","nKEGG_PI3KAKT_SIGNALING_PATHWAY","KEGG_JAK_STAT_SIGNALING_PATHWAY","KEGG_MTOR_SIGNALING_PATHWAY","KEGG_PPAR_SIGNALING_PATHWAY","nKEGG_PHOSPOLIPASED_SIGNALING_PATHWAY","KEGG_HEDGEHOG_SIGNALING_PATHWAY","KEGG_NEUROACTIVE_LIGAND_RECEPTOR_INTERACTION","KEGG_ARACHIDONIC_ACID_METABOLISM")
+p1 <- plotEnrichment(pathways.MM.K[[selected_pathways[1]]], ranks) + labs(title=selected_pathways[1])
+p2 <- plotEnrichment(pathways.MM.K[[selected_pathways[5]]], ranks) + labs(title=selected_pathways[5])
+p3 <- plotEnrichment(pathways.MM.K[[selected_pathways[9]]], ranks) + labs(title=selected_pathways[9])
+p3a <- plotEnrichment(pathways.MM.K[[selected_pathways[10]]], ranks) + labs(title=selected_pathways[10])
+p3b <- plotEnrichment(pathways.MM.K[[selected_pathways[11]]], ranks) + labs(title=selected_pathways[11])
+p4 <- plotEnrichment(pathways.MM.K$KEGG_SPLICEOSOME, ranks) + labs(title="KEGG_SPLICEOSOME")
+p5 <- plotEnrichment(pathways.MM.K$KEGG_LYSOSOME, ranks) + labs(title="KEGG_LYSOSOME")
+
+plot_grid(p1,p2,p3,p3a,p3b,p4,p5,ncol=7)
+```
+
+### KEGG Genes
+
+Select particular pathways, from the list Ting sent.
+
+```{r}
+selected_pathways_ok <- selected_pathways[c(1,5,6,7,9,10,11)]
+# add spliceosome and lysosome as controls and cell cycle as they want it
+selected_pathways_ok <- c(selected_pathways_ok,"KEGG_SPLICEOSOME","KEGG_LYSOSOME","KEGG_CELL_CYCLE")
+```
+
+Plot raw expression of 15 mostly DE genes in each of the selected pathways
+
+```{r}
+library(tidyverse)
+for (p in selected_pathways_ok) {
+  pathwaysK_INT <- lapply(pathways.MM.K, as.integer)
+  kk <- pathwaysK_INT %>%
+  enframe("pathway", "entrez") %>%
+  unnest() %>%
+  inner_join(resdata, by="entrez")
+
+  adipogenes <- kk[which (kk$pathway == p),]
+  adipogenes <- adipogenes[order(-abs(adipogenes$stat)),]
+  
+  selGenes <- adipogenes[1:15,]
+  selGenes.names <- selGenes[order(selGenes$stat),3]
+  selGenes <- selGenes[order(selGenes$stat),]$GeneENS
+  # selGenes <- selGenes[order(selGenes$stat),22]
+  # selGenes <- lapply(selGenes,as.character)[[1]]
+  selGenes.names <- lapply(selGenes.names,as.character)[[1]]
+  data<-plotCounts(dds, selgenes[1], "condition",returnData=T)
+  for (i in selGenes){
+    data[,i] <- log2(fpm(dds)[match(i,rownames(res)),])
+    data
+  }
+  colnames(data) <- c(colnames(data)[1:2],unique(selGenes.names))
+  data <- melt(data,id.vars='condition',measure.vars=selGenes.names)
+  data <- data[str_detect(data$condition, eval(expression(paste("^D-LPX","^D-VEH",sep="|")))),]
+
+  myplot<-ggplot(data, aes(x=variable, y=value, color=condition)) +
+   geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.3)) +
+   #scale_y_log10() +
+   scale_color_manual(values=rev(unique(mycols2))) +
+   geom_point(position=position_dodge(width=0.3))+
+   labs(x="Gene",y="CPM (log2 transformed)") +
+  # facet_wrap( ~ variable, scales="free") +
+   ggtitle(paste0("Gene Expression: DE genes in ",p)) + 
+   theme(axis.text.x = element_text(angle = 18,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+  plot(myplot)
+}
+
+```
+
+## Pathway Enrichment
+
+List of KEGG codes
+
+```{r}
+pathway_codes <- c("mmu04064","mmu04668","mmu04151","mmu04630","mmu04150","mmu03320","mmu04072","mmu04080","mmu04218","mmu00590")
+```
+
+```{r message=FALSE, warning=FALSE,comment=""}
+knit_hooks$set(output = function(x,options) x)
+ctrl='ndlpx'
+case='dlpx'
+outsuffix=paste0("pathview.",ctrl,"-vs-",case)
+for (mypath in pathway_codes) {
+  select <- AnnotationDbi::select
+  logFC <- gseaDat$log2FoldChange
+  names(logFC) <- gseaDat$entrez
+  pathview(gene.data = logFC, 
+         pathway.id = mypath, 
+         species = "mmu",
+         out.suffix = outsuffix,
+         limit = list(gene=1, cpd=1))
+  
+  files <- list.files(pattern = paste0(mypath,".",outsuffix,".png"))
+  # include_graphics(files)
+  cat(paste0("![](",getwd(),"/",files,")"),"\n")
+}
+```
+
+
+***
+
+## Extra
+### Enrichment with ClusterProfiler
+
+* Check first which KEGG pathways are more enriched just based on the number of DE genes
+  * dotplot of the different categories
+
+```{r}
+mapEntrez2Name <- function(x){
+  mapres <- unlist(lapply(resdata$Gene[match(strsplit(x,"/")[[1]],resdata$entrez)],as.character))
+  mapres <- paste(mapres,collapse = "/")
+  return(mapres)
+}
+```
+
+```{r}
+sigGenes <-resdata$entrez[ resdata$pvalue < 0.01 & !is.na(resdata$pvalue) & !is.na(resdata$entrez)]
+sigGenes <- na.exclude(sigGenes)
+kk <- enrichKEGG(gene = sigGenes, organism = 'mmu')
+kk@result$geneID <- unlist(lapply(kk@result$geneID,mapEntrez2Name))
+dotplot(kk,showCategory=15)
+```
+
+* Network of the pathways and their relationship
+
+```{r}
+p <- cnetplot(kk,foldChange=sigGenes)
+# + ggtitle("kk")
+plot(p)
+```
+
+```{r}
+p <- emapplot(kk)
+plot(p)
+```
+
+***
+### Extra plots selected genes
+
+```{r}
+# selected_genes.ens <- c("ENSG00000181092","ENSG00000159346","ENSG00000006831","ENSG00000157500","ENSG00000140945","ENSG00000182533","ENSG00000174697","ENSG00000116678","ENSG00000132356","ENSG00000181929","ENSG00000142208","ENSG00000168610","ENSG00000112062","ENSG00000100030","ENSG00000186951","ENSG00000132170","ENSG00000121879","ENSG00000140443","ENSG00000169047","ENSG00000181856","ENSG00000124253","ENSG00000105329","ENSG00000118523","ENSG00000100985","ENSG00000035862","ENSG00000174437","ENSG00000165168","ENSG00000086991","ENSG00000232810","ENSG00000129226","ENSG00000125538","ENSG00000198408","ENSG00000147162","ENSG00000198380","ENSG00000131459","ENSG00000164867","ENSG00000092054","ENSG00000175206","ENSG00000120937","ENSG00000128272","ENSG00000135218")
+# selected_genes.name <- c( "AdipoQ","AdipoR1","AdipoR2","APPL1","cdh13","Cav3","Lep","LepR","PRKAA1","PRKAG1","Akt1","STAT3","Mapk14","Mapk1","PPARa","PPARg","PI3Ka","IGF1R","IRS1","Slc2a4","Pck1","TGFb1","CTGF","MMP9","TIMP2","ATP2a2","Cybb","Nox4","TNF","Cd68","Il1b","MGEA5","OGT","Gfpt1","Gfpt2","Nos3","Myh7","Nppa","Nppb","ATF4","CD36")
+# selected_genes.name <- selected_genes.name[which (selected_genes.ens %in% rownames(dds))]
+# selected_genes.ens <- selected_genes.ens[which (selected_genes.ens %in% rownames(dds))]
+```
+
+```{r}
+# data<-plotCounts(dds, selected_genes.ens[1], "condition",returnData=T)
+# for (i in selected_genes.ens){
+#   data[,i] <- log2(fpm(dds)[match(i,rownames(dds)),])
+#   data
+# }
+# colnames(data) <- c(colnames(data)[1:2],selected_genes.name)
+# data$count <- "log2cpm"
+# write.csv(data,"gse106177_human_log2cpm_selectedgenes.csv")
+# write.csv(resdata,"gse106177_human_rawcounts_stats_allgenes.csv")
+# data <- melt(data,id.vars='condition',measure.vars=selected_genes.name)
+# 
+# ggplot(data, aes(x=variable, y=value, color=condition)) +
+#    geom_boxplot(alpha=0.2,width=0.2,show.legend=FALSE,position=position_dodge(0.7)) +
+#    #scale_y_log10() +
+#    scale_color_manual(values=unique(mycols)) +
+#    geom_point(position=position_dodge(width=0.7))+
+#    labs(x="Gene",y="CPM (log2 transformed)") +
+#   # facet_wrap( ~ variable, scales="free") +
+#    ggtitle("Gene Expression: Adiponectin signalling and markers of cardiomyopathy") + 
+#    theme(axis.text.x = element_text(angle = 70,hjust=1), plot.margin=margin(t = 5, r = 2, b = 5, l = 30, unit = "pt"))
+```
+
+
+
+***
+
+# Session info
+
+```{r comment=""}
+sessionInfo()
+```
+
+
+***
+
+# References and useful links
+
+* https://bioinformatics-core-shared-training.github.io/cruk-summer-school-2018/RNASeq2018/html/06_Gene_set_testing.nb.html
+
+* https://www.bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#heatmap-of-the-count-matrix
+
+* https://stephenturner.github.io/deseq-to-fgsea/
+* --> map ensembl to symbol and run gsea
+
+* https://cran.r-project.org/web/packages/msigdbr/vignettes/msigdbr-intro.html
+* msigdbr to run gsea with KEGG and others
+
+***

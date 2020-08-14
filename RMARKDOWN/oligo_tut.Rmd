@@ -1,0 +1,72 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+code from https://kasperdanielhansen.github.io/genbioconductor/html/oligo.html
+
+
+```{r}
+library(oligo)
+library(GEOquery)
+```
+
+```{r}
+celfiles <-list.files(pattern="*CEL*")
+celfiles
+rawData <- read.celfiles(celfiles[c(3:6)])
+rawData
+```
+
+```{r}
+getClass("GeneFeatureSet")
+```
+
+```{r}
+head(exprs(rawData))
+max(exprs(rawData))
+```
+
+```{r}
+filename <- sampleNames(rawData)
+filename
+pData(rawData)$filename <- filename
+sampleNames <- sub(".*_", "", filename)
+sampleNames <- sub(".CEL.gz$", "", sampleNames)
+sampleNames(rawData) <- sampleNames
+pData(rawData)$group <- ifelse(grepl("^IDC|^[PS]", sampleNames(rawData)),
+                               "CASE", "Control")
+pData(rawData)
+
+```
+
+```{r}
+boxplot(rawData,target='core')
+
+```
+
+```{r}
+normData <- rma(rawData)
+normData
+boxplot(normData)
+```
+https://kasperdanielhansen.github.io/genbioconductor/html/limma.html
+```{r}
+library(limma)
+```
+chrome-extension://oemmndcbldboiebfnladdacbdfmadadm/https://bioconductor.org/packages/release/bioc/vignettes/oligo/inst/doc/oug.pdf
+
+```{r}
+eset <- rma(normData)
+class(eset)
+show(eset)
+```
+
+```{r}
+exprs(eset)[1:10, 1:2]
+```
+
+```{r}
+e <- exprs(eset)
+```
+
+

@@ -1,0 +1,350 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+data from https://rawgit.com/bioinformatics-core-shared-training/microarray-analysis/master/affymetrix.nb.html
+
+```{r}
+library(affy)
+targetsFile <- "phenodata_OK.txt"
+pd <- read.AnnotatedDataFrame(targetsFile,header=TRUE,sep="",row.names=1)
+pData(pd)
+
+```
+
+```{r}
+raw <-ReadAffy(celfile.path = ".", filenames=rownames(pData(pd)),phenoData = pd)
+boxplot(raw,col="red",las=2)
+hist(log2(affy::pm(raw[,1])),breaks=100,col="steelblue",main="PM",xlim=c(4,14))
+mva.pairs(affy::pm(raw)[,1:4],plot.method="smoothScatter")
+```
+
+
+```{r}
+# library(affyPLM)
+# plmset <- fitPLM(raw)
+# affyPLM::NUSE(plmset,las=2)
+# affyPLM::RLE(plmset,las=2)
+
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+image(raw[,1])
+image(raw[,2])
+image(raw[,3])
+image(raw[,4])
+```
+```{r}
+eset <- rma(raw)
+# boxplot(exprs(eset),las=2)
+
+```
+```{r}
+mva.pairs(affy::pm(raw)[,1:4],plot.method="smoothScatter")
+mva.pairs(exprs(eset)[,1:4],log.it = FALSE,plot.method="smoothScatter")
+```
+```{r}
+# library(arrayQualityMetrics)
+# arrayQualityMetrics(eset)
+```
+
+```{r}
+library(oligo)
+rawData <- read.celfiles(rownames(pData(pd)))
+filename <- sampleNames(rawData)
+pData(rawData)$filename <- filename
+sampleNames <- sub(".*_", "", filename)
+sampleNames <- sub("-HuGene.CEL.gz$", "", sampleNames)
+sampleNames(rawData) <- sampleNames
+pData(rawData)$group <- ifelse(grepl("^IDC|^[PS]", sampleNames(rawData)),
+                               "CASE", "Control")
+pData(rawData)
+# boxplot(rawData,target='core')
+```
+
+```{r}
+normData <- rma(rawData)
+# normData
+# boxplot(normData)
+```
+
+```{r}
+par(mfrow=c(1,2))
+boxplot(rawData,target='core',main="raw")
+boxplot(normData,main="norm")
+par(mfrow=c(2,1))
+hist(rawData,target="core")
+hist(normData)
+```
+
+```{r}
+library(genefilter)
+filter <- genefilter(normData,filterfun(pOverA(p = 0.2, A = log2(100)), function(x) (IQR(x) > 0.25)))
+normData.filter <- normData[filter,]
+normData.filter
+```
+
+```{r}
+design <- model.matrix(~0+pData(rawData)$group)
+colnames(design) <- c("CASE","CONTROL")
+design
+```
+
+```{r}
+library(limma)
+fit1<-lmFit(normData.filter, design)
+contrasts <- makeContrasts(CASE - CONTROL, levels=design)
+fit2 <- contrasts.fit(fit1, contrasts)
+fit3 <- eBayes(fit2)
+topTable(fit3)
+```
+
+```{r}
+# tab<-topTable(fit3, number = 3e6, adjust.method = "BH", sort.by = "p")
+# pr<-row.names(tab)
+# sy<-getSYMBOL(pr, data = "hugene10stv1.db")
+# df<-data.frame(Symbol = sy, tab)
+# print(xtable(head(df, n = 8), digits = c(0, 0, 2, 2, 2, -2, -2, 2)), type='html')
+```
+chrome-extension://oemmndcbldboiebfnladdacbdfmadadm/https://bioconductor.org/packages/release/data/annotation/manuals/hugene10sttranscriptcluster.db/man/hugene10sttranscriptcluster.db.pdf
+
+INFO FROM HERE TO ANNOTATE ARRAY ID PROBE WITH GENE ID OR NAME
+
+```{r}
+library(hugene10sttranscriptcluster.db)
+tab<-topTable(fit3, number = 3e6, adjust.method = "BH", sort.by = "p")
+pr<-row.names(tab)
+x <- hugene10sttranscriptclusterENSEMBL
+mapped_genes <- mappedkeys(x)
+xx <- as.list(x[mapped_genes])
+sy <- xx[pr]
+head(sy)
+length(labels(sy)[!is.na(labels(sy))])
+```
+```{r}
+# x <- hugene10sttranscriptclusterENTREZID
+# mapped_genes <- mappedkeys(x)
+# xx <- as.list(x[mapped_genes])
+# sy <- xx[pr]
+# head(sy)
+# length(labels(sy)[!is.na(labels(sy))])
+```
+```{r}
+# x <- hugene10sttranscriptclusterGENENAME
+# mapped_genes <- mappedkeys(x)
+# xx <- as.list(x[mapped_genes])
+# sy <- xx[pr]
+# head(sy)
+# length(labels(sy)[!is.na(labels(sy))])
+```
+```{r}
+# xSYM <- hugene10sttranscriptclusterSYMBOL
+# mapped_genesSYM <- mappedkeys(x)
+# xxSYM <- as.list(x[mapped_genes])
+# sySYM <- xx[pr]
+# head(sySYM)
+# length(labels(sySYM)[!is.na(labels(sySYM))])
+```
+
+```{r}
+# x <- hugene10sttranscriptclusterUNIGENE
+# mapped_genes <- mappedkeys(x)
+# xx <- as.list(x[mapped_genes])
+# sy <- xx[pr]
+# head(sy)
+# length(labels(sy)[!is.na(labels(sy))])
+```
+
+```{r}
+library(biomaRt)
+library(purrr)
+mart <- useMart("ensembl")
+ensemblHuman <- useDataset ("hsapiens_gene_ensembl",mart=mart)
+```
+
+```{r}
+myGenes <- as.character(compact(sapply(sy, function(k){as.character(k[1])})))
+myGenesDF <- as.data.frame(myGenes)
+colnames(myGenesDF) <- 'ensembl_gene_id'
+myAttr <- c('ensembl_gene_id', 'description', 'external_gene_name', 'chromosome_name')
+
+myGenesRes <- getBM(attributes = myAttr, filters='ensembl_gene_id', values=myGenesDF, mart=ensemblHuman)
+head(myGenesRes)
+```
+```{r}
+sy.probes <- labels(sy)[as.character(sapply(sy, function(k){as.character(k[1])})) != "character(0)"]
+myGenesDF$symbol <- myGenesRes[match(myGenesDF[,1],myGenesRes[,1]),3]
+myGenesDF$probeid <- sy.probes
+matchtab <- tab[match(myGenesDF[,3],row.names(tab)),]
+matchtab$probeid <- row.names(matchtab)
+myGenesDF.stats <- merge(myGenesDF,matchtab,by="probeid",sort=F)
+head(myGenesDF.stats)
+```
+
+
+
+DOWNSTREAM
+
+
+
+
+```{r}
+library(GEOquery)
+colonData <- getGEO(filename="GSE67492_series_matrix.txt")
+# colonData <- rma(rawData)
+boxplot(colonData)
+```
+
+```{r}
+gsms <- "XX1100"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+sel <- which(sml != "X")
+colonData <- colonData[ , sel]
+boxplot(colonData)
+```
+
+```{r}
+#exprs (colonData) <- log2 (exprs(colonData))
+boxplot(exprs(colonData),outline=FALSE)
+dim (colonData)
+```
+
+```{r}
+varFiltered <- varFilter (colonData)
+dim (varFiltered)
+nrow (colonData) / nrow (varFiltered)
+euc.dist <- dist (t(exprs(varFiltered)))
+euc.dist
+corMat <- cor(exprs(varFiltered))
+corMat
+cor.dist <- as.dist(1 - corMat)
+cor.dist
+clust <- hclust(cor.dist)
+clust
+names(clust)
+clust$order
+plot(clust)
+clust.ward <- hclust(cor.dist,method = "ward.D")
+par(mfrow=c(1,2))
+plot(clust)
+plot(clust.ward)
+plot(clust,labels=paste("Sample", 1:4))
+pd <- pData(colonData)
+pd
+#View(pd)
+plot(clust,labels=pd$description)
+```
+
+```{r}
+library(WGCNA)
+
+SampleGroup <- c("sample1","sample2","ctrl1","ctrl2")
+groupColours <- rep("yellow",length(SampleGroup))
+groupColours[3:4] <- "blue"
+groupColours
+clust.euclid = hclust(euc.dist)
+plotDendroAndColors(clust.euclid,colors=groupColours)
+```
+
+```{r}
+geneVar = rowSds(exprs(colonData))
+sd(exprs(colonData)[1,])
+geneVar[1]
+sd(exprs(colonData)[2,])
+geneVar[2]
+length(geneVar)
+highVarGenes = order (geneVar, decreasing = TRUE )[1:100]
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]),labCol = SampleGroup)
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]),
+         labCol = SampleGroup,
+         ColSideColors = as.character(groupColours))
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]),
+         labCol = SampleGroup , Colv=NA)
+heatmap (as.matrix(exprs(colonData)[highVarGenes, order(SampleGroup)]),
+         labCol = SampleGroup[order(SampleGroup)], Colv = NA)
+```
+
+```{r}
+library (RColorBrewer)
+display.brewer.all()
+hmcol <- brewer.pal(11 , "RdBu")
+heatmap (as.matrix(exprs(colonData)[highVarGenes, ]) ,
+  ColSideColors = as.character(groupColours) , col=hmcol)
+```
+
+```{r}
+library(cluster)
+supervised.clus <- pam(euc.dist,k=2)
+clusplot(supervised.clus)
+supervised.clus$clustering
+```
+
+```{r}
+pca.geneExpression <- prcomp(t(exprs(varFiltered)))
+summary(pca.geneExpression)
+# plot(pca.geneExpression)
+# plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2])
+# plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+#      pch=16,col=as.character(groupColours))
+plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+     pch=16,col=as.character(groupColours))
+legend("bottomright",fill=c("blue","yellow"),legend=c("tumour","normal"))
+text(pca.geneExpression$x[,1],pca.geneExpression$x[,2]-0.01,labels = pd$geo_accession)
+boxplot(pca.geneExpression$x[,1] ~ SampleGroup)
+
+```
+
+```{r}
+design <- model.matrix(~0+pData(rawData)$group)
+colnames(design) <- c("CASE","CONTROL")
+design
+```
+```{r}
+library(limma)
+fit1<-lmFit(colonData, design)
+contrasts <- makeContrasts(CASE - CONTROL, levels=design)
+fit2 <- contrasts.fit(fit1, contrasts)
+fit3 <- eBayes(fit2)
+topTable(fit3)
+```
+
+```{r}
+tab<-topTable(fit3, number = 3e6, adjust.method = "BH", sort.by = "p")
+pr<-row.names(tab)
+x <- hugene10sttranscriptclusterENSEMBL
+mapped_genes <- mappedkeys(x)
+xx <- as.list(x[mapped_genes])
+sy <- xx[pr]
+head(sy)
+length(labels(sy)[!is.na(labels(sy))])
+```
+```{r}
+# library(biomaRt)
+# library(purrr)
+# mart <- useMart("ensembl")
+# ensemblHuman <- useDataset ("hsapiens_gene_ensembl",mart=mart)
+```
+```{r}
+myGenes <- as.character(compact(sapply(sy, function(k){as.character(k[1])})))
+myGenesDF <- as.data.frame(myGenes)
+colnames(myGenesDF) <- 'ensembl_gene_id'
+myAttr <- c('ensembl_gene_id', 'description', 'external_gene_name', 'chromosome_name')
+
+myGenesRes <- getBM(attributes = myAttr, filters='ensembl_gene_id', values=myGenesDF, mart=ensemblHuman)
+head(myGenesRes)
+```
+
+```{r}
+sy.probes <- labels(sy)[as.character(sapply(sy, function(k){as.character(k[1])})) != "character(0)"]
+myGenesDF$symbol <- myGenesRes[match(myGenesDF[,1],myGenesRes[,1]),3]
+myGenesDF$probeid <- sy.probes
+matchtab <- tab[match(myGenesDF[,3],row.names(tab)),]
+matchtab$probeid <- row.names(matchtab)
+myGenesDF.stats <- merge(myGenesDF,matchtab,by="probeid",sort=F)
+head(myGenesDF.stats)
+```
+
+

@@ -1,0 +1,583 @@
+---
+title: "Training Peaks"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    theme: cosmo
+    df_print: paged
+    highlight: tango
+    # code_folding: hide
+    # fig_width: 12
+    # fig_height: 12
+# output:
+#   epuRate::BAKER:
+#     toc: TRUE
+#     number_sections: FALSE
+#     code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# TrainingPeaks Data
+
+## Preliminary tasks
+### Load Libraries
+
+Load libraries for reading fit data and create maps and plots.
+
+```{r warning=FALSE, results='hide', echo='FALSE'}
+library(fit)
+library(ggplot2)
+library(leaflet)
+library(dplyr)
+# library(cetcolor)
+library(stringr)
+```
+
+*** 
+
+# Activity per athlete
+
+> **Note**
+>
+> We are missing personal data from all patients (Name, VO2max, Weight, etc.)
+
+## Summarize activities per athlete
+
+Number of activities per category?
+
+* Month 2,12 year 0,2
+* Full activities for the 2 years?
+* N activities cycling, running, other?
+* Heart data?
+
+
+### Sport type definition
+
+  * https://developer.garmin.com/downloads/connect-iq/monkey-c/doc/Toybox/ActivityRecording.html
+
+Specify main sports with data (running, cycling, swimming, rowing)
+```{r}
+sport_code <- c(0,1,2,5,10,15)
+names(sport_code) <- c("Undefined","Running","Cycling","Swimming","Cardio","Rowing")
+```
+  
+### Selected Athletes
+
+Correct naming
+
+```{r}
+sel.athletes <- c("LEUVEN_PH/LOICSEGAERT","HASSELT_PH/RUBENAPERS","HASSELT_PH/SANDERDEPESTEL","HASSELT_PH/ARNEMARIT",
+                  "HASSELT_PH/AARONVANPOUCKE","AUS_PH/FERGUSSULLY","AUS_PH/MATHEWROSS","AUS_PH/CYRUSMONK","AUS_PH/BENTLEYOLDEN",
+                  "AUS_PH/DAVIDRANDALL","HASSELT_PH/WARDVANHOOF","LEUVEN_PH/ROBSCHEERLINCK","LEUVEN_PH/TRISTANGERRYN")
+```
+
+
+```{r}
+### FOR TESTING
+# sel.dirs[50]
+# dataheart <- try(read.fit(paste0(sel.dirs[50],"/",list.files(sel.dirs[50])[1])),silent=T)
+# get_activity_info_from_fitdata(dataheart,training.all = training.all, ath.id = "BA_007")
+```
+
+
+## Define Functions
+
+Create a function to calculate all predictors as previously, given a list of Fit files:
+
+```{r}
+get_activity_info_from_fitdata <- function (fitdata,training.all=training.all,ath.id) {
+  #initialize activity summary
+  activity <- as.data.frame(matrix(NA,ncol=1))
+  colnames(activity) <- "date"
+  activity.date <- get_date_GARMIN(fitdata$session$start_time)
+  activity$date <- format(activity.date,"%Y%m%d")
+  activity$year <- format(activity.date,"%Y")
+  activity$month <- format(activity.date,"%m")
+  activity$week <- format(activity.date,"%W")
+  activity$start_time <- format(activity.date,"%H%M")
+  activity$time.min <- round((max(fitdata$record$timestamp)-fitdata$record$timestamp[1])/60,2)
+
+  if (any(names(fitdata$record) %in% "heart_rate")){
+    activity$hrmax.activity <- max(fitdata$record$heart_rate[1:(length(fitdata$record$heart_rate)-3)],na.rm=T)
+    #check if there is heart_rate info (not in swimming, surfing and other watersports)
+    if(is.null(fitdata$zones_target$max_heart_rate)){
+      hrmax.prev <- if(is.null(training.all$ath_id)){0}else{training.all %>% filter(ath_id==ath.id) %>% summarize(max(hrmax.athlete)) %>% as.numeric()}
+      activity$hrmax.athlete <- max(min(round(activity$hrmax.activity*1.03,0),199),hrmax.prev,na.rm=T)
+    } else {
+      activity$hrmax.athlete <- fitdata$zones_target$max_heart_rate
+    }
+    activity$hrmax.perc <- round(activity$hrmax.activity/activity$hrmax.athlete*100,2)
+    activity$hrmax.intensity <- activity$hrmax.perc * activity$time.min
+    hr.zones <- quantile(c(0:activity$hrmax.athlete),probs=seq(0,1,by=0.1))
+    fitdata$record$hr.zones <- findInterval(fitdata$record$heart_rate,hr.zones[6:10])
+    hr.zones.table<-round(table(fitdata$record$hr.zones)/sum(table(fitdata$record$hr.zones))*100,2)
+    hr.zones.table[c("0","1","2","3","4","5")[!c("0","1","2","3","4","5") %in% names(hr.zones.table)]] <- 0
+    activity$hr.z1 <- hr.zones.table['1'] + hr.zones.table['0']
+    activity$hr.z2 <- hr.zones.table['2']
+    activity$hr.z3 <- hr.zones.table['3']
+    activity$hr.z4 <- hr.zones.table['4']
+    activity$hr.z5 <- hr.zones.table['5']
+    activity$hr.avg <- fitdata$session$avg_heart_rate
+  } else {
+    activity$hrmax.activity <- NA
+    #check if there is heart_rate info (not in swimming, surfing and other watersports)
+    if(is.null(fitdata$zones_target$max_heart_rate)){
+      hrmax.prev <- if(is.null(training.all$ath_id)){0}else{training.all %>% filter(ath_id==ath.id) %>% summarize(max(hrmax.athlete)) %>% as.numeric()}
+      activity$hrmax.athlete <- if(hrmax.prev == 0){NA}else{hrmax.prev}
+    } else {
+      activity$hrmax.athlete <- fitdata$zones_target$max_heart_rate
+    }
+    # activity$hrmax.athlete <- NA
+    activity$hrmax.perc <- NA
+    activity$hrmax.intensity <- NA
+    activity$hr.z1 <- NA
+    activity$hr.z2 <- NA
+    activity$hr.z3 <- NA
+    activity$hr.z4 <- NA
+    activity$hr.z5 <- NA
+    activity$hr.avg <- NA
+  }
+  # VT zones
+  if (any(names(fitdata$record) %in% "heart_rate")){
+    vt.zones <- quantile(c(0:activity$hrmax.athlete),probs=c(0,0.83,0.94,1))
+    fitdata$record$vt.zones <- findInterval(fitdata$record$heart_rate,vt.zones)
+    vt.zones.table <- round(table(fitdata$record$vt.zones)/sum(table(fitdata$record$vt.zones))*100,2)
+    vt.zones.table[c("1","2","3")[!c("1","2","3") %in% names(vt.zones.table)]] <- 0
+    activity$vt.z1 <- vt.zones.table['1'] 
+    activity$vt.z2 <- vt.zones.table['2']
+    activity$vt.z3 <- vt.zones.table['3']
+  } else {
+    # activity$hrmax.athlete <- NA
+    activity$vt.z1 <- NA
+    activity$vt.z2 <- NA
+    activity$vt.z3 <- NA
+  }
+  activity$sport_code <- fitdata$session$sport
+  activity$sport_type <- names(sport_code)[sport_code == activity$sport_code]
+  activity$speed.avg <- round(fitdata$session$avg_speed*3.79,1)
+  activity$cal <- if(is.null(fitdata$session$total_calories)){NA}else{fitdata$session$total_calories}
+  activity$ascent <- if(is.null(fitdata$session$total_ascent)){NA}else{fitdata$session$total_ascent}
+  activity$power.max <- if(is.null(fitdata$session$max_power)){NA}else{fitdata$session$max_power}
+  activity$power.avg <- if(is.null(fitdata$session$avg_power)){NA}else{fitdata$session$avg_power}
+  activity$power.norm <- if(is.null(fitdata$session$normalized_power)){NA}else{fitdata$session$normalized_power}
+  activity$work <- if(is.null(fitdata$session$total_work)){NA}else{fitdata$session$total_work}
+  activity$stress.score <- if(is.null(fitdata$session$training_stress_score)){NA}else{fitdata$session$training_stress_score}
+  activity$total.dist <- fitdata$session$total_distance
+  activity$intensity.factor <-  if(is.null(fitdata$session$intensity_factor)){NA}else{fitdata$session$intensity_factor}
+  activity$training.effect <-  if(is.null(fitdata$session$total_training_effect)){NA}else{fitdata$session$total_training_effect}
+  # print(all.activity)
+  return(activity)
+}
+```
+
+
+Get date
+https://stat.ethz.ch/R-manual/R-devel/library/base/html/strptime.html  
+http://www.nlvocables.com/blog/?p=969 (garmin timestamp)
+
+```{r}
+get_date_GARMIN <- function(tstmp){
+  as.POSIXct(tstmp, origin="1989-12-31",tz="UTC")
+}
+# data.date <- get_date_GARMIN(data$session$start_time)
+# data.date.day <- format(data.date,"%Y%m%d")
+# data.date.start_time <- format(data.date,"%H%M")
+# data.date.year <- format(data.date,"%Y")
+# data.date.month <- format(data.date,"%m")
+# data.date.week <- format(data.date,"%W")
+```
+
+## Get directories
+
+
+```{r}
+dirs.ph <- list.dirs("PRO_HEART")
+sel.dirs <- dirs.ph[str_detect(dirs.ph,paste(sel.athletes,collapse="|"))]
+sel.dirs <- sel.dirs[str_detect(sel.dirs,"YEAR")]
+# sel.dirs
+```
+
+Initialize athlete list
+
+```{r}
+ath.info<- as.data.frame(unique(do.call(rbind, str_split(sel.dirs,"/"))[,3]),stringsAsFactors =FALSE)
+colnames(ath.info) <- "name"
+ath.info$ath_id <- paste0("BA_",str_pad(as.numeric(as.factor(ath.info$name)),3,pad="0"))
+ath.info$total_activities <- 0
+ath.info$month_2_year_0 <- 0
+ath.info$month_12_year_0 <- 0
+ath.info$month_2_year_2 <- 0
+ath.info$month_12_year_2 <- 0
+ath.info$full_2years <- 0
+ath.info$n_cycling <- 0
+ath.info$n_running <- 0
+ath.info$n_other <- 0
+ath.info$n_heart <- 0
+ath.info$perc_heart <- 0
+```
+
+# Activity sessions
+
+```{r}
+error.sessions <- NULL
+dup.sessions <- setNames(data.frame(matrix(ncol = 3, nrow = 0)), c("dup_file", "original_file","reason"))
+training.all <- NULL
+for (dir in sel.dirs){
+  print(dir)
+  dir.name <- unlist(str_split(dir,"/"))[3]
+  dir.monthcategory <- tolower(unlist(str_split(dir,"/"))[4])
+  dir.files <- list.files(dir,pattern="fit")
+  for (file in dir.files) {
+    file.fullpath <- paste0(dir,"/",file)
+    # check if file has already been processed in a different folder (some cases with full/monthly divisions)
+    if (any(sapply(str_split(training.all$file,"/"),function(x) x[5]) == file & training.all$ath_id == ath.info$ath_id[ath.info$name==dir.name])){
+      dup.source <- as.character(training.all$file[sapply(str_split(training.all$file,"/"),function(x) x[5]) == file & training.all$ath_id == ath.info$ath_id[ath.info$name==dir.name]])
+      dup.sessions <- rbind(dup.sessions,setNames(data.frame(matrix(c(file.fullpath,dup.source,"rep_file"),nrow=1)),c("dup_file", "original_file","reason")))
+      next
+    }
+    # read fit file
+    fitdata <- try(read.fit(paste0(dir,"/",file)),silent=T)
+    # skip files with errors
+    if (class(fitdata) == "try-error"){
+      error.sessions <- c(error.sessions,paste0(dir,"/",file))
+      next
+    }
+    # get session data
+    session <- try(get_activity_info_from_fitdata(fitdata,training.all = training.all, ath.id = ath.info$ath_id[ath.info$name==dir.name]), silent=T)
+    # skip files with errors
+    if (class(session) == "try-error"){
+      error.sessions <- c(error.sessions,paste0(dir,"/",file))
+      next
+    }
+    # check if activity is already present on the db and skip if so
+    if (any(training.all$date == session$date & training.all$start_time == session$start_time & training.all$ath_id == ath.info$ath_id[ath.info$name==dir.name] & training.all$time.min == session$time.min)){
+      dup.source <- as.character(training.all$file[training.all$date == session$date & training.all$start_time == session$start_time & training.all$ath_id == ath.info$ath_id[ath.info$name==dir.name] & training.all$time.min == session$time.min])
+      dup.sessions <- rbind(dup.sessions,setNames(data.frame(matrix(c(file.fullpath,dup.source,"rep_activity"),nrow=1)),c("dup_file", "original_file","reason")))
+      next
+    }
+    # update session to be counted and add the info to training.all df
+    # ath.info[ath.info$name == dir.name,dir.monthcategory] <-  ath.info[ath.info$name == dir.name,dir.monthcategory] + 1
+    training.all <- rbind(training.all,cbind(ath_id=ath.info$ath_id[ath.info$name == dir.name],session,file=file.fullpath))
+    # # check sport type
+    fitdata.sporttype <- fitdata$session$sport
+    if (fitdata.sporttype == 2) {
+      ath.info[ath.info$name == dir.name,"n_cycling"] <- ath.info[ath.info$name == dir.name,"n_cycling"] + 1
+    } else if (fitdata.sporttype == 1) {
+      ath.info[ath.info$name == dir.name,"n_running"] <- ath.info[ath.info$name == dir.name,"n_running"] + 1
+    } else {
+      ath.info[ath.info$name == dir.name,"n_other"] <- ath.info[ath.info$name == dir.name,"n_other"] + 1
+    }
+    # update total after each directory
+    ath.info[ath.info$name == dir.name,dir.monthcategory] <- ath.info[ath.info$name == dir.name,dir.monthcategory] + 1
+    ath.info[ath.info$name == dir.name,"total_activities"] <- ath.info[ath.info$name == dir.name,]$month_2_year_0 +
+      ath.info[ath.info$name == dir.name,]$month_12_year_0 + ath.info[ath.info$name == dir.name,]$month_2_year_2 +
+      ath.info[ath.info$name == dir.name,]$month_12_year_2 + ath.info[ath.info$name == dir.name,]$full_2years
+    # check heart rate if present
+    if (!is.null(fitdata$record$heart_rate)) {
+      ath.info[ath.info$name == dir.name,"n_heart"] <- ath.info[ath.info$name == dir.name,"n_heart"] + 1
+      ath.info[ath.info$name == dir.name,"perc_heart"] <- round(ath.info[ath.info$name == dir.name,"n_heart"] /
+                                                                  ath.info[ath.info$name == dir.name,"total_activities"] * 100,2)
+    }
+  }
+}
+```
+
+```{r}
+ath.info
+```
+
+```{r}
+save(ath.info,training.all,error.sessions,dup.sessions,file=
+       paste0("trainingpeaks_data_",format(as.Date(Sys.Date()),format="%y%m%d"),".rda"))
+```
+
+
+
+* Number of Activities
+* Volume (Time)
+* Intensity
+  * %HRmax
+  * Thresholds (Time in T1/T2)
+  * Volume x %HRmax
+* Sessions per week
+* Average time
+* Average speed (cycling vs running, etc?)
+  * Event type = 1 == cycling??
+  * sport = 2?
+    * 2 = cycling
+    * 5 = swimming
+  * https://developer.garmin.com/downloads/connect-iq/monkey-c/doc/Toybox/ActivityRecording.html
+* Average HR
+* Heart beats per week/year of training
+* Average accumulated power
+* Data from TrainingPeaks? (data$session)
+  * Calories
+  * Total ascent
+  * max_power
+  * average_power / normalized_power
+  * total work
+  * training_stress_score
+  * total_distance
+  * intensity_factor
+  * avg_HR
+
+  * Average accumulated power (ATHLETE CALCULATION)
+* Heart beats per week/year of training (ATHLETE CALCULATION)
+* Data from TrainingPeaks? (data$session)
+  * Calories
+
+  * Thresholds (Time in Z5/Z4/Z3)
+https://blogs.sas.com/content/efs/2018/01/26/data-driven-fitness-vo2-max-lactate-threshold-heart-rate/
+
+
+Summarize power and add to ath.info
+
+```{r}
+load('trainingpeaks_data_200630.rda')
+
+cohort_vs_athlete <- as.data.frame(t(do.call("cbind",str_split(str_remove(str_remove(sel.dirs[str_detect(sel.dirs,"FULL")],"PRO_HEART/"),"/FULL_2YEARS"),"/"))))
+ath.info.ok <- merge(merge(ath.info, cohort_vs_athlete,by.x="name",by.y="V2"),
+                     training.all %>%
+                       group_by(ath_id) %>%
+                       summarize(n_power=sum(!is.na(power.avg)),n_heart_power=sum(!is.na(power.avg) & !is.na(hrmax.activity))),by='ath_id') %>%
+  mutate(cohort = V1,perc_power = round(n_power/total_activities*100,2), perc_heart_power = round(n_heart_power/total_activities*100,2)) %>%
+  select(-V1)
+
+
+# training.all %>%
+#   filter(ath_id=="BA_003",!is.na(hrmax.activity))
+write.csv(ath.info.ok, file=paste0("tpeaks_summary_athletes_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+write.csv(training.all, file=paste0("tpeaks_summary_activities_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+write.csv(error.sessions, file=paste0("tpeaks_summary_error_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+write.csv(dup.sessions, file=paste0("tpeaks_summary_dups_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+```
+
+```{r}
+# for (i in ath.info$name) { print(i);print(sum(!is.na(str_extract(error.sessions,i))))}
+```
+
+```{r}
+for (i in ath.info$name) {
+  # print(i);
+  print(sum(!is.na(str_extract(dup.sessions$dup_file,i))))
+}
+```
+
+
+```{r}
+# nfiles <- as.data.frame(matrix(rep(0,1)))
+# for (dir in sel.dirs){
+#   dir.name <- unlist(str_split(dir,"/"))[3]
+#   nfiles[`dir.name`] <- 0
+# }
+# nfiles <- nfiles %>% select(-V1)
+# 
+# for (dir in sel.dirs){
+#   # print(dir)
+#   dir.name <- unlist(str_split(dir,"/"))[3]
+#   dir.monthcategory <- tolower(unlist(str_split(dir,"/"))[4])
+#   dir.files <- list.files(dir)
+#   nfiles[`dir.name`] <- nfiles[`dir.name`]+length(dir.files)
+# }
+```
+
+duplicate check 
+
+```{r}
+# dupfile <- 'PRO_HEART/AUS_PH/BENTLEYOLDEN/MONTH_12_YEAR_2/bentleyno.2018-12-10-07-07-12-257Z.GarminPush.27656281043.fit'
+# # dupfile <- 'PRO_HEART/AUS_PH/BENTLEYOLDEN/FULL_2YEARS/bentleyno.2018-06-21-11-57-17-252Z.GarminPush.21832615345.fit'
+# dir.name <-   unlist(str_split(dupfile,"/"))[3]
+# fitdata <- read.fit(dupfile)
+# session <- get_activity_info_from_fitdata(fitdata,training.all = training.all, ath.id = ath.info$ath_id[ath.info$name==dir.name])
+# session$file <- dupfile
+# rbind(session,training.all[which(training.all$date == session$date & training.all$start_time == session$start_time & training.all$ath_id == ath.info$ath_id[ath.info$name==dir.name] & training.all$time.min == session$time.min),] %>% select(-ath_id))
+```
+
+year summary
+
+```{r}
+for (i in ath.info$name) {
+  print(i);
+  k <- training.all %>% group_by(ath_id,year) %>% tally() %>% filter(ath_id==ath.info[ath.info$name == i,"ath_id"]) %>% mutate(n=as.numeric(n)) %>% t() %>% data.frame()
+  print(k)
+}
+```
+
+***
+<!-- <!-- -->
+
+<!-- ## Superpredictors as summary -->
+
+<!-- Superpredictors are averages or totals of each of the activity predictors, as a way to summarize training data for each athlete during the selected period. -->
+<!-- Here we calculate all of them to compare with vo2max in the final step. -->
+
+<!-- ### Definition -->
+
+<!-- Define function to: -->
+<!-- * Initialize variables -->
+
+<!-- ```{r} -->
+<!-- # final.data <- vo2max -->
+<!-- prep_superpredictors <- function(final.data){ -->
+<!--   final.data$activities.total <- NA -->
+<!--   final.data$time.total <- NA -->
+<!--   final.data$time.avg <- NA -->
+<!--   final.data$hrmax.perc.avg <- NA -->
+<!--   final.data$hrmax.max <- NA -->
+<!--   final.data$hrmax.intensity.total <- NA -->
+<!--   final.data$hrmax.intensity.avg <- NA -->
+<!--   final.data$hr.z5.avg <- NA -->
+<!--   final.data$hr.z4.avg <- NA -->
+<!--   final.data$hr.z3.avg <- NA -->
+<!--   final.data$hr.z2.avg <- NA -->
+<!--   final.data$hr.z1.avg <- NA -->
+<!--   final.data$hr.avg <- NA -->
+<!--   final.data$cal.total <- NA -->
+<!--   final.data$cal.avg <- NA -->
+<!--   final.data$power.avg <- NA -->
+<!--   final.data$work.avg <- NA -->
+<!--   final.data$stress.score.avg <- NA -->
+<!--   final.data$dist.total <- NA -->
+<!--   final.data$dist.avg <- NA -->
+<!--   final.data$intensity.factor.avg <- NA -->
+<!--   return(final.data) -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- * Calculate variables -->
+
+<!-- ```{r} -->
+<!-- # ath <- 'Liam' -->
+<!-- get_superpredictors <- function (ath.data,ath.predictors,ath.name) { -->
+<!--   ath.data[ath.data$name == ath.name,]$activities.total <- nrow(ath.predictors) -->
+<!--   ath.data[ath.data$name == ath.name,]$time.total <- sum(ath.predictors$time.min) -->
+<!--   ath.data[ath.data$name == ath.name,]$time.avg <- mean(ath.predictors$time.min,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hrmax.perc.avg <- mean(ath.predictors$hrmax.perc,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hrmax.max <- if (sum(!is.na(ath.predictors$hrmax.activity)) == 0 ){NA}else{max(ath.predictors$hrmax.activity,na.rm=T)} -->
+<!--   ath.data[ath.data$name == ath.name,]$hrmax.intensity.total <- sum(ath.predictors$hrmax.intensity,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hrmax.intensity.avg <- mean(ath.predictors$hrmax.intensity,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hr.z5.avg <- mean(ath.predictors$hr.z5,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hr.z4.avg <- mean(ath.predictors$hr.z4,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hr.z3.avg <- mean(ath.predictors$hr.z3,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hr.z2.avg <- mean(ath.predictors$hr.z2,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hr.z1.avg <- mean(ath.predictors$hr.z1,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$hr.avg <- mean(ath.predictors$hr.avg,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$cal.total <- sum(ath.predictors$cal,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$cal.avg <- mean(ath.predictors$cal,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$power.avg <- mean(ath.predictors$power.avg,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$work.avg <- mean(ath.predictors$work,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$stress.score.avg <- mean(ath.predictors$stress.score,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$dist.total <- sum(ath.predictors$total.dist,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$dist.avg <- mean(ath.predictors$total.dist,na.rm=T) -->
+<!--   ath.data[ath.data$name == ath.name,]$intensity.factor.avg <- mean(ath.predictors$intensity.factor,na.rm=T) -->
+<!--   ath.data[is.na(ath.data)] <- NA -->
+<!--   return(ath.data) -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ### Calculate Superpredictors -->
+
+<!-- Combine the reading of the files with the superpredictor calculation -->
+
+<!-- ```{r} -->
+<!-- dirs <- list.dirs("SELECTED_FILES",recursive=F) -->
+<!-- ath.superpreds <- prep_superpredictors(vo2max) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- for (ath in vo2max$name){ -->
+<!-- # for (ath in 'Liam'){ -->
+<!--   ath.folder <- paste0(dirs[grep(tolower(ath),tolower(dirs))],"/09/") -->
+<!--   myfiles <- paste0(ath.folder, list.files(paste0(ath.folder))) -->
+<!--   #get predictors -->
+<!--   ath.predictors <- calc_predictors(myfiles) -->
+<!--   #get superpredictors -->
+<!--   ath.superpreds <- get_superpredictors(ath.superpreds,ath.predictors,ath) -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- And the final results for all the athletes: -->
+
+<!-- ```{r} -->
+<!-- ath.superpreds -->
+<!-- ``` -->
+
+
+
+
+
+
+
+<!-- *** -->
+
+<!-- ## Make correlation with VO2max -->
+
+<!-- Correlate all superpredictors with VO2max. -->
+<!-- Each point corresponds to an athlete: -->
+
+<!-- ```{r} -->
+<!-- # models <- as.data.frame(matrix(NA,ncol=22)) -->
+<!-- # models <- rbind(models,NA) -->
+<!-- # row.names(models) <- c("rsquare","pvalue") -->
+<!-- # colnames(models) <- names(ath.superpreds)[c(5,7:dim(ath.superpreds)[2])] -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # for (mod in names(models)){ -->
+<!-- #   md <- paste("VO2max ~ ",mod,sep = "") -->
+<!-- #   lmTemp = lm(md, data = ath.superpreds) #Create the linear regression -->
+<!-- #   plot(ath.superpreds[[mod]],ath.superpreds$VO2max, pch = 16, col = "blue",xlab=mod,ylab="VO2max") #Plot the results -->
+<!-- #   abline(lmTemp) #Add a regression line -->
+<!-- #   # print(summary(lmTemp)) -->
+<!-- #   models[[mod]] <- c(summary(lmTemp)$adj.r.squared,summary(lmTemp)$coefficients[2,4]) -->
+<!-- # } -->
+<!-- ``` -->
+
+<!-- * Model with all variables -->
+
+<!-- ```{r} -->
+<!-- # md <- paste("VO2max ~ ",paste(names(models)[1:3],collapse="+"),sep = "") -->
+<!-- # lmTemp = lm(md, data = ath.superpreds) #Create the linear regression -->
+<!-- # plot(ath.superpreds[[mod]],ath.superpreds$VO2max, pch = 16, col = "blue",xlab=mod,ylab="VO2max") #Plot the results -->
+<!-- # abline(lmTemp) #Add a regression line -->
+<!-- # # print(summary(lmTemp)) -->
+<!-- # models$ALL <- c(summary(lmTemp)$adj.r.squared,summary(lmTemp)$coefficients[2,4]) -->
+<!-- # summary(lmTemp) -->
+<!-- # models -->
+<!-- ``` -->
+
+
+
+
+<!-- ```{r} -->
+<!-- # library(purrr) -->
+<!-- # vo2max <- read.csv("~/sgcluster/WORK/BIOINFO/TRAINING_PEAKS/VO2maxdata.csv") -->
+<!-- # vo2max <- vo2max[vo2max$EventName == "Baseline",] -->
+<!-- # row.names(vo2max) <- 1:nrow(vo2max) -->
+<!-- # vo2max <- vo2max %>% mutate(name= map(strsplit(as.character(Athlete), "(?!^)(?=[[:upper:]])", perl=T),~.x[1]) %>% unlist()) -->
+<!-- # vo2max -->
+<!-- ``` -->
+
+<!-- --> -->
+
+

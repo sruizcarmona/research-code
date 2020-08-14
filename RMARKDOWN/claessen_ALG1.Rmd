@@ -1,0 +1,1374 @@
+---
+title: "Claessen Project"
+output: 
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float: 
+      collapsed: false
+      smooth_scroll: true
+    theme: cosmo
+    df_print: paged
+    highlight: tango
+    # code_folding: hide
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+# Load libraries
+
+```{r}
+library(bvpSolve)
+library(ggplot2)
+library(plyr)
+library(gplots)
+options(scipen = 999)
+```
+
+### Add info from excel:
+
+```{r}
+#my_data=c("4632","3776","3661","5383","2619","3617","3655","3061","3048","4390","2093","3039","35","42","32","34","37","39","80","97","111","91","89","64","21","26","26","22","33","27","14.1","13.3","14.4","15.4","15.9","16.5","25.99","16.85","21.29","20.62","11.73","17.28")
+my_data <-  c("4632","3655","35","80","21","14.1","25.99","96","23.3","3776","3061","42","97","26","13.3","16.85","98.3","41.7","3661","3048","32","111","26","14.4","21.29","98.7","39.2","5383","4390","34","91","22","15.4","20.62","98.1","29.9","2619","2093","37","89","33","15.9","11.73","97.8","66.6","3617","3039","39","64","27","16.5","17.28","93.1","43.4","4287","5239","35","125","51","16.3","24.46","98.4","35","3479","4631","39","99","27","14.5","26.89","97.8","41","3968","4284","38","104","30","14.1","24.31","98.1","38.8","4745","5857","37","84","24","15.4","28.65","97","28.7","3364","3956","35","86","25","15.4","21.22","97.2","34.7","2091","2767","39","82","26","14.6","12.77","96.6","37.6","3544","4797","39","85","25","15.3","29.24","97.4","40.1","3733","4480","36","105","38","15.7","24.71","98.1","55.8","1338","1456","29","53","21","18.2","8.44","91.2","40","1677","1395","30","67","25","15.3","10.46","92.6","33.1","800","755","28","90","16","13.3","5.48","98","17.3","1128","1130","34","61","26","17.1","9.24","89.2","37.6","1370","1365","23","43","21","15.8","13.55","86.8","45.3","816","859","23","51","19","15.1","5.36","91","35.5","1332","1129","21","60","18","15.7","10.8","91.8","22.2")
+my_data <- as.data.frame(matrix(data=as.numeric(my_data),ncol=9,byrow=T))
+rownames(my_data) <-c(paste("C",seq(14),sep=""),paste("CTEPH",seq(7),sep=""))
+colnames(my_data) <- c("VO2","VCO2","PaCO2","PaO2","PvO2","Hb","Q_exp","satO2_a","satO2_v")
+my_data
+```
+PATIENT samples
+
+```{r echo=FALSE}
+# my_data_PAT<-c("1338","1456","29","53","21","18.2","8.44","1677","1395","30","67","25","15.3","10.46","800","755","28", "90","16","13.3","5.48","1128","1130","34","61","26","17.1","9.24","1370","1365","23","43","21","15.8",  "13.55","816","859","23","51","19","15.1","5.36","1332","1129","21","60","18","15.7","10.8")
+# my_data_PAT <- as.data.frame(matrix(data=as.numeric(my_data_PAT),ncol=7,nrow=7,byrow=TRUE))
+# rownames(my_data_PAT) <-paste("CTEPH",seq(7),sep="")
+# colnames(my_data_PAT) <- c("VO2","VCO2","PaCO2","PaO2","PvO2","Hb","Q")
+# my_data <- rbind(my_data,my_data_PAT)
+#my_data
+```
+
+EXTRA 2 samples from the paper (average values for the healthy and HFpEF patients)
+NO INFO FOR PaCO2 in the paper --> i will put 35 / 30
+
+```{r}
+paper_HEALTHY <- c("1620","1940","35","97","21","14.1","14","100","34")
+paper_HFPEF <- c("1090","1260","30","96","21","13.4","10.2","100","34")
+my_data_PAPER <- c(paper_HEALTHY,paper_HFPEF)
+my_data_PAPER <- as.data.frame(matrix(data=as.numeric(my_data_PAPER),ncol=9,nrow=2,byrow=TRUE))
+colnames(my_data_PAPER) <- colnames(my_data)
+rownames(my_data_PAPER) <-c("REFCTR","REFPAT")
+my_data<-rbind(my_data,my_data_PAPER)
+my_data
+```
+
+## Application of Algorithm 1:
+
+O2 pathway parameter estimation from an individual's exercise measurements.
+
+1. Input:
+
+   a) CPET-measurements at peak exercise for patient i: `VO2, VCO2, PaCO2, PaO2, PvO2, Hb`
+   b) Constants: `k, PlO2, p50, RCtlmito, RHFmito`
+  
+2. Solve O2 transport equations (1)-(2), (7)-(11) with boundary conditions (3)-(6)
+3. Output:
+
+   a) Patient i O pathway parameters at peak exercise: `Q, DL, DM, VA, vmax`
+   b) Patient i O2 tension in the alveolus, mitochondria, pulmonary and muscle capillaries: `PAO2, Pmito, PLcap(t), PMcap(t)`
+
+### Define Constants:
+
+* k= 1.159 (mL O2 mL-1 air mmHg -1) --> units conversion constant
+* PIO2= 150 mmHG (from http://www.partone.litfl.com/oxygen_cascade.html)--> Inspired partial pressure of oxygen
+* p50=0.24 --> Mitochondrial oxygen affinity (mmHg)
+* RCtlmito= 1.8 --> reserve mitochondrial respiration capacity, for HEALTHY patients, derived from Esposito et al 11
+* RHFmito= 2.0 --> sameas above
+* T (capillary transit time)= 0.5s or 0.00833 min --> from papers from Guidos email...not sure but will try with this value first
+
+```{r}
+ct_k=1.159
+ct_piO2=150
+ct_p50=0.24
+ct_Rctlmito=1.8
+ct_RHFmito=2
+ct_T=0.00833
+```
+
+##### First, we will calculate Q for all the samples and then plot the calculated vs the measured Q:
+Parameters needed:
+
+* VO2 --> my_data[1]
+* PaO2 --> my_data[4]
+* Hb --> my_data[6]
+* PvO2 --> my_data[5]
+* SatO2_v --> my_data[9] 
+* SatO2_a --> my_data[8]
+```{r}
+calcQ <- function(p1){
+  res=p1[1]/((0.0032*p1[4]+1.4*p1[6]*p1[8])-(0.0032*p1[5]+1.4*p1[6]*p1[9]))*10;
+  return(res)
+}
+calcQ(my_data[1,])
+```
+```{r}
+round(apply(my_data,1,calcQ),2)
+my_data$Q_calc <- round(apply(my_data,1,calcQ),2)
+```
+
+Plot correlation:
+
+```{r}
+my_data$group <- c(rep('control',14),rep('patient',7),rep('ref',2))
+```
+
+
+```{r echo =F}
+#ggscatter(my_data,x='Q_exp',y='Q_calc',add="reg.line") +
+# stat_cor(aes(label=paste(..rr.label..,..p.label..,sep="~`,`~")),label.x=3)
+```
+
+```{r echo=F}
+#specific intersect
+modelINT <- lm(I(Q_calc)~0+my_data$Q_exp,data=my_data)
+modelINT_cor <- cor(my_data$Q_calc,my_data$Q_exp)**2
+coeffINT=coefficients(modelINT)
+eqINT = paste0("y = ", round(coeffINT[1],2), "*x", ", R2 = ", round(modelINT_cor,2))
+#q_plot + geom_point(aes(color=group)) +
+#  geom_abline(intercept=0,slope=coeffINT[1]) +
+#  ggtitle(eqINT)
+```
+
+```{r}
+plot_data <- my_data[-5,]
+model <- lm(Q_calc~Q_exp,data=plot_data)
+model_cor <- cor(plot_data$Q_calc,plot_data$Q_exp)**2
+coeff=coefficients(model)
+eq = paste0("y = ", round(coeff[2],2), "*x + " ,round(coeff[1],2))
+eq_cor=bquote(R^2 ~"=" ~ .(round(model_cor,2)))
+#eq_cor=expression(paste("R"^"2"))
+q_plot <- ggplot(plot_data, aes(Q_exp, Q_calc ))
+q_plot + geom_point(aes(color=group)) +
+  #geom_abline(intercept=coeff[1],slope=coeff[2]) +
+  geom_smooth(method=lm,se=F,color="black") +
+  #ggtitle(eq) +
+  annotate(geom="text", x=5, y=40, label=eq, color="black",hjust=0) +
+  annotate(geom="text", x=5, y=38, label=eq_cor, color="black",hjust=0) +
+  ggtitle("Correlation between Calculated and Experimental Q") +
+  ylab ("Calculated Q (L/min)") +
+  xlab ("Experimental Q (L/min)")
+  #geom_text(x=7, y=30, label=eq_cor)
+```
+
+### Calculate other variables and parameters for the final ODE
+
+```{r}
+calcVA <- function (input){
+  res=as.numeric(input[2])/(ct_k*as.numeric(input[3]))
+  return (res)
+}
+my_data$VA <- round(apply(my_data,1,calcVA),2)
+```
+
+```{r}
+calcPAO2 <- function(input) {
+  res=ct_piO2-(as.numeric(input[1])/(as.numeric(input[12])*ct_k))
+  return(res)
+}
+my_data$PAO2 <- round(apply(my_data,1,calcPAO2),2)
+```
+
+```{r}
+calcVMAX <- function(input,rmito) {
+  res=rmito*as.numeric(input[1])
+  return(res)
+}
+#my_data$Vmax <- apply(my_data,1,calcVMAX,rmito=ct_Rctlmito)
+vmax_ctl <- round(apply(my_data,1,calcVMAX,rmito=ct_Rctlmito),2)
+vmax_pat <- round(apply(my_data,1,calcVMAX,rmito=ct_RHFmito),2)
+my_data$Vmax <- c(vmax_ctl[1:14],vmax_pat[15:21],vmax_ctl[22],vmax_pat[23])
+```
+
+```{r}
+calcPMITO <- function(input) {
+  res=ct_p50/((as.numeric(input[14])/as.numeric(input[1]))-1)
+  return(res)
+}
+# my_data$Pmito <- formatC(apply(my_data,1,calcPMITO), format = "e", digits = 2)
+my_data$Pmito <- apply(my_data,1,calcPMITO)
+```
+
+### Summary of all the calculated variables
+
+```{r}
+my_data
+```
+
+### Plots as in the paper
+Q vs VO2
+
+```{r}
+create_cor_plot <- function(pData, xVar, yVar,legx,legy,myxlim=c(0,100),myylim=c(0,100),axis=c("title","xlab","ylab")) {
+  model <- lm(formula(paste(yVar,"~",xVar)),data=pData)
+  model_cor <- cor(pData[,yVar],pData[,xVar])**2
+  coeff=coefficients(model)
+  eq = paste0("y = ", round(coeff[2],4), "*x + " ,round(coeff[1],2))
+  eq_cor=bquote(R^2 ~"=" ~ .(round(model_cor,2)))
+  q_plot <- ggplot(pData, aes_string(x=xVar, y=yVar ))
+  q_plot + geom_point(aes(color=group)) +
+    geom_smooth(method=lm,se=T,color="black") +
+    annotate(geom="text", x=legx, y=legy, label=eq, color="black",hjust=0) +
+    annotate(geom="text", x=legx, y=legy-(0.05*legy), label=eq_cor, color="black",hjust=0) +
+    xlim(myxlim)+
+    ylim(myylim) +
+    ggtitle(axis[1]) +
+    xlab (axis[2]) +
+    ylab (axis[3])
+}
+```
+
+Calculated Q
+
+```{r}
+# plot_data <- my_data[-5,]
+plot_data <- my_data
+plot_data$VO2 <- plot_data$VO2/1000
+pTitle <- expression("Correlation between Calculated Q and V"["O"[2]])
+pxLab <- expression("V"["O"[2]]*" (L/min)")
+pyLab <- "Calculated Q (L/min)"
+create_cor_plot(plot_data,"VO2","Q_calc",1,40,c(0,6),c(0,50),c(pTitle,pxLab,pyLab))
+```
+
+Experimental Q
+
+```{r}
+pTitle <- expression("Correlation between Experimental Q and V"["O"[2]])
+pxLab <- expression("V"["O"[2]]*" (L/min)")
+pyLab <- "Experimental Q (L/min)"
+create_cor_plot(plot_data,"VO2","Q_exp",1,30,c(0,6),c(0,35),c(pTitle,pxLab,pyLab))
+```
+
+VA vs VO2
+
+```{r}
+pTitle <- expression("Correlation between V"["A"]*" and V"["O"[2]])
+pxLab <- expression("V"["O"[2]]*" (L/min)")
+pyLab <- expression("V"["A"]* " (L/min)")
+create_cor_plot(plot_data,"VO2","VA",1,130,c(0,6),c(0,150),c(pTitle,pxLab,pyLab))
+```
+
+### Missing Plots
+
+* Q vs DAV_O2 (DAV_O2 not calculated)
+
+### Functions to Integrate the ODE and get the last parameters
+
+#### DL and PLcap
+
+* VO2 --> my_data[1]
+* PaO2 --> my_data[4]
+* Hb --> my_data[6]
+* PvO2 --> my_data[5]
+* SatO2_v --> my_data[9] 
+* SatO2_a --> my_data[8]
+* Q --> my_data[10]
+* Pmito--> my_data[15]
+* T (capillary transit time)= 0.5s or 0.00833 min --> from papers from Guidos email...not sure but will try with this value first
+
+
+```{r}
+# ct_T=0.00833
+# ct_T=10
+f_PL <- function(t,y,DL,params){
+  # dy <- DL / (y[10]*ct_T*(0.0032*y[1]+1.4*y[6]*y[9])) * (y[13]-y[1])
+  dy <- DL / (as.numeric(params[2])*ct_T*(0.0032*y[1]+1.4*as.numeric(params[1])*as.numeric(params[3]))) * (as.numeric(params[4])-y[1])
+  list(dy)
+}
+```
+
+
+```{r include=F}
+t <- seq(0,ct_T,ct_T/20)
+calc_PL <- function (data) {
+  hb <- data[6]
+  q <- data[10]
+  satv <- as.numeric(data[8])/100
+  pao2 <- data[13]
+  mysol <- bvpshoot(yini=as.numeric(data[5]),yend=as.numeric(data[4]),x=t,func=f_PL,extra=20,maxiter=100000000,params=c(hb,q,satv,pao2))
+  # mysol <- bvpshoot(yini=21,yend=64,x=t,func=f_PL,extra=20,maxiter=100000000,params=c(hb,q,satv,pao2))
+  DL <- attr(mysol,"roots")
+  plot(mysol[,1],mysol[,2],type="l")
+  return(DL$root/10)
+}
+```
+
+```{r}
+options(scipen = 999)
+par(mfrow=c(4,6))
+plot_data$DL <- round(apply(my_data,1,calc_PL),2)
+#dev.off()
+```
+
+
+```{r}
+pTitle <- expression("Correlation between D"["L"]*" and V"["O"[2]])
+pxLab <- expression("V"["O"[2]]*" (L/min)")
+pyLab <- expression("D"["L"]* " (mL/min" %.% "mmHg)")
+create_cor_plot(plot_data[c(-7,-2,-3),],"VO2","DL",0,150,c(0,6),c(0,170),c(pTitle,pxLab,pyLab))
+```
+
+#### DM and PMcap
+
+```{r}
+f_PM <- function(t,y,DM,params){
+  dy <- - DM / (as.numeric(params[2])*ct_T*(0.0032*y[1]+1.4*as.numeric(params[1])*as.numeric(params[3]))) * (y[1]-as.numeric(params[4]))
+  list(dy)
+}
+```
+
+
+```{r include=F}
+t <- seq(0,ct_T,0.0005)
+calc_PM <- function (data) {
+  hb <- data[6]
+  q <- data[10]
+  satv <- as.numeric(data[8])/100
+  pmito <- data[15]
+  mysol <- bvpshoot(yini=as.numeric(data[4]),yend=as.numeric(data[5]),x=t,func=f_PM,extra=50,maxiter=100000000,params=c(hb,q,satv,pmito))
+  DM <- attr(mysol,"roots")
+  plot(mysol[,1],mysol[,2],type="l")
+  return(DM$root/10)
+}
+```
+
+```{r}
+par(mfrow=c(4,6))
+plot_data$DM <- round(apply(my_data,1,calc_PM),2)
+# dev.off()
+```
+
+
+```{r}
+pTitle <- expression("Correlation between D"["M"]*" and V"["O"[2]])
+pxLab <- expression("V"["O"[2]]*" (L/min)")
+pyLab <- expression("D"["M"]* " (mL/min" %.% "mmHg)")
+create_cor_plot(plot_data,"VO2","DM",0,100,c(0,6),c(0,120),c(pTitle,pxLab,pyLab))
+```
+
+## Extra Plots
+
+### Histogram DM with respect to different groups (Fig 2D in the paper)
+```{r}
+# from http://www.sthda.com/english/wiki/ggplot2-barplots-quick-start-guide-r-software-and-data-visualization
+#+++++++++++++++++++++++++
+# Function to calculate the mean and the standard deviation
+  # for each group
+#+++++++++++++++++++++++++
+# data : a data frame
+# varname : the name of a column containing the variable
+  #to be summariezed
+# groupnames : vector of column names to be used as
+  # grouping variables
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+```
+
+```{r}
+df3 <- data_summary(plot_data, varname="DM", groupnames="group")
+pTitle <- expression("Barplot of the different groups with respect to D"["M"])
+pxLab <- "Groups"
+pyLab <- expression("D"["M"]* " (mL/min" %.% "mmHg)")
+ggplot(df3,aes(x=group,y=DM,fill=group)) + geom_bar(stat = "identity",position = position_dodge()) + geom_errorbar(aes(ymin=DM-sd, ymax=DM+sd),width=0.2,position=position_dodge(.9)) +
+  ggtitle(pTitle) +
+  xlab (pxLab) +
+  ylab (pyLab)
+```
+### Same with all the variables
+
+```{r}
+units<-c("L/min","mL/min","mmHg","mmHg","mmHg","g/dL","L/min","%","%","L/min","L/min","mmHg","mL/min","mmHg","mL/min x mmHg","mL/min x mmHg")
+units <- as.data.frame(matrix(units,nrow=1))
+colnames(units) <- colnames(plot_data[,-11])
+for (i in colnames(plot_data[,-11])){
+  pd <- plot_data
+  if (i == 'DL') {pd <- plot_data[-7,]}
+  if (i =='Pmito') {pd$Pmito <- as.numeric(pd$Pmito)}
+  df3 <- data_summary(pd, varname=i, groupnames="group")
+  pTitle <- paste("Barplot of the different groups with respect to",i)
+  pxLab <- "Groups"
+  pyLab <- paste0(i," (",as.character(getElement(units,i)),")")
+  p <- ggplot(df3,aes_string(x="group",y=i,fill="group")) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    geom_errorbar(aes_string(ymin=paste(i,"-sd"), ymax=paste(i,"+sd")),width=0.2,position=position_dodge(.9))+
+    ggtitle(pTitle) +
+    xlab (pxLab) +
+    ylab (pyLab)
+  plot(p)
+}
+```
+### Summary of all the data
+
+```{r}
+plot_data
+```
+
+# Repeat everything predicting VO2 instead
+
+```{r}
+my_data$DL <- plot_data$DL
+my_data$DM <- plot_data$DM
+my_data
+```
+
+```{r}
+my_data_VO2 <- my_data[,c(1:11)]
+my_data_VO2$Q_calc <- my_data_VO2$Q_exp
+my_data_VO2
+```
+
+
+```{r}
+calcVO2 <- function(p1){
+  p1 <- as.numeric(p1[c(1:9)])
+  res=p1[7]*((0.0032*p1[4]+1.4*p1[6]*p1[8])-(0.0032*p1[5]+1.4*p1[6]*p1[9]))/10
+  return(res)
+}
+calcVO2(my_data_VO2[1,])
+```
+```{r}
+round(apply(my_data_VO2,1,calcVO2),2)
+my_data_VO2$VO2 <- round(apply(my_data,1,calcVO2),2)
+kk <- my_data[,c(1,2,11)]
+colnames(kk) <- c("VO2exp","VO2calc","group")
+kk$VO2calc <-round(apply(my_data,1,calcVO2),2)
+```
+```{r}
+pTitle <- expression("Correlation between Calculated and Experimental V"["O"[2]])
+pxLab <- expression("Calc V"["O"[2]]*" (mL/min)")
+pyLab <- expression("Exp V"["O"[2]]*" (mL/min)")
+create_cor_plot(kk,"VO2calc","VO2exp",500,4500,c(0,5500),c(0,5500),c(pTitle,pxLab,pyLab))
+```
+
+```{r}
+pTitle <- expression("Correlation between Experimental Q and Calculated V"["O"[2]])
+pxLab <- expression("Calc V"["O"[2]]*" (mL/min)")
+pyLab <- "Exp Q (L/min)"
+create_cor_plot(my_data_VO2,"VO2","Q_exp",1,40,c(0,6000),c(0,50),c(pTitle,pxLab,pyLab))
+
+pTitle <- expression("Correlation between Experimental Q and Experimental V"["O"[2]])
+pxLab <- expression("Exp V"["O"[2]]*" (mL/min)")
+pyLab <- "Exp Q (L/min)"
+create_cor_plot(my_data,"VO2","Q_exp",1,40,c(0,6000),c(0,50),c(pTitle,pxLab,pyLab))
+
+pTitle <- expression("Correlation between Calc Q and Exp V"["O"[2]])
+pxLab <- expression("Exp V"["O"[2]]*" (L/min)")
+pyLab <- "Calc Q (L/min)"
+create_cor_plot(my_data,"VO2","Q_calc",1,40,c(0,6000),c(0,50),c(pTitle,pxLab,pyLab))
+```
+```{r}
+my_data_VO2$VA <- round(apply(my_data_VO2,1,calcVA),2)
+my_data_VO2$PAO2 <- round(apply(my_data_VO2,1,calcPAO2),2)
+vmax_ctl <- round(apply(my_data_VO2,1,calcVMAX,rmito=ct_Rctlmito),2)
+vmax_pat <- round(apply(my_data_VO2,1,calcVMAX,rmito=ct_RHFmito),2)
+my_data_VO2$Vmax <- c(vmax_ctl[1:14],vmax_pat[15:21],vmax_ctl[22],vmax_pat[23])
+my_data_VO2$Pmito <- round(apply(my_data_VO2,1,calcPMITO),2)
+```
+```{r}
+pTitle <- expression("Correlation between V"["A"]*" and Calc V"["O"[2]])
+pxLab <- expression("Calc. V"["O"[2]]*" (L/min)")
+pyLab <- expression("V"["A"]* " (L/min)")
+create_cor_plot(my_data_VO2,"VO2","VA",1,130,c(0,6000),c(0,150),c(pTitle,pxLab,pyLab))
+```
+```{r}
+par(mfrow=c(4,6))
+my_data_VO2$DL <- round(apply(my_data_VO2,1,calc_PL),2)
+```
+
+```{r}
+pTitle <- expression("Correlation between D"["L"]*" and V"["O"[2]])
+pxLab <- expression("V"["O"[2]]*" (mL/min)")
+pyLab <- expression("D"["L"]* " (mL/min" %.% "mmHg)")
+create_cor_plot(my_data_VO2[-7,],"VO2","DL",0,100,c(0,6000),c(0,120),c(pTitle,pxLab,pyLab))
+```
+```{r}
+par(mfrow=c(4,6))
+my_data_VO2$DM <- round(apply(my_data_VO2,1,calc_PM),2)
+```
+
+```{r}
+pTitle <- expression("Correlation between D"["M"]*" and V"["O"[2]])
+pxLab <- expression("V"["O"[2]]*" (L/min)")
+pyLab <- expression("D"["M"]* " (mL/min" %.% "mmHg)")
+create_cor_plot(my_data_VO2,"VO2","DM",0,100,c(0,6000),c(0,120),c(pTitle,pxLab,pyLab))
+```
+
+
+```{r}
+units<-c("L/min","mL/min","mmHg","mmHg","mmHg","g/dL","L/min","%","%","L/min","L/min","mmHg","mL/min","mmHg","mL/min x mmHg","mL/min x mmHg")
+units <- as.data.frame(matrix(units,nrow=1))
+plots <- NULL
+colnames(units) <- colnames(my_data_VO2[,-11])
+for (i in colnames(my_data_VO2[,-11])){
+  pd <- my_data_VO2
+  if (i == 'DL') {pd <- my_data_VO2[-7,]}
+  if (i =='Pmito') {pd$Pmito <- as.numeric(pd$Pmito)}
+  df3 <- data_summary(pd, varname=i, groupnames="group")
+  pTitle <- paste("Barplot of the different groups with respect to",i)
+  pxLab <- "Groups"
+  pyLab <- paste0(i," (",as.character(getElement(units,i)),")")
+  p <- ggplot(df3,aes_string(x="group",y=i,fill="group")) + 
+    geom_bar(stat = "identity",position = position_dodge()) +
+    geom_errorbar(aes_string(ymin=paste(i,"-sd"), ymax=paste(i,"+sd")),width=0.2,position=position_dodge(.9))+
+    ggtitle(pTitle) +
+    xlab (pxLab) +
+    ylab (pyLab)
+  plot(p)
+}
+```
+```{r}
+# heatmap.2(my_data_VO2[,-11], key=F, trace="none",
+#            col=colorpanel(100, "black", "white"),
+#            #ColSideColors=mycols[condition], RowSideColors=mycols[condition],
+#            margin=c(10, 10), main="Sample Distance Matrix")
+#  legend("topleft", legend=unique(condition), col=mycols,lty=1,lwd=5,cex=0.4)
+```
+
+https://sebastianraschka.com/Articles/heatmaps_in_r.html
+
+```{r}
+my_palette <- colorRampPalette(c("blue", "green", "yellow","white"))(n = 399)
+my_palette <- colorRampPalette(c("blue4", "darkcyan", "darkseagreen3","lemonchiffon1","white"))(n = 99)
+
+# my_palette <- rev(brewer.pal(9,"YlGnBu"))
+col_breaks = c(seq(0,30,length=20),  # for red
+  seq(31,44,length=20),           # for yellow
+  seq(45,57,length=20),
+  seq(58,70,length=20),
+  seq(71,100,length=20)) 
+# col_breaks = c(seq(1,100, length=10) )
+mat_data <- data.matrix(apply(my_data_VO2[,-11][-7,],2,function(x){round(as.numeric(x)/as.numeric(max(x))*100,2)}))
+rownames(mat_data) <- rownames(my_data_VO2[-7,])
+heatmap.2(mat_data[order(mat_data[,10]),],
+  # cellnote = F,  # same data set for cell labels
+  main = "Correlation", # heat map title
+  notecol="black",      # change font color of cell labels to black
+  density.info="none",  # turns off density plot inside color legend
+  trace="none",         # turns off trace lines inside the heat map
+  margins =c(5,5),     # widens margins around plot
+  col=my_palette,       # use on color palette defined earlier
+  breaks=col_breaks,    # enable color transition at specified limits
+  dendrogram="none",     # only draw a row dendrogram
+  Rowv="NA",
+  Colv=T,
+  colsep=0:ncol(mat_data),
+  rowsep=0:nrow(mat_data),
+  sepcolor="gray70",
+  sepwidth=c(0.01,0.01),)
+```
+
+## Study different T values
+
+* I will run the DL and DM prediction with different T values and store the correlations in a variable.
+* Next, I will plot the 3 variables in a contour plot or a plot of T vs R_DL*R_DM, for instance.
+```{r}
+get_cor <- function(pData, xVar, yVar) {
+  model_cor <- cor(pData[,yVar],pData[,xVar])**2
+  return(round(model_cor,2))
+}
+```
+
+```{r}
+f_PM <- function(t,y,DM,params){
+  dy <- - DM / (as.numeric(params[2])*ct_T*(0.0032*y[1]+1.4*as.numeric(params[1])*as.numeric(params[3]))) * (y[1]-as.numeric(params[4]))
+  list(dy)
+}
+f_PL <- function(t,y,DL,params){
+  dy <- DL / (as.numeric(params[2])*ct_T*(0.0032*y[1]+1.4*as.numeric(params[1])*as.numeric(params[3]))) * (as.numeric(params[4])-y[1])
+  list(dy)
+}
+```
+
+
+```{r}
+calc_PM <- function (data) {
+  hb <- data[6]
+  q <- data[10]
+  satv <- as.numeric(data[8])/100
+  pmito <- data[15]
+  mysol <- bvpshoot(yini=as.numeric(data[4]),yend=as.numeric(data[5]),x=t,func=f_PM,extra=50,maxiter=100000000,params=c(hb,q,satv,pmito))
+  DM <- attr(mysol,"roots")
+  plot(mysol[,1],mysol[,2],type="l")
+  return(DM$root/10)
+}
+```
+
+```{r}
+calc_PL <- function (data) {
+  hb <- data[6]
+  q <- data[10]
+  satv <- as.numeric(data[8])/100
+  pao2 <- data[13]
+  mysol <- bvpshoot(yini=as.numeric(data[5]),yend=as.numeric(data[4]),x=t,func=f_PL,extra=20,maxiter=100000000,params=c(hb,q,satv,pao2))
+  DL <- attr(mysol,"roots")
+  plot(mysol[,1],mysol[,2],type="l")
+  return(DL$root/10)
+}
+```
+
+```{r}
+#ct_T=0.00833
+#ct_T=0.01
+dmcor <- NULL
+dlcor <- NULL
+dl7cor <- NULL
+for (ct_T in seq(0.001,0.01,0.0018325)){
+  print(ct_T)
+  t <- seq(0,ct_T,ct_T/20)
+  par(mfrow=c(4,6))
+  my_data_VO2$DM <- round(apply(my_data_VO2,1,calc_PM),2)
+  # print(my_data_VO2$DM)
+  par(mfrow=c(4,6))
+  my_data_VO2$DL <- round(apply(my_data_VO2,1,calc_PL),2)
+  # print(my_data_VO2$DL)
+  dmcor <- c(dmcor,get_cor(my_data_VO2,"VO2","DM"))
+  dlcor <- c(dlcor,get_cor(my_data_VO2,"VO2","DL"))
+  dl7cor <- c(dl7cor, get_cor(my_data_VO2[-7,],"VO2","DL"))
+}
+```
+## Check results
+
+Agus suggested me to manually check some of the results:
+```
+Agus 12:04
+if you put the DL value from the output and calculate using the formula on 
+the right hand side, do you get the outputtted derivative?
+```
+
+```{r}
+#Example with first Row
+#plot as in formula
+calc_PL <- function (data) {
+  hb <- data[6]
+  q <- data[10]
+  satv <- as.numeric(data[8])/100
+  pao2 <- data[13]
+  mysol <- bvpshoot(yini=as.numeric(data[5]),yend=as.numeric(data[4]),x=t,func=f_PL,extra=20,maxiter=100000000,params=c(hb,q,satv,pao2))
+  DL <- attr(mysol,"roots")
+  plot(mysol[,1],mysol[,2],type="l")
+  return(mysol[,2])
+}
+DLfirst <- calc_PL(my_data_VO2[1,])
+# x <- t
+x <- DLfirst
+get_DL <- function (x,data){
+  DL <- data[16]
+  hb <- data[6]
+  q <- data[10]
+  satv <- as.numeric(data[8])/100
+  pao2 <- data[13]
+  y <- DL / (q*ct_T*(0.0032*x+1.4*hb*satv)) * (pao2-x)
+  return(y)
+}
+# get_DL(x[2],my_data_VO2[1,],DLfirst)
+k <- my_data_VO2[1,]
+s <- as.numeric(unlist(lapply(x,get_DL,data=k)))
+```
+
+
+
+
+```{r echo =F}
+################################################
+#EXAMPLES FOR BVPSOLVE
+```
+
+```{r echo =F}
+f <- function(x,y,parms){
+  dy <- y[2]
+  dy2 <- -4*y[1]
+  list(c(dy,dy2))
+}
+x <- seq(0,pi/4,0.01)
+mysol <- bvptwp(yini=c(-2,NA),yend=c(10,NA),x=x,func=f)
+k<-function(x){-2*cos(2*x)+10*sin(2*x)}
+k2 <- function(x){4*sin(2*x)+20*cos(2*x)}
+par(mfrow=c(2,2))
+plot(mysol[,1],mysol[,2],type="l")
+plot(x,k(x),type="l")
+plot(mysol[,1],mysol[,3],type="l")
+plot(x,k2(x),type="l")
+```
+```{r echo =F}
+# f2 <- function(x,y,parms){
+#   dy <- y[2]
+#   dy2 <- -3*y[1]
+#   list(c(dy,dy2))
+# }
+# x <- seq(0,2*pi,0.01)
+# mysol <- bvptwp(yini=c(7,NA),yend=c(0,NA),x=x,func=f2)
+# k<-function(x){7*cos(sqrt(3)*x) - 7/tan(2*sqrt(3)*pi)*sin(sqrt(3)*x)}
+# k2 <- function(x){x}
+# par(mfrow=c(2,2))
+# plot(mysol[,1],mysol[,2],type="l")
+# plot(x,k(x),type="l")
+# plot(mysol[,1],mysol[,3],type="l")
+# plot(x,k2(x),type="l")
+```
+```{r echo=F}
+# f3 <- function(x,y,parms){
+#   dy<-y[2]
+#   dy2 <- 2*y[1]^3*(6-2*x*y[1])^(-2)*(2+x*y[1]*(6-2*x*y[1])^(-1))
+#   list(c(dy,dy2))
+# }
+# x <- seq(0,1,0.1)
+# #mysol <- bvptwp(yini=c(1,NA),yend=c(5,NA),x=x,func=f3)
+# k<-function(x,y){6*y-x*y^2=1}
+# par(mfrow=c(1,2))
+# plot(mysol[,1],mysol[,2],type="l")
+# plot(x,k(x,x),type="l")
+```
+
+sensitivity analysis for the T
+plot DAVo2 vs Q (calculate DAVO2 as difference of VO2 in arteria and veins)
+
+# Algorithm 2
+
+## Application of Algorithm 2
+
+Calculate a patient’s O2 levels from their O2 pathway parameters:
+
+1. Input:
+
+   a) O pathway parameters at peak exercise for patient i: `Q, DL, DM, VA, p50, vmax, Hb`
+   b) Constants: `PIO2`
+  
+2. Solve O2 transport equations (1)-(2), (14)-(16) with boundary conditions (12)-(13)
+3. Output:
+
+   a) O2 levels at peak exercise: `VO2, DAVO2, PLcap(t), PMcap(t), PaO2, PvO2, Pmito, PAO2`
+
+### Define input params & constants
+
+* k= 1.159 (mL O2 mL-1 air mmHg -1) --> units conversion constant
+* PIO2= 150 mmHG (from http://www.partone.litfl.com/oxygen_cascade.html)--> Inspired partial pressure of oxygen
+* p50=0.24 --> Mitochondrial oxygen affinity (mmHg)
+* T (capillary transit time)= 0.5s or 0.00833 min --> from papers from Guidos email...not sure but will try with this value first
+
+#### Constants
+
+```{r}
+ct_k=1.159
+ct_piO2=150
+ct_p50=0.24
+#ct_T=0.00833
+```
+
+#### Params
+
+* Q --> my_data_VO2["Q_calc"]
+* DL --> my_data_VO2["DL"]
+* DM --> my_data_VO2["DM"]
+* VA --> my_data_VO2["VA"]
+* Vmax --> my_data_VO2["Vmax"] 
+* Hb --> my_data_VO2["Hb"]
+
+## Get Output
+
+From all the formula in the paper, we can calculate the parameters below:
+
+
+```{r}
+calcPAO2 <- function(input) {
+  res=ct_piO2-(as.numeric(input[1])/(as.numeric(input[12])*ct_k))
+  return(res)
+}
+my_data$PAO2 <- round(apply(my_data,1,calcPAO2),2)
+```
+
+
+### VO2
+
+```{r}
+# XVO2X = Q (co2(PMcap(0),Hb)-co2(PMcap(T),Hb))
+
+```
+
+### DAVO2
+
+### PLcap(t)
+
+```{r}
+# f_PL <- function(t,y,PL,params){
+#   dy <- as.numeric(params[5]) / (as.numeric(params[2])*ct_T*(0.0032*y[1]
+#                   +1.4*as.numeric(params[1])*as.numeric(params[3]))) * (as.numeric(params[4])-y[1])
+#   list(dy)
+# }
+```
+
+
+```{r include=F}
+# t <- seq(0,ct_T,ct_T/20)
+# calc_PL <- function (data) {
+#   hb <- data[6]
+#   q <- data[10]
+#   satv <- as.numeric(data[8])/100
+#   pao2 <- data[13]
+#   mysol <- bvpshoot(yini=as.numeric(data[5]),yend=as.numeric(data[4]),x=t,func=f_PL,extra=20,maxiter=100000000,params=c(hb,q,satv,pao2))
+#   # mysol <- bvpshoot(yini=21,yend=64,x=t,func=f_PL,extra=20,maxiter=100000000,params=c(hb,q,satv,pao2))
+#   DL <- attr(mysol,"roots")
+#   plot(mysol[,1],mysol[,2],type="l")
+#   return(DL$root/10)
+# }
+```
+
+```{r}
+# options(scipen = 999)
+# par(mfrow=c(4,6))
+# plot_data$DL <- round(apply(my_data,1,calc_PL),2)
+# #dev.off()
+```
+
+### PMcap(t)
+
+### PaO2
+
+### PvO2
+
+### Pmito
+
+```{r}
+# XPMITOX = ct_p50 / ((my_data_VO2["Vmax"]/XVO2X) - 1)
+```
+
+### PAO2
+
+```{r}
+# XPAO2X = ct_piO2 - (XVO2X/(my_data_VO2["VA"]*ct_k))
+```
+
+
+
+```{r}
+# fun<- function(x,y,pars) {
+# list(c(y[2],
+# 1/ks * (-x*y[2]+y[1]-(1+ks*pi*pi)*cos(pi*x)-pi*x*sin(pi*x)))
+# )
+# }
+# ks <- 0.1
+# x <- seq(-1, 1, by = 0.01)
+# print(system.time(
+# sol1 <- bvpshoot(yini = c(-1, NA), yend = c(1, NA),
+# x = x, func = fun, guess = 0)
+# ))
+# print(system.time(
+# sol2 <- bvptwp(yini = c(-1, NA), yend = c(1, NA), x = x, func = fun)
+# ))
+# print(system.time(
+# sol3 <- bvpcol(yini = c(-1, NA), yend = c(1, NA), x = x, func = fun)
+# ))
+```
+```{r}
+# plot(sol2[,1], sol2[,3], type = "l", main = "test problem 7, ksi=0.1",
+# lwd = 2, col = "red")
+# points(sol1[,1], sol1[,3], col = "green", pch = "x")
+# legend("topright", c("bvptwp", "bvpshoot"),
+# lty = c(1, NA, NA), pch = c(NA, 1, 3), col = c("red", "green"))
+```
+
+```{r}
+# musn <- function(x,Y,pars) {
+# with (as.list(Y), {
+# du <- 0.5 * u * (w - u) /v
+# dv <- -0.5 * (w - u)
+# dw <- (0.9 - 1000 * (w - y) - 0.5 * w * (w - u)) /z
+# dz <- 0.5 * (w - u)
+# dy <- -100 * (y - w)
+# return(list(c(du, dv, dw, dz, dy)))
+# })
+# }
+# init <- c(u = 1, v = 1, w = 1, z = -10, y = NA)
+# yend <- function (Y, yini, pars) with (as.list(Y), w-y)
+# print(system.time(
+# sol <-bvpshoot(yini = init, x = seq(0, 1, by = 0.05), func = musn,
+# yend = yend, guess = 1, atol = 1e-10, rtol = 0)
+# ))
+```
+
+```{r}
+# sol
+# plot(sol, type = "l", lwd = 2)
+# mtext(outer = TRUE, side = 3, line = -1.5, cex = 1.5, "musn")
+```
+```{r}
+# f_PL <- function(x,Y,pars){
+#   with (as.list(Y), {
+#   dz <- 50 / (26*0.008*(0.0032*z+1.4*14.1*23.3)) * (114-z)
+#   dy <- 67 / (26*0.008*(0.0032*y+1.4*14.1*23.3)) * (y-0.3)
+#   return (list(c(dz,dy)))
+#   })
+# }
+# init <- c(z = NA, y = 0)
+# yend <- function (Y, yini, pars) with (as.list(Y), z-y)
+# print(system.time(
+# sol <-bvpshoot(yini = init, x = seq(0,0.01,0.0005), func = f_PL,
+# yend = yend, guess = 1 , atol = 1e-10, rtol = 0)
+# ))
+```
+
+```{r}
+# sol
+# plot(sol, type = "l", lwd = 2)
+# mtext(outer = TRUE, side = 3, line = -1.5, cex = 1.5, "musn")
+```
+
+
+# Use Excel as input
+
+## new functions from Nick Houstis
+
+```{r}
+model <- function(x,y,parms) {
+  q <- parms$q
+  hb <- parms$hb
+  pA <- parms$pA
+  pmito <- parms$pmito
+  # model represented as a list
+  return(list( c(
+    (y[3]/(TT*q*o2ct(y[1],hb,1)))*(pA-y[1]), # y[1] = Lung o2 
+    -(y[4]/(TT*q*o2ct(y[2],hb,1)))*(y[2]-pmito), #y [2] = Muscle o2
+    0, # y[3] = dlo2
+    0  # y[4] = dmo2
+  )))
+}
+
+boundCond <- function(i,y,parms) { 
+  pvo2 <- parms$pvo2
+  pao2 <- parms$pao2 
+  # boundary conditions
+  if (i==1) return(y[1]-pvo2) # y[1] = pvo2, at t=0 
+  if (i==2) return(y[2]-pao2) # y[2] = pao2, at t=0 
+  if (i==3) return(y[1]-pao2) # y[1] = pao2, at t=T 
+  if (i==4) return(y[2]-pvo2) # y[2] = pvo2, at t=T 
+}
+
+DmDlSolver <- function(...,pao2,pvo2,q,hb,pA,pmito,
+                       init_dmo2=1, init_dlo2=1,
+                       stepsize=0.01, errtol=1e-3, NITER=10000) {
+  
+  # error checking
+  if (pao2>pA) {
+    cat("Impossible measurements: pao2 > pA\n")
+    return(data.frame(dmo2=NA,dlo2=NA,pmcap=NA))
+  }
+  if (pmito>pvo2) {
+    cat("Impossible parameters: pmito > pvo2; setting pmito to pvo2-0.05\n")
+    pmito <- pvo2-0.05
+  }
+  
+  # initial values  
+  xguess = seq(0, TT, by = stepsize)
+  yguess = matrix(nrow = 4, ncol = length(xguess), data = 0)
+  rownames(yguess) <- c("LungO2", "MuscleO2","dlo2","dmo2")
+  yguess[1,] <- (pvo2+(pao2-pvo2)*xguess/TT) # initialize the venous blood gas in the lung
+  yguess[2,] <- (pao2-(pao2-pvo2)*xguess/TT) # initialize the arterial blood gas in the muscle
+  yguess[3,] <- init_dlo2
+  yguess[4,] <- init_dmo2
+  
+  # solver call
+  parms <- list(pao2 = pao2,pvo2 = pvo2,q=q,hb=hb,pA=pA,pmito=pmito)
+  Sol <- bvptwp(func = model, 
+                bound = boundCond, 
+                x = seq(0, TT, by = stepsize), 
+                ynames = c("L(x)","M(x)","dlo2","dmo2"),
+                parms=parms,
+                leftbc=2,
+                xguess=xguess,
+                yguess=yguess,
+                verbose=FALSE,
+                atol=errtol,
+                nmax=10000)
+  
+  dmo2 <- Sol[1,"dmo2"]
+  dlo2 <- Sol[1,"dlo2"]
+  pmcap <- sintegral(Sol[,1],Sol[,"M(x)"])$int / TT # mean value of pmcap(x), computed by integration
+  
+  return(data.frame(dmo2=dmo2,dlo2=dlo2,pmcap=pmcap))
+}
+
+
+###############
+# O2 dissociation curve and its derivative
+# Dash-Bassingthwaighte formulation used here, but Kelman is another popular alternative
+###############
+
+o2ct <- function(x,hb,flag) { #wrapper for odcDB
+  if (flag==0) return((0.003*x+1.39*hb*odcDB(x,hb,flag))*10) # o2 content: mL O2/ L blood
+  if (flag==1) return(odcDB(x,hb,flag)*hb*1.39*10+0.03) # o2 content DERIVATIVE, ie change in o2 content per delta pao2
+}
+
+# Simulation of oxyhemoglobin (HbO2) and carbomino hemoglobin (HbCO2)
+# dissociation curves and computation of total O2 and CO2 contents in 
+# the whole blood (Dash-Bassingthwaighte, ABME 38(4):1683-1701, 2010)
+
+odcDB <- function(pO2,hb,flag) {
+  
+  # set pCO2, pH, DPG, Temp to default values unless explicitly modeled
+  pCO2 <- 40
+  pH <- 7.24
+  DPG <- 0.00465
+  Temp <- 37
+  Hct <- hb
+  
+  # Parameters those are fixed in the model (i.e., water fractions, hemoglobin
+  # concentration in RBCs, equilibrium constants, and Hill coefficient)
+  Wpl = 0.94             # fractional water space in plasma unitless
+  Wrbc = 0.65            # fractional water space in RBCs unitless
+  Rrbc = 0.69            # Gibbs-Donnan ratio across RBC membrane unitless
+  Hbrbc = 5.18e-3        # hemoglobin concentration in RBCs M
+  K2 = 2.95e-5           # CO2 + HbNH2 equilibrium constant unitless
+  K2dp = 1.0e-6          # HbNHCOOH dissociation constant M
+  K2p = K2/K2dp          # kf2p/kb2p 1/M
+  K3 = 2.51e-5           # CO2 + O2HbNH2 equilibrium constant unitless
+  K3dp = 1.0e-6          # O2HbNHCOOH dissociation constant M
+  K3p = K3/K3dp          # kf3p/kb3p 1/M
+  K5dp = 2.63e-8         # HbNH3+ dissociation constant M
+  K6dp = 1.91e-8         # O2HbNH3+ dissociation constant M
+  nhill = 2.7            # Hill coefficient unitless
+  n0 = nhill-1.0         # deviation of Hill coefficient or cooperativity from
+  # the stochiometry of O2 for each heme site
+  
+  # Variables those are privately fixed in the model with the standard 
+  # physiological values (i.e., pH0, pCO20, DPG0, Temp0)
+  pO20 = 100.0           # standard O2 partial pressure in blood mmHg
+  pCO20 = 40.0           # standard CO2 partial pressure in blood mmHg
+  pH0 = 7.24             # standard pH in RBCs unitless
+  DPG0 = 4.65e-3         # standard 23-DPG concentration in RBCs M
+  Temp0 = 37.0           # standard temperature in blood degC
+  fact = 1.0e-6/Wpl      # a multiplicative factor M/mmHg
+  alphaO20 = fact*1.37	# solubility of O2 in water at 37 C M/mmHg
+  alphaCO20 = fact*30.7	# solubility of CO2 in water at 37 C M/mmHg
+  O20 = alphaO20*pO20	# standard O2 concentration in RBCs M
+  CO20 = alphaCO20*pCO20	# standard CO2 concentration in RBCs M
+  Hp0 = 10^(-pH0)        # standard H+ concentration in RBCs M
+  pHpl0 = pH0-log10(Rrbc)	# standard pH in plasma unitless
+  P500 = 26.8            # standard pO2 at 50# SHbO2 mmHg
+  C500 = alphaO20*P500	# standard O2 concentration at 50# SHbO2 M
+  
+  # Calculation of intermediate variables and the indices n1, n2, n3, and 
+  # n4 in the computations of SHbO2 & SHbCO2
+  Wbl = (1-Hct)*Wpl + Hct*Wrbc
+  pHpl = pH-log10(Rrbc)
+  pHpldiff = pHpl-pHpl0
+  pHdiff = pH-pH0
+  pCO2diff = pCO2-pCO20
+  DPGdiff = DPG-DPG0
+  Tempdiff = Temp-Temp0
+  alphaO2 = fact*(1.37 - 0.0137*Tempdiff + 0.00058*Tempdiff^2)
+  alphaCO2 = fact*(30.7 - 0.57*Tempdiff + 0.02*Tempdiff^2)
+  pK1 = 6.091 - 0.0434*pHpldiff + 0.0014*Tempdiff*pHpldiff
+  K1 = 10^(-pK1)
+  O2 = alphaO2*pO2 ##
+  CO2 = alphaCO2*pCO2
+  Hp = 10^(-pH) ##
+  Hppl = 10^(-pHpl)
+  
+  Term1 = K2p*(1+K2dp/Hp)
+  Term2 = K3p*(1+K3dp/Hp)
+  Term3 = (1+Hp/K5dp)
+  Term4 = (1+Hp/K6dp)
+  Term10 = K2p*(1+K2dp/Hp0)
+  Term20 = K3p*(1+K3dp/Hp0)
+  Term30 = (1+Hp0/K5dp)
+  Term40 = (1+Hp0/K6dp)
+  Kratio10 = (Term10*CO20+Term30)/(Term20*CO20+Term40)
+  Kratio11 = (Term1*CO20+Term3)/(Term2*CO20+Term4)
+  Kratio12 = (Term10*alphaCO20*pCO2+Term30)/(Term20*alphaCO20*pCO2+Term40)
+  K4dp = Kratio10*O20^n0/C500^nhill
+  K4tp = K4dp/O20^n0
+  Kratio20 = Kratio10/K4tp
+  Kratio21 = Kratio11/K4tp
+  Kratio22 = Kratio12/K4tp
+  
+  P501 = 26.765 - 21.279*pHdiff + 8.872*pHdiff^2
+  P502 = 26.80 + 0.0428*pCO2diff + 3.64e-5*pCO2diff^2
+  P503 = 26.78 + 795.633533*DPGdiff - 19660.8947*DPGdiff^2
+  P504 = 26.75 + 1.4945*Tempdiff + 0.04335*Tempdiff^2 + 0.0007*Tempdiff^3
+  C501 = alphaO20*P501
+  C502 = alphaO20*P502
+  C503 = alphaO20*P503
+  C504 = alphaO2*P504
+  
+  if (abs(pH-pH0) < 1.0e-6) {
+    n1 = 1.0       # can be any arbitrary value
+  } else {
+    n1 = (log10(Kratio21)-nhill*log10(C501))/(pH-pH0)
+  }
+  if (abs(pCO2-pCO20) < 1.0e-6) {
+    n2 = 1.0       # can be any arbitrary value
+  } else {
+    n2 = (log10(Kratio22)-nhill*log10(C502))/(log10(CO20)-log10(CO2))
+  }
+  if (abs(DPG-DPG0) < 1.0e-6) {
+    n3 = 1.0        # can be any arbitrary value
+  } else {
+    n3 = (log10(Kratio20)-nhill*log10(C503))/(log10(DPG0)-log10(DPG))
+  }
+  if (abs(Temp-Temp0) < 1.0e-6) {
+    n4 = 1.0       # can be any arbitrary value
+  } else {
+    n4 = (log10(Kratio20)-nhill*log10(C504))/(log10(Temp0)-log10(Temp))
+  }
+  Term5 = (Hp0/Hp)^n1*(CO20/CO2)^n2*(DPG0/DPG)^n3*(Temp0/Temp)^n4
+  
+  # Calculation of Hill coefficients (KHbO2 and KHbCO2) O2 and CO2 saturations
+  # of hemoglobin (SHbO2 and SHbCO2) and O2 and CO2 contents in blood. These 
+  # are computed as functions of pO2 and pCO2. Also compute the concentrations
+  # of all the components of HbO2 and HbCO2.
+  K4p = K4dp*(O2/O20)^n0*Term5
+  KHbO2 = K4p*(Term2*CO2+Term4)/(Term1*CO2+Term3)
+  KHbO2deriv = n0*K4dp*((O2/O20)^(n0-1))*Term5
+  KHbCO2 = (Term1+Term2*K4p*O2)/(Term3+Term4*K4p*O2)
+  
+  ######
+  SHbO2 = KHbO2*O2/(1+KHbO2*O2)
+  beta = ((KHbO2*(n0+1))/((1+KHbO2*O2)^2))*(alphaO20) # convert back to mmHg from molarity
+  ######
+  
+  SHbCO2 = KHbCO2*CO2/(1+KHbCO2*CO2)
+  O2free = Wbl*alphaO2*pO2
+  O2bound = 4*Hct*Hbrbc*SHbO2
+  O2total = O2free+O2bound
+  O2content = 2225.6*O2total
+  CO2free = Wbl*alphaCO2*pCO2
+  CO2bicarb = ((1-Hct)*Wpl+Hct*Wrbc*Rrbc)*(K1*alphaCO2*pCO2/Hppl)
+  CO2bound = 4*Hct*Hbrbc*SHbCO2
+  CO2total = CO2free+CO2bicarb+CO2bound
+  CO2content = 2225.6*CO2total
+  
+  if (flag==1) {
+    return(beta)
+  } else return(SHbO2)
+} 
+
+#####
+```
+
+```{r}
+library(Bolstad2)
+FIO2 <- 0.21
+PIO2 <- (760-47)*FIO2 # partial pressure of inspired o2, Torr; pio2 = 149.7 for fio2=0.21
+K <- 1.159 # ml o2 / ml air / Torr
+TT = 1 # transit time set arbitrarily to 1 as the calculations are invariant to its value, but useful conceptually
+
+# Mitochondrial constants
+P50REF <- 0.24 # mmHg
+VRESERVE <- 1.8 # VO2 Knee extension / VO2 cycle; sets a lower bound on vmax (derived from Esposito et al 2010)
+
+########################
+# Input measurements: pao2 (mmHg), pvo2 (mmHg), paco2 (mmHg), hb (g/dL), vo2 (mL/min), vco2 (mL/min)
+# Output O2 pathway parameters: va (L/min), q (L/min), dmo2 (mL/mmHg/min), dlo2 (mL/mmHg/min), vmax (L/min)
+# Output O2 tensions: pA (mmHg), pmito (mmHg), average pmcap (mmHg)
+########################
+
+measurements <- data.frame(pao2=97, paco2 = 40, pvo2=21, hb=14, vo2=1600, vco2=1900) # sample values for a single individual
+
+calc_params <- function(meas) {
+  dp <- mutate(meas,
+         o2ct.art = mapply(o2ct,x=pao2,hb=hb,flag=0)/10, # mL O2/ dL blood
+         o2ct.ven = mapply(o2ct,x=pvo2,hb=hb,flag=0)/10, # mL O2/ dL blood
+         va=vco2/(K*paco2), # L/min (BTPS), vco2 in mL/min (STPD)
+         avo2 = o2ct.art - o2ct.ven, # mL/dL
+         q = 0.1*vo2/avo2, # L/min
+         o2deliv = q*o2ct.art*10/1000, # L O2/min
+         pA = PIO2-vo2/(va*K), # vo2 in mL/min (STPD)
+         vmax = VRESERVE*vo2, # mL O2/min
+         p50 = P50REF, # mmHg
+         pmito = p50/((vmax/vo2) - 1)) #mmHg
+  return (dp)
+}
+
+calc_all <- function(meas){
+  dataparams <- calc_params(meas)
+  finalparams <- do.call(DmDlSolver,dataparams)
+  return(cbind(dataparams,finalparams))
+}
+```
+
+```{r}
+library(readxl)
+kk <- read_excel('alg1_HOUSTIS/data/Combined data_ESC_abstract_060220120_CALCULATED.xlsx')
+colnames(kk) <- tolower(colnames(kk))
+test <- kk[c(1:2),]
+colnames(test) <- tolower(colnames(test))
+```
+
+```{r}
+kkk <- NULL
+for(i in 1:nrow(kk)) {
+    row <- kk[i,]
+    # do stuff with row
+    kkk <- rbind(kkk,calc_all(row))
+}
+
+```
+
+## Comparison with Houstis
+
+Calculate Q from VO2
+
+```{r}
+# options(width=120)
+# subset(my_data,VO2==4632)
+example_guido <- data.frame(pao2=80, paco2 = 35, pvo2=21, hb=14.1, q=25.99, vo2=4632, vco2=3655,satao2=96,satvo2=23.3)
+example_guido <- mutate(example_guido,
+                        q_c = calc_params(example_guido)$q,
+                        o2art=calc_params(example_guido)$o2ct.art,
+                        o2ven=calc_params(example_guido)$o2ct.ven,
+                        avo2=calc_params(example_guido)$avo2,
+                        sao2_c = odcDB(pao2,hb,0),
+                        svo2_c = odcDB(pvo2,hb,0))
+example_guido
+```
+
+```{r}
+new_data <- as.data.frame(my_data)
+# new_data <- new_data[,-10]
+colnames(new_data) <- tolower(colnames(new_data))
+
+example_guido <- data.frame(pao2=80, paco2 = 35, pvo2=21, hb=14.1, q=25.99, vo2=4632, vco2=3655,sato2_a=96,sato2_v=23.3)
+calcQnew <- function(meas){
+  res <- mutate(meas,
+               o2ct.art = 0.0032*pao2+1.4*hb*sato2_a/100,
+               o2ct.ven = 0.0032*pvo2+1.4*hb*sato2_v/100,
+               avo2 = o2ct.art - o2ct.ven,
+               q_calc_new = 0.1*vo2/avo2)
+  return(res)
+}
+# calcQnew(example_guido)
+# system.time(calcQnew(example_guido))
+# calcQ(my_data[1,])
+# system.time(calcQ(my_data[1,]))
+kkk <- NULL
+for(i in 1:nrow(new_data)) {
+    row <- new_data[i,]
+    # do stuff with row
+    kkk <- rbind(kkk,calcQnew(row))
+}
+```
+
+calculate all with houstis
+```{r}
+final_data <- NULL
+for(i in 1:nrow(kkk)) {
+    row <- kkk[i,]
+    # do stuff with row
+    final_data <- rbind(final_data,calc_params(row))
+}
+```
+
+
+## Compare Qexp vs Qcalc with ours and Houstis code
+
+```{r}
+# my_data
+# my_data$group <- c(rep('control',14),rep('patient',7),rep('ref',2))
+# final_data$q_calc2<- round(apply(final_data,1,calcQ),2)
+pyLab <- "Calculated Q (L/min)"
+pxLab <- "Experimental Q (L/min)"
+create_cor_plot(final_data,"q_exp","q_calc",1,30,c(0,40),c(0,40),c("Qexp vs Qcalc OUR CODE",pxLab,pyLab))
+# create_cor_plot(my_data,"Q_exp","q_calc",1,30,c(0,40),c(0,40),c("Qexp vs Qcalc OUR CODE",pxLab,pyLab))
+```
+our new format (mutate)
+```{r}
+create_cor_plot(final_data,"q_exp","q_calc_new",1,30,c(0,40),c(0,40),c("Qexp vs Qcalc OUR CODE NEW",pxLab,pyLab))
+```
+houstis
+```{r}
+create_cor_plot(final_data,"q_exp","q",1,100,c(0,40),c(0,150),c("Qexp vs Qcalc HOUSTIS",pxLab,pyLab))
+```
+
+```{r}
+create_cor_plot(final_data,"q_calc","q_calc_new",1,30,c(0,50),c(0,50),c("Qcalc vs Qcalc OLDNEW",pxLab,pyLab))
+
+```
+## Calculate Blood CO2 to use it on Fick's Eq and get VCO2
+
+```{r}
+library(readxl)
+kk <- read_excel('alg1_HOUSTIS/data/Combined data_ESC_abstract_31012020.xlsx')
+colnames(kk) <- tolower(colnames(kk))
+m <- as.data.frame(kk[1,])
+calcVCO2 <- function(meas){
+  #define vars
+  plasmatemp <- 37
+  pha <- meas$pha
+  phv <- meas$phv
+  paco2 <- meas$paco2
+  pvco2 <- meas$pvco2
+  satao2 <- meas$satao2
+  satcvo2 <- meas$satcvo2
+  hb <- meas$hb
+  q <- meas$q
+  #calculate art and ven co2 sol
+  co2.s <- 0.0307+(0.00057*(37-plasmatemp))+(0.00002*(37-plasmatemp)^2)
+  #calculate apparent pk, pkprime, art and ven
+  co2.pkp.art <- 6.086+(0.042*(7.4-pha))+((38-plasmatemp)*(0.00472+0.00139*(7.4-pha)))
+  co2.pkp.ven <- 6.086+(0.042*(7.4-phv))+((38-plasmatemp)*(0.00472+0.00139*(7.4-phv)))
+  #plasma co2 content, art and ven
+  co2.plasma.art <- 2.226*co2.s*paco2*(1+10^(pha-co2.pkp.art))
+  co2.plasma.ven <- 2.226*co2.s*pvco2*(1+10^(pha-co2.pkp.ven))
+  #blood co2 content, art and ven
+  co2ct.art <- co2.plasma.art*(1-(0.0289*hb)/((3.352-0.456*satao2)*(8.142-pha)))
+  co2ct.ven <- co2.plasma.ven*(1-(0.0289*hb)/((3.352-0.456*satcvo2)*(8.142-phv)))
+  # co2ct.art <- co2.plasma.art*(1-((0.43)/((2.244-0.422*satao2)*(8.74-pha))))
+  # co2ct.ven <- co2.plasma.ven*(1-((0.43)/((2.244-0.422*satcvo2)*(8.74-phv))))
+
+  res <- mutate(meas,
+               co2ct.art=co2ct.art,
+               co2ct.ven=co2ct.ven,
+               vco2_calc=10*q*(co2ct.ven-co2ct.art))
+  return(res)
+}
+```
+
+```{r}
+vco2data <- NULL
+for(i in 1:nrow(kk)) {
+    row <- kk[i,]
+    # do stuff with row
+    vco2data <- rbind(vco2data,calcVCO2(row))
+}
+create_cor_plot(vco2data,"vco2","vco2_calc",1,5000,c(0,6000),c(0,10000),c("Vco2 EXP vs Vco2 CALC","exp vco2","calc vco2"))
+```
+```{r}
+as.data.frame(vco2data)
+# as.data.frame(matrix(c(vco2data$vco2,vco2data$vco2_calc),ncol=2))
+
+```
+
+```{r}
+# q=co2p.btps/cvaco2.btps
+# p0=101.4
+# t0=273
+# t.btps=310
+# p.btps=p0
+# ph20=6.2
+# co2p.stpd=vco2*(273/310)*((101.4-6.2)/101.4)
+```
+

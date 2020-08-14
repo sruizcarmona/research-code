@@ -1,0 +1,176 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+library(bvpSolve)
+```
+
+Add info from excel:
+CONTROL samples
+```{r}
+my_data=c("4632","3776","3661","5383","2619","3617","3655","3061","3048","4390","2093","3039","35","42","32","34","37","39","80","97","111","91","89","64","21","26","26","22","33","27","14.1","13.3","14.4","15.4","15.9","16.5","25.99","16.85","21.29","20.62","11.73","17.28")
+my_data <- as.data.frame(matrix(data=as.numeric(my_data),ncol=7,nrow=6))
+rownames(my_data) <-paste("C",seq(6),sep="")
+colnames(my_data) <- c("VO2","VCO2","PaCO2","PaO2","PvO2","Hb","Q")
+#my_data
+```
+PATIENT samples
+```{r}
+my_data_PAT<-c("1338","1456","29","53","21","18.2","8.44","1677","1395","30","67","25","15.3","10.46","800","755","28", "90","16","13.3","5.48","1128","1130","34","61","26","17.1","9.24","1370","1365","23","43","21","15.8",  "13.55","816","859","23","51","19","15.1","5.36","1332","1129","21","60","18","15.7","10.8")
+my_data_PAT <- as.data.frame(matrix(data=as.numeric(my_data_PAT),ncol=7,nrow=7,byrow=TRUE))
+rownames(my_data_PAT) <-paste("CTEPH",seq(7),sep="")
+colnames(my_data_PAT) <- c("VO2","VCO2","PaCO2","PaO2","PvO2","Hb","Q")
+my_data <- rbind(my_data,my_data_PAT)
+#my_data
+```
+EXTRA 2 samples from the paper (average values for the healthy and HFpEF patients)
+NO INFO FOR PaCO2 in the paper --> i will put 35 / 30
+```{r}
+paper_HEALTHY <- c("1620","1940","35","97","21","14.1","14")
+paper_HFPEF <- c("1090","1260","30","96","21","13.4","10.2")
+my_data_PAPER <- c(paper_HEALTHY,paper_HFPEF)
+my_data_PAPER <- as.data.frame(matrix(data=as.numeric(my_data_PAPER),ncol=7,nrow=2,byrow=TRUE))
+colnames(my_data_PAPER) <- c("VO2","VCO2","PaCO2","PaO2","PvO2","Hb","Q")
+rownames(my_data_PAPER) <-c("REFCTR","REFPAT")
+my_data<-rbind(my_data,my_data_PAPER)
+my_data
+```
+
+Application of Algorithm 1:
+
+O2 pathway parameter estimation from an individual's exercise measurements 1. Input:
+  a) CPET-measurements at peak exercise for patient i: VO2, VCO2, PaCO2, PaO2, PvO2, Hb
+  b) Constants: k, PlO2, p50, RCtlmito, RHFmito
+2. Solve O2 transport equations (1)-(2), (7)-(11) with boundary conditions (3)-(6)
+3. Output:
+  a) Patient i O pathway parameters at peak exercise: Q, DL, DM, VA, vmax
+  b) Patient i O2 tension in the alveolus, mitochondria, pulmonary and muscle capillaries: PAO2, Pmito,    PLcap(t), PMcap(t)
+
+--> Define Constants:
+k= 1.159 (mL O2 mL-1 air mmHg -1) --> units conversion constant
+PIO2= 150 mmHG (from http://www.partone.litfl.com/oxygen_cascade.html)--> Inspired partial pressure of oxygen
+p50=0.24 --> Mitochondrial oxygen affinity (mmHg)
+RCtlmito= 1.8 --> reserve mitochondrial respiration capacity, for HEALTHY patients, derived from Esposito et al 11
+RHFmito= 2.0 --> sameas above
+
+```{r}
+ct_k=1.159
+ct_piO2=150
+ct_p50=0.24
+ct_Rctlmito=1.8
+ct_RHFmito=2
+```
+
+```{r}
+calcQ <- function(p1){
+  res=p1[1]/((0.0032*p1[4]+1.4*p1[6]*1)-(0.0032*p1[5]+1.4*p1[6]*1))/1000;
+  return(res)
+}
+calcQ(my_data[1,])
+```
+```{r}
+apply(my_data,1,calcQ)
+my_data$calcQ <- apply(my_data,1,calcQ)
+```
+
+Calculate some initial variables and parameters for the final ODE
+
+```{r}
+calcVA <- function (input){
+  res=input[2]/(ct_k*input[3])
+  return (res)
+}
+my_data$VA <- apply(my_data,1,calcVA)
+```
+
+```{r}
+calcPAO2 <- function(input) {
+  res=ct_piO2-(input[1]/(input[8]*ct_k))
+  return(res)
+}
+my_data$PAO2 <- apply(my_data,1,calcPAO2)
+```
+
+```{r}
+calcVMAX <- function(input,rmito) {
+  res=rmito*input[1]
+  return(res)
+}
+#my_data$Vmax <- apply(my_data,1,calcVMAX,rmito=ct_Rctlmito)
+vmax_ctl <- apply(my_data,1,calcVMAX,rmito=ct_Rctlmito)
+vmax_pat <- apply(my_data,1,calcVMAX,rmito=ct_RHFmito)
+my_data$Vmax <- c(vmax_ctl[1:6],vmax_pat[7:13],vmax_ctl[14],vmax_pat[15])
+```
+```{r}
+calcPMITO <- function(input) {
+  res=ct_p50/((input[10]-input[1])-1)
+  return(res)
+}
+my_data$Pmito <- apply(my_data,1,calcPMITO)
+my_data
+```
+```{r}
+f_PL <- function(t,y,DL){
+  dy <- DL / (30*0.1*(0.0032*y[1]+1.4*14.1*1)) * (47-y[1])
+  list(dy)
+}
+t <- seq(0,0.1,0.001)
+mysol <- bvpshoot(yini=270,yend=64,x=t,func=f_PL,extra=30,maxiter=10000000)
+mysol
+plot(mysol[,1],mysol[,2],type="l")
+attr(mysol,"roots")
+```
+
+
+
+################################################
+EXAMPLES FOR BVPSOLVE
+```{r}
+f <- function(x,y,parms){
+  dy <- y[2]
+  dy2 <- -4*y[1]
+  list(c(dy,dy2))
+}
+x <- seq(0,pi/4,0.01)
+mysol <- bvptwp(yini=c(-2,NA),yend=c(10,NA),x=x,func=f)
+k<-function(x){-2*cos(2*x)+10*sin(2*x)}
+k2 <- function(x){4*sin(2*x)+20*cos(2*x)}
+par(mfrow=c(2,2))
+plot(mysol[,1],mysol[,2],type="l")
+plot(x,k(x),type="l")
+plot(mysol[,1],mysol[,3],type="l")
+plot(x,k2(x),type="l")
+```
+```{r}
+f2 <- function(x,y,parms){
+  dy <- y[2]
+  dy2 <- -3*y[1]
+  list(c(dy,dy2))
+}
+x <- seq(0,2*pi,0.01)
+mysol <- bvptwp(yini=c(7,NA),yend=c(0,NA),x=x,func=f2)
+k<-function(x){7*cos(sqrt(3)*x) - 7/tan(2*sqrt(3)*pi)*sin(sqrt(3)*x)}
+k2 <- function(x){x}
+par(mfrow=c(2,2))
+plot(mysol[,1],mysol[,2],type="l")
+plot(x,k(x),type="l")
+plot(mysol[,1],mysol[,3],type="l")
+plot(x,k2(x),type="l")
+```
+

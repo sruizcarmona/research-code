@@ -1,0 +1,516 @@
+---
+title: "Importing publicly available data"
+author: "Mark Dunning; mark 'dot' dunning 'at' cruk.cam.ac.uk, Oscar Rueda; oscar 'dot' rueda 'at' cruk.cam.ac.uk"
+date: '`r format(Sys.time(), "Last modified: %d %b %Y")`'
+output: 
+  html_notebook: 
+    toc: yes
+    toc_float: yes
+---
+
+
+# Bioconductor data packages
+
+The bioconductor project includes a collection of [Experimental Data](http://bioconductor.org/packages/release/BiocViews.html#___ExperimentData) packages that can be downloaded and installed in the same way as regular software packages in Bioconductor
+
+## Example data for a package
+
+The size limit for a new package submission is quite restrictive, so authors often have to submit example datasets separately. 
+e.g. The [beadrrayExampleData](http://bioconductor.org/packages/release/data/experiment/html/beadarrayExampleData.html) has example data which can be used to test examples from the beadarray package
+
+
+## Supplementary data for a paper
+
+e.g. from the [Markowetz lab @ CI](http://bioconductor.org/packages/release/data/experiment/html/Fletcher2013a.html). This package not only has the data, but R scripts to reproduce the analysis in the paper.
+
+## Curated datasets for meta-analysis
+
+Several breast cancer datasets have been curated for use with the genefu package; which has many useful functions for classication of breast cancer
+
+- [breastCancerNKI](http://bioconductor.org/packages/release/data/experiment/html/breastCancerNKI.html)
+- [breastCancerVDX](http://bioconductor.org/packages/release/data/experiment/html/breastCancerVDX.html)
+
+```{r eval=FALSE}
+source("http://www.bioconductor.org/biocLite.R")
+biocLite("breastCancerNKI")
+biocLite("breastCancerVDX")
+```
+
+
+also
+
+- [curatedBreastData](http://bioconductor.org/packages/release/data/experiment/html/curatedBreastData.html)
+- [curatedBladderData](http://bioconductor.org/packages/release/data/experiment/html/curatedBladderData.html)
+- [curatedOvarianData](http://bioconductor.org/packages/release/data/experiment/html/curatedOvarianData.html)
+
+******
+
+# Data from Gene Expression Omnibus (GEO)
+
+## Using the GEOquery package
+
+Can search from GEO [home page](http://www.ncbi.nlm.nih.gov/geo/) or using this [Shiny app](https://zhiji.shinyapps.io/GEOsearch) to get a dataset ID which will be of the form **GSE....**.
+
+With this identifier, we can use the [GEOquery](http://bioinformatics.oxfordjournals.org/content/23/14/1846.long) Bioconductor package
+
+```{r message=FALSE}
+library(GEOquery)
+```
+
+## Example. General procedure
+
+Lets say we have identified a dataset which has leukemia patients. The web page describing these data is [here](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE1729). The main function we need to use is `getGEO`. This downloads the *series* file for the dataset and parses the data in this file into a format that is compatible with Bioconductor. 
+
+```{r eval=FALSE}
+mydata <- getGEO("GSE1729")
+mydata
+```
+
+sometimes datasets in GEO can include more than one platform (technology) so the result is returned in the form of a list; one item in the list for each platform. In this case, even though there is only one platform used, we have to subset the object.
+
+```{r eval=FALSE}
+mydata[[1]]
+```
+
+
+***The recommended approach*** is to download to disk first. On the [page](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE1729) for the dataset you should see there is a link to the **Series Matrix File(s)**. You can copy and paste this link into R and use the `download.file` function to get data from the URL to disk. `GEOquery` is then able to read from this file in future using the filename argument. The advantage is that you don't need an internet connection to run your script, or wait for large files to download.
+
+```{r cache=TRUE}
+remotefile <- 'ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE1nnn/GSE1729/matrix/GSE1729_series_matrix.txt.gz'
+destfile <- "data/GSE1729_series_matrix.txt.gz"
+if(!file.exists(destfile)) download.file(remotefile, destfile)
+mydata<- getGEO(filename="data/GSE1729_series_matrix.txt.gz")
+mydata
+```
+
+The structure of the `mydata` object should be quite familiar to you. The expression values can be retrieved by the `exprs` function. Here, we just print the first 5 rows and 5 columns. In total there are `r nrow(mydata)` rows (genes) and `r ncol(mydata)` columns (samples)
+
+******
+### What scale are the expression values recorded on? Is this an appropriate scale for analysis / visualisation?
+
+******
+
+
+```{r}
+exprs(mydata)[1:5,1:5]
+summary(exprs(mydata)[,1:5])
+mva.pairs(exprs(mydata)[,1:4],log.it = TRUE)
+pData(mydata)
+```
+
+We can visualise the expression values for a particular gene by knowing which row of the expression matrix it is found in.
+
+
+## Example. Quality assessment of the downloaded data
+
+As we have downloaded the processed and normalised data, there are limited options in terms of quality assessment. Without the *.cel* files we cannot examine the raw images or fit PLMs. The simplest form of QA is the boxplot.
+
+
+```{r}
+boxplot(log2(exprs(mydata)))
+```
+
+The ***arrayQualityMetrics*** package can automatically-generate a variety of QA plots. It incorporates clustering methods that we will explore in-depth later in the course. Such methods are extremely useful for verifying known relationships between sample groups.
+
+
+******
+### (Optional) Generate an arrayQualityMetrics report for the dataset. Do any arrays seem to be poor quality?
+
+```{r message=FALSE,cache=TRUE,warning=FALSE,eval=FALSE}
+library(arrayQualityMetrics)
+arrayQualityMetrics(mydata, force=TRUE)
+```
+
+
+The report should be generated in a folder called `arrayQualityMetrics report for mydata` (the name of the directory can be configured).
+
+N.B the `force=TRUE` argument will make sure that the output gets written if the specified directory name already exists
+
+******
+
+
+An `ExpressionSet` object obeys the same subsetting rules that apply to a standard matrix or data frame in R. 
+
+- We can subset rows and columns using the square bracket notation
+- Remembering that we need to specify both the row and column index separated by a `,`
+    + one of these indices can be omitted if we want all rows or all columns
+
+Here we create a subset that is just the first four arrays
+
+- This works nicely as all the components of the object (expression values, metadata and features) all get subset
+
+```{r}
+subset <- mydata[,1:4]
+dim(exprs(subset))
+dim(pData(subset))
+dim(fData(subset))
+```
+
+Similarly, to *remove* the first four samples, we could do;
+
+```{r}
+subset <- mydata[,-c(1,4)]
+subset
+```
+
+So in order to remove one or more poor-quality arrays we need to know their indices.
+
+
+When creating a subset of an `ExpressionSet` object, we can also filter on rows. e.g. to select the first 100 genes.
+
+```{r}
+subset <- mydata[1:100,]
+dim(subset)
+```
+
+In the next section we will look into the annotation of the dataset in more detail
+
+## Example. Dealing with gene annotation
+
+The annotation for the features can be retrieved by using `fData`. Because of the strict submission process, all the rows of this feature matrix are in the same order as the expression matrix; which greatly-simplifies further analysis
+
+```{r}
+fData(mydata)[1:5,1:5]
+colnames(fData(mydata))
+all(rownames(fData(mydata)) == rownames(exprs(mydata)))
+```
+
+Although this is an Affymetrix experiment, the `annotation` is set to `r annotation(mydata)`, which is the GEO identifier for this paticular platform. All experiments in GEO run on this platform get annotated with the same table (a *SOFT* file). During the process of importing the dataset, `GEOquery` will automatically download this *SOFT* file for you.
+
+To save some typing, we will save the features data to a new variable
+```{r}
+features <- fData(mydata)
+```
+
+
+Recall that a particular column from the feature matrix can be retrieved using the `$` syntax. The results will be a vector with a length corresponding to the number of genes in the experiment (in this case `r nrow(fData(mydata))`). 
+
+```{r eval=FALSE}
+colnames(features)
+features$ID[1:10]
+```
+
+
+******
+
+## Exercise
+
+- How many unique Entrez gene IDs are there? 
+    + HINT: there is a function called `unique`....
+- How many features do not have an associated Entrez ID? 
+    + HINT: how is a probe without an Entrez ID represented in the vector?
+    
+    
+******
+```{r}
+
+## Your answer here ##
+
+```
+
+
+
+##Example: Retrieving data for a particular gene
+
+There are a number of different approaches we could use to find the rows that correspond to a particular gene
+
+
+******
+Q. Use the following code to understand the difference between `grep`, `match` and `==`
+
+******
+
+```{r eval=FALSE}
+features[grep("TP53", features$`Gene Symbol`),]
+features[which(features$`Gene Symbol` == "TP53"),]
+features[match("TP53", features$`Gene Symbol`),]
+```
+
+- `grep` will return all rows that have "TP53" *somewhere* in the gene symbol, 
+- `which` combined with `==` returns all rows that exactly match,
+- match` returns just the first match.
+
+You'll probably want to use `which(features$"Gene Symbol" == TP53`)`, which in this example returns two rows.
+
+```{r}
+rows <- which(features$`Gene Symbol` == "TP53")
+rows
+```
+
+The expression values relating to either of these probes can be extracted from the expression matrix (given by `exprs(mydata)`) by using the same row index. For convenience, here we save the expression matrix as a new variable and do the log$_2$ transformation.
+
+```{r}
+E <- log2(exprs(mydata))
+E[1274,]
+E[10723,]
+```
+
+Having the expression values available as a vector allows us to access the plotting and statistical functions in R. If we plot either of these vectors that we extract in the previous piece of code, we plot the expression level of the probe on the $y$ axis, and the array index on the $x$ axis.
+
+
+```{r}
+par(mfrow=c(1,2))
+plot(E[1274,], xlab="Array Index ",
+     col="steelblue",pch=16,
+     ylab="Normalised Expression",main="201746_at")
+
+plot(E[10723,], xlab="Array Index ",
+     col="steelblue",pch=16,
+     ylab="Normalised Expression",main="211300_s_at")
+
+```
+
+Or we could plot one probe against the other
+
+```{r}
+par(mfrow=c(1,1))
+plot(E[1274,],E[10723,],xlab="201746_at",ylab="211300_s_at",col="steelblue",pch=16)
+cor(E[1274,],E[10723,])
+```
+
+If we want to include information about the samples on the plot (e.g. clinical variables), then we need to look at how these data are represented in the `ExpressionSet` object. This follows in the next section.
+
+## Which probe to use for a given Gene?
+
+Finally, when deciding which probe to use in the analysis, we could use some of the feature information stored in the `mydata` object. For instance, one probe might represent specific transcript forms of the gene, whereas the other might be more specific.
+
+Another approach would be to use the variability of the probe as a measure of how *informative* it is in the study. The `IQR` (`?IQR`) function can compute this.
+
+
+
+```{r}
+IQR(E[1274,])
+IQR(E[10723,])
+```
+
+As we will see later, the `genefilter` package in Bioconductor provides several methods to assist in the filtering of microarray data based on a lack of annotation or low variation. 
+
+# GEO Example. Dealing with large cohorts with clinical data
+
+For this second example, we will import a patient cohort
+```{r}
+remotefile <- 'ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE18nnn/GSE18088/matrix/GSE18088_series_matrix.txt.gz'
+destfile <- "data/GSE18088_series_matrix.txt.gz"
+if(!file.exists(destfile)) download.file(remotefile, destfile)
+cohort <- getGEO(filename="data/GSE18088_series_matrix.txt.gz")
+cohort
+```
+
+As before, we can query the expression matrix and features
+
+```{r}
+head(exprs(cohort)[,1:5])
+head(fData(cohort)[,1:5])
+```
+
+And as always, check the distribution of the samples
+
+```{r}
+boxplot(exprs(cohort),outline=FALSE)
+```
+
+
+An extra feature of this dataset is the availability of clinical information
+
+```{r}
+pData(cohort)[1:5,1:5]
+colnames(pData(cohort))
+```
+
+As we did with the gene annotation in the previous example, we can save the metadata as an object to save some typing.
+
+```{r}
+pd <- pData(cohort)
+View(pd)
+colnames(pd)
+```
+
+The interesting columns tend to be in columns starting "characteristics_"
+
+```{r}
+pd[1:4,10:16]
+```
+
+******
+Exercise: 
+
+- How many males and females are there in the study?
+- How many of the patients relapsed?
+
+*****
+
+```{r }
+
+## Your answer here ## 
+
+```
+
+## Incorporating metadata into the analysis
+
+This cateogorical information can be used in our analysis.
+
+Lets take the gene ***XIST*** and find what probes target this gene;
+
+```{r}
+rows <- which(fData(cohort)$"Gene Symbol" == "XIST")
+rows
+```
+
+The vector that we have just created,`rows`, can be used to subset the expression matrix. If we plot the expression values corresponding to the first probe, it clearly exhibits bi-modal behaviour.
+
+```{r}
+subset <- exprs(cohort)[rows,]
+dim(subset)
+plot(subset[1,])
+plot(density(subset[1,]))
+```
+
+Up to this point, we have been using the `boxplot` function to visualise the distribution of a matrix of expression values. In fact, the `boxplot` function is versatile and can accept different types of data as input.
+
+A common way of creating a `boxplot` is using the *formula* syntax in R. Also used in statistics (and linear modelling in particular) we can specify a *response* and predictor variable. In the case of our analysis, we are looking to see if the gene expression level of a particular gene can be explained by a categorical variable (e.g. gender). 
+
+******
+Exercise: 
+
+- Produce a boxplot to see if the first probe that targets XIST shows and different between males and females
+    + the expression values for the first probe can be found in `subset[1,]`
+    
+*****
+
+```{r }
+
+## Your answer here ## 
+
+```
+
+- Note that the order of categories on the boxplot is determined by alphabetical order
+    + for how to change this, see the note in the Appendix below
+
+The boxplot provides a nice visualisation of the difference between the groups of interest. For a quick-and-dirty assessment of whether this difference is statistically signficant we could use the standard `t.test` function. 
+
+- However, as we will see in subsequent sections, more sophisticated approaches are required.
+
+```{r}
+t.test(subset[1,]~gender)
+```
+
+
+# Summary
+
+If we wanted to query a particular gene in our dataset and know if it exhibits a difference between a biological condition of interest
+
+- Find the url of the dataset on GEO
+- Create a Bioconductor object using the `getGEO` function in `GEOquery`
+- Locate the rows corresponding to the gene
+- Find which column in the metadata contains the condition of interest
+- Make a boxplot with the expression values of the genes as the `x` variable, and biological condition as the `y` variable
+
+# Appendix
+
+## Example: Extra manipulation of the clinical data
+
+
+******
+Q. What is the age distribution of the samples?
+
+******
+
+
+This is trickier without extra manipulation of the data. R supports various string-cleaning operations such as substituting text, trimming etc. A commonly-used function is `gsub` (`?gsub`) which replaces a given *pattern* with a *replacement* string for every element in a character vector. In this case, we want to replace `age at diagnosis, years: ` with the blank string `""`. The R code is thus;
+
+```{r}
+clinvars <- pd[,10:16]
+gsub("age at diagnosis, years: ","",clinvars$characteristics_ch1.4)
+```
+
+However, R still treats the result as a character vector (as each item has `""` around it). We need to explicitly convert to numeric values before proceeding
+
+```{r}
+clinvars$characteristics_ch1.4 <- as.numeric(gsub("age at diagnosis, years: ","",clinvars$characteristics_ch1.4))
+hist(clinvars$characteristics_ch1.4)
+```
+
+******
+Q. Clean-up the gender column so that the values are either `male` or `female`.
+
+******
+
+```{r echo=FALSE}
+sex<- gsub("gender: ","",clinvars$characteristics_ch1.1)
+table(sex)
+```
+
+Another relevant function is `substr`, which prints the portion of a string between a start and end position. In our case, we want strings that start after the `:` character (which is letter number 9 in the string) and go all the way to the end of the string. The length of the string can vary, but can be retrieved using the `nchar` function
+
+```{r}
+nchar(as.character(clinvars$characteristics_ch1.1))
+sex <- substr(clinvars$characteristics_ch1.1,9,nchar(as.character(clinvars$characteristics_ch1.1)))
+sex
+```
+
+## Changing the plotting order in a boxplot
+
+```{r}
+gender <- pd$characteristics_ch1.1
+gender <- factor(gender, levels = c("gender: male", "gender: female"))
+gender
+boxplot(subset[1,]~gender)
+
+```
+
+
+## Supplementary data from GEO
+
+Example from the Bioconductor course in [Montevideo, Uruguay](http://bioconductor.org/help/course-materials/2015/Uruguay2015/)
+
+We can also download supplementary files from GEO. In the case of Affymetrix arrays, this may include the *.CEL* files
+
+```{r cache=TRUE,eval=FALSE}
+x = getGEOSuppFiles("GSE20986")
+x
+```
+
+The supplementary file comes as a *tar* archive, which we need to extract to get the individual cel files.
+
+```{r cache=TRUE,eval=FALSE}
+untar("GSE20986/GSE20986_RAW.tar", exdir = "suppdata")
+list.files("suppdata/")
+```
+
+Each cel file is zipped, so we unzip with *gunzip*.
+
+```{r cache=TRUE,eval=FALSE}
+cels = list.files("suppdata/", pattern = "[gz]")
+sapply(paste("suppdata", cels, sep = "/"), gunzip)
+```
+
+We can now proceed as with the Affymetrix workflow.
+ 
+```{r cache=TRUE,eval=FALSE}
+library(affy)
+raw <- ReadAffy(celfile.path = "suppdata/")
+raw
+boxplot(raw)
+```
+
+## Data in ArrayExpress
+
+The ArrayExpress vignette has various examples of importing data from the ***ArrayExpress*** repository into R. Similar to `getGEO` from `GEOquery`, the `getAE` function can do the import if the accession number is known. If we want just normalised data, we set an argument `type=processed`. 
+
+```{r cache=TRUE,eval=FALSE}
+library(ArrayExpress)
+aeData <- getAE("E-GEOD-69017",type="processed")
+aeData
+```
+
+Alternatively, we can get the full dataset (including raw cel files) with `type=full`.
+```{r cache=TRUE,eval=FALSE}
+rawdata <- getAE("E-GEOD-69017",type="full")
+```
+
+We can process the *cel* files using the Affymetrix workflow, or `ArrayExpress` can process them for us.
+
+```{r cache=TRUE,eval=FALSE}
+procdata <- ae2bioc(rawdata)
+```
+

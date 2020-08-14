@@ -1,0 +1,31 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(reshape2)
+# t %>% pivot_longer(starts_with="JM")
+t <- melt(t)
+t
+
+# t <- rbind(fpm(dds)[16142,c(11,22,30:36,1:10,12:21,23:29)],fpm(dds)[16143,c(11,22,30:36,1:10,12:21,23:29)])
+# t <- rbind(t,rbind(fpm(ddsOK.new)[16142,],fpm(ddsOK.new)[16143,]))
+# rownames(t) <- c("khk.old","cgref1.old","khk.new","cgref1.new")
+```
+
+```{r}
+tkhk <- t %>%  filter(grepl("khk",Var1))
+p1 <- ggplot(tkhk,aes(x=Var2,y=value,color=Var1,group=Var1)) + geom_point() + geom_line() + labs(x="sample",y="cpm") + theme(axis.text.x = element_text(angle=45,hjust=1))
+tcgref <- t %>%  filter(grepl("cgref",Var1))
+p2 <- ggplot(tcgref,aes(x=Var2,y=value,color=Var1,group=Var1)) + geom_point() + geom_line() + labs(x="sample",y="cpm")+ theme(axis.text.x = element_text(angle=45,hjust=1))
+plot_grid(p1,p2,nrow=2)
+```
+
+```{r}
+t <- rbind(fpm(dds)[16142,c(11,22,30:36,1:10,12:21,23:29)],fpm(dds)[16143,c(11,22,30:36,1:10,12:21,23:29)])
+t <- rbind(t,rbind(fpm(ddsOK.new)[16142,],fpm(ddsOK.new)[16143,]))
+rownames(t) <- c("khk.old","cgref1.old","khk.new","cgref1.new")
+t
+```
+

@@ -1,0 +1,333 @@
+---
+title: "Differential Expression Tutorial"
+author: "Mark Dunning; mark 'dot' dunning 'at' cruk.cam.ac.uk, Oscar Rueda; oscar 'dot' rueda 'at' cruk.cam.ac.uk"
+date: '`r format(Sys.time(), "Last modified: %d %b %Y")`'
+output: html_document
+---
+
+# Importing the data
+
+The data from this experiment comprises nine paired tumor/normal colon tissues on Illumina HT12\_v3 gene expression Beadchips. These data were generated to inform a comparison of technologies for microRNA profiling. However, we will only use the mRNA data here.
+
+
+```{r echo=FALSE,message=FALSE}
+library(GEOquery)
+library(limma)
+```
+
+
+```{r cache=TRUE}
+library(GEOquery)
+library(limma)
+url <- "ftp://ftp.ncbi.nih.gov/pub/geo/DATA/SeriesMatrix/GSE33126/GSE33126_series_matrix.txt.gz"
+filenm <- "data/GSE33126_series_matrix.txt.gz"
+if(!file.exists(filenm)) download.file(url, destfile=filenm)
+gse <- getGEO(filename=filenm)
+gse
+```
+
+```{r}
+head(exprs(gse))
+```
+
+
+******
+##Q  Do the data look to be normalised?
+
+******
+
+```{r}
+exprs(gse) <- log2(exprs(gse))
+boxplot(exprs(gse),outline=FALSE)
+```
+
+Inspect the clinical variables
+
+******
+##Q What column has the information about whether is sample is a tumour or normal?
+##Q How many do we have in each group?
+
+******
+```{r echo=FALSE}
+
+## Your answer here ##
+
+```
+
+
+
+
+******
+##Q Create a design matrix for the experiment, on paper if you like
+
+******
+
+
+# Simple t-tests
+
+For completeness, we note that t-statistics and corresponding p-values can be generated quickly using the `genefilter` package.
+
+```{r}
+pd <- pData(gse)
+SampleGroup <- pd$source_name_ch1
+library(genefilter)
+destats <- rowttests(exprs(gse),fac=SampleGroup)
+head(destats)
+```
+
+- Can we remember the drawbacks of this approach?
+
+
+
+A useful function is the `model.matrix`, which understands the linear model syntax of R (i.e. using the tilde `~` symbol)
+
+```{r}
+design <- model.matrix(~0+SampleGroup)
+colnames(design) <- c("Normal","Tumour")
+```
+
+By-hand, we would do;
+
+```{r}
+design <- matrix(nrow=18,ncol=2)
+design[,1] <- c(0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1)
+design[,2] <- c(1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0)
+colnames(design) <- c("Normal","Tumour")
+```
+
+or a shortcut in this would use the `rep` function.
+
+```{r}
+design[,1] <- rep(c(0,1),by=9)
+design[,2] <- rep(c(1,0),by=9)
+```
+
+Prior to the differential expression analysis, we will *filter* the data so only the top 50% most-variable genes get analysed, which [has been shown](http://www.ncbi.nlm.nih.gov/pmc/articles/PMC2906865/) to increase our power to detect differential expression. We can do this using the `varFilter` function in the `genefilter` package.
+
+```{r}
+library(genefilter)
+gse.expFilt <- varFilter(gse)
+gse.expFilt
+```
+
+
+
+The `lmFit` funcion is used to fit the model to the data. The output has various components, most of which you probably don't need to know about.
+
+```{r}
+fit <- lmFit(exprs(gse.expFilt), design)
+names(fit)
+dim(fit$coefficients)
+head(fit$coefficients)
+```
+
+
+******
+
+##Q. What is the interpretation of the `coeff` item in the output
+
+******
+
+
+Now we define the contrast
+
+```{r}
+contrasts <- makeContrasts(Tumour - Normal, levels=design)
+fit2 <- contrasts.fit(fit, contrasts)
+head(fit2$coeff)
+```
+
+Finally, apply the *empirical Bayes'* step
+
+```{r}
+fit2 <- eBayes(fit2)
+fit2
+```
+
+We usually get our first look at the results by using the `topTable` command
+
+```{r}
+topTable(fit2)
+```
+
+The rows in this table are ordered according the *B-statistic*, or log-odds from the empirical Bayes' analysis. You should be cautious when interpreting these values. Although a B-statistic of 0 corresponds to a 50/50 chance of a gene being DE, this is contingent on a certain percentage of genes in the experiment being DE. In experiments such as the one we are looked at here, there are a large number of DE genes. In this case genes with B-statistic < 0 could still be DE. Thus, you should use the B-statistic as a ranking criteria and not attempt to compare the values between experiments.
+
+
+# Including annotation
+
+```{r}
+anno <- fData(gse.expFilt)
+head(anno)[,1:5]
+anno <- anno[,c("Symbol","Entrez_Gene_ID","Chromosome","Cytoband")]
+fit2$genes <- anno
+topTable(fit2)
+```
+
+# Diagnostic checks
+
+At this point it is useful to take stock and do some diagnostic checks
+
+```{r}
+dotchart(exprs(gse)["ILMN_1704294",])
+```
+
+```{r}
+boxplot(exprs(gse)["ILMN_1704294",]~SampleGroup)
+```
+
+To find how many genes are DE we can use the `decideTests` function, which also applies multiple-test correction.
+
+*Make a note of how many genes are DE, you will need this later*
+
+```{r}
+decideTests(fit2)
+table(decideTests(fit2))
+sum(abs(decideTests(fit2))==1)
+```
+
+The "*Volcano Plot*" function is a common way of visualising the results of a DE analysis. The $x$ axis shows the log-fold change and the $y$ axis is some measure of statistical significance, which in this case is the log-odds, or "B" statistic. A characteristic "volcano" shape should be seen.
+
+```{r}
+volcanoplot(fit2)
+```
+
+The function also has options to highlight the postions of the top N genes from the test.
+
+```{r}
+volcanoplot(fit2,highlight=10,names = fit2$genes$"Symbol")
+```
+
+
+# Exporting the results
+
+```{r}
+write.fit(fit2, file = "de-results.txt",adjust="BH")
+```
+
+# Getting the results for a particular gene
+
+The `topTable` function by default only prints the top 10 DE genes. However, by changing the arguments we can make it print the statistics for all the genes that we test.
+
+```{r}
+testResults <- topTable(fit2, number=nrow(fit2))
+```
+
+This gives us the opportunity to look-up the results for particular genes of interest. Lets say we're interested in "OCIAD2" (for no particular reason...)
+
+```{r}
+testResults[which(testResults$Symbol == "OCIAD2"),]
+```
+
+
+If we have a list of genes, the `%in%` function can be used.
+
+```{r}
+mylist <- c("LOC441066","ARF3","FMNL3","CSF1R","XLKD1","TTRAP","DMWD","SYNPO2L","PILRB","LAMP3")
+
+testResults[which(testResults$Symbol %in% mylist),]
+
+```
+
+
+# Further filtering and ordering
+
+******
+
+- Q. Create a data frame containing genes with i) adjusted p-value < 0.05 ii) log-fold change > 1. How many genes does this contain?
+- Q. Now order this data frame according to chromosome
+
+******
+
+```{r echo=FALSE}
+
+## Your Answer here ##
+
+```
+
+
+
+
+# Improved analysis: Doing a paired analysis
+
+******
+
+- Q. What would the design matrix look like to incorporate patient ID into the model 
+- Q. Create this model using the `model.matrix` function
+
+******
+
+
+```{r echo=FALSE}
+
+## Your answer here ##
+
+```
+
+******
+
+- Q. Proceed to fit your model to the data
+- Q. How many genes are DE? How does this compare to the previous model?
+
+******
+
+```{r}
+
+## Your answer here ##
+
+```
+
+# The estrogen dataset
+
+Recall the estrogen dataset from yesterday
+
+```{r}
+library(affy)
+targetsFile <- "estrogen/estrogen.txt"
+pd <- read.AnnotatedDataFrame(targetsFile,header=TRUE,sep="",row.names=1)
+pData(pd)
+ER <- pData(pd)$estrogen
+Time <- factor(pData(pd)$time.h)
+design <- model.matrix(~ER+Time)
+design
+
+design2 <- model.matrix(~ER*Time)
+design2
+
+```
+# Reading and normalising the data
+
+We read the data and then apply rma normalisation. What are the steps?
+
+```{r}
+
+raw <-ReadAffy(celfile.path = "estrogen", filenames=rownames(pData(pd)),phenoData = pd)
+raw
+
+eset <- rma(raw)
+eset
+
+```
+# Fitting the models
+
+Fit the model with and without interaction.
+
+```{r}
+library(limma)
+fit1 <- lmFit(eset, design)
+fit1 <- eBayes(fit1)
+topTable(fit1, coef=2)
+
+fit2 <- lmFit(eset, design2)
+fit2 <- eBayes(fit2)
+topTable(fit2, coef=2)
+
+```
+
+
+******
+## Q. Which one do you prefer? Why?
+******
+
+```{r echo=FALSE}
+table(decideTests(fit2)[,4])
+```

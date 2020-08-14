@@ -1,0 +1,141 @@
+---
+title: "Leah Wright - Lipidomics"
+author: "Baker Bioinformatics"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+# output:
+  # html_notebook:
+  #   # css:
+  #   # - !expr system.file("rmarkdown/templates/html_vignette/resources/vignette.css",
+  #   #                     package = "rmarkdown")
+  #   toc: true
+  #   toc_depth: 3
+  #   toc_float:
+  #     collapsed: false
+  #     smooth_scroll: true
+  #   theme: cosmo
+  #   df_print: paged
+  #   highlight: tango
+  #   code_folding: show
+  #   # fig_width: 12
+  #   # fig_height: 12
+output:
+  epuRate::BAKER:
+    toc: TRUE
+    number_sections: FALSE
+    code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# Initial setup
+## Load libraries
+
+```{r warning=FALSE, results='hide'}
+# library(fit)
+library(ggplot2)
+# library(leaflet)
+library(dplyr)
+# library(cetcolor)
+library(stringr)
+library(readxl)
+# library(summarytools)
+```
+
+## Configure output
+
+```{r setup}
+library(knitr)
+opts_chunk$set(results = 'asis',      # Can also be set at the chunk-level
+               comment = NA,
+               prompt  = FALSE,
+               cache   = FALSE)
+library(summarytools)
+st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           style        = "rmarkdown", # Always use this option in Rmd documents
+           footnote     = NA,          # Makes html-rendered results more concise
+           subtitle.emphasis = FALSE,  # Improves layout with some rmardown themes
+           # bootstrap.css = FALSE,
+)
+```
+
+```{r, echo=TRUE}
+st_css()
+```
+
+***
+# Read input
+
+Read file with 2016 and 2017 patients data together:
+
+* Already QCd and mediancentered by lipidomics people
+* 2017 individuals lack personal info and CVD measurements
+  * __Corrected in the last update sent by Leah__
+  
+```{r}
+# file <- "Echo_Lipids no CVD.xlsx"
+file <- "final_dataset.xlsx"
+mydata <- read_xlsx(file)
+```
+
+***
+
+# Data Cleaning
+## Preprocess and summarize
+
+Here, we will select and group files in order to get a basic summary of all the dataset.
+
+* Personal info
+* Health and disease info
+* Cardiac info
+* Lipid info (to do separately later)
+
+We will use these results to sort and filter out the patients without enough data in each of the groups (e.g. _not enough cardiac info or lack of health measurements_)
+
+More details about the summarytools library here:  
+https://cran.r-project.org/web/packages/summarytools/vignettes/Introduction.html
+
+Divide all fields in the different groups:
+
+```{r}
+# fields_to_summarize <- paste(colnames(mydata)[1:128],collapse="', '")
+fields_nolipids <- c(1:101)
+fields_lipids <- c(1,102:716)
+fields_personal <- c(1:23)
+fields_health <- c(24:53)
+fields_cardiac <- c(54:101)
+# # exclude uninformative fields for the report, such as sno 1, site_name 2, date_enrol 4, pt_initials 5, dob 6, repeated ID 54
+# fields_excluded <- c(1,2,4,5,6,54)
+fields_excluded <- NULL
+```
+
+### Personal info
+
+Corrections:
+
+* Change pregnant == 2 (not-pregnant), to 0, as it makes more sense.
+  * Men will still have NA and women will have 0 or 1.
+  * Add waist to hip ratio
+
+```{r}
+mydata$pregnant[mydata$pregnant == 2] <- 0
+mydata <- mydata %>% mutate(waist_hip_ratio = waist/hip)
+```
+
+Summary:
+
+```{r message=FALSE}
+fields_personal_OK <- setdiff(fields_personal,fields_excluded)
+dfSummary(mydata$waist_hip_ratio,style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp")
+print(dfSummary(mydata$waist_hip_ratio,style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp"),method='render')
+```

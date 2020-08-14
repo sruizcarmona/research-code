@@ -1,0 +1,309 @@
+---
+title: "GSE304028 Microarray Analysis"
+output: html_notebook
+---
+Processing data for Helena Qin
+Study of differentially expressed genes and pathway analysis
+Is ANXA1 present in any of them?
+
+Data and code from:
+https://www.ncbi.nlm.nih.gov/geo/geo2r/?acc=GSE30428
+https://rawgit.com/bioinformatics-core-shared-training/microarray-analysis/master/affymetrix.nb.html
+
+LOAD LIBRARIES
+```{r}
+library(oligo)
+library(GEOquery)
+library(limma)
+library(RColorBrewer)
+library(cluster)
+library(biomaRt)
+library(purrr)
+library(gplots)
+library(genefilter)
+library(lattice)
+library(mogene10sttranscriptcluster.db)
+```
+
+READ INPUT
+ADD INFO
+
+```{r}
+targetsFile <- "phenodata_OK.txt"
+pd <- read.AnnotatedDataFrame(targetsFile,header=TRUE,sep="",row.names=1)
+# pData(pd)
+rawData <- read.celfiles(rownames(pData(pd)))
+filename <- sampleNames(rawData)
+pData(rawData)$filename <- filename
+sampleNames <- sub(".*_", "", filename)
+sampleNames <- sub(".CEL.gz$", "", sampleNames)
+sampleNames(rawData) <- sampleNames
+pData(rawData)$group <- ifelse(grepl("PAC", sampleNames(rawData)),
+                               "CASE", "Control")
+pData(rawData)
+```
+
+QC ANALYSIS: plot raw array data
+
+```{r}
+# par(mfrow=c(2,2))
+# layout(matrix(c(1,2,3,4), 2, 2, byrow = TRUE))
+image(rawData[,1])
+image(rawData[,2])
+image(rawData[,3])
+image(rawData[,4])
+```
+NORMALIZE reading data
+```{r}
+normData <- rma(rawData)
+```
+
+COMPARE RAW WITH NORM DATA
+
+MAPLOT RAW
+```{r}
+MAplot(rawData[, 1:4], pairs=TRUE)
+```
+MAPLOT NORM
+```{r}
+MAplot(normData[, 1:4], pairs=TRUE)
+```
+BOXPLOT AND HIST RAW VS NORM
+```{r}
+par(mfrow=c(1,2))
+boxplot(rawData,target='core',main="raw")
+boxplot(normData,main="norm")
+```
+```{r}
+hist(rawData,target="core")
+hist(normData)
+```
+
+LOAD PREPROCESSED DATA FROM GEO TO REPRODUCE RESULTS
+SERIES MATRIX LOADING...
+
+```{r}
+preprocessedData <- getGEO(filename="GSE30428_series_matrix.txt")
+gsms <- "XXXXXXXX1100"
+sml <- c()
+for (i in 1:nchar(gsms)) { sml[i] <- substr(gsms,i,i) }
+sel <- which(sml != "X")
+preprocessedData <- preprocessedData[ , sel]
+```
+
+CHECK THAT RESULTS LOOK LIKE NORMALIZED DATA FROM CEL FILES
+```{r}
+boxplot(preprocessedData)
+MAplot(preprocessedData[, 1:4], pairs=TRUE)
+hist(preprocessedData)
+```
+
+Continue with downstream analysis (DE genes)
+Check if 2 groups can be clustered in different clusters
+
+```{r}
+varFiltered <- varFilter (preprocessedData)
+# dim (varFiltered)
+# nrow (preprocessedData) / nrow (varFiltered)
+euc.dist <- dist (t(exprs(varFiltered)))
+#euc.dist
+corMat <- cor(exprs(varFiltered))
+#corMat
+cor.dist <- as.dist(1 - corMat)
+#cor.dist
+clust <- hclust(cor.dist)
+# clust
+# names(clust)
+# clust$order
+# plot(clust)
+clust.ward <- hclust(cor.dist,method = "ward.D")
+# par(mfrow=c(1,2))
+# plot(clust)
+# plot(clust.ward)
+# plot(clust,labels=paste("Sample", 1:4))
+pd <- pData(preprocessedData)
+# pd
+#View(pd)
+plot(clust,labels=pd$description)
+```
+
+
+check heatmap to idenfity any possible errors in replicates
+
+```{r}
+geneVar = rowSds(exprs(preprocessedData))
+# sd(exprs(preprocessedData)[1,])
+# geneVar[1]
+# sd(exprs(preprocessedData)[2,])
+# geneVar[2]
+# length(geneVar)
+highVarGenes = order (geneVar, decreasing = TRUE )[1:100]
+SampleGroup <- c("case1","case2","ctrl1","ctrl2")
+groupColours <- rep("red",length(SampleGroup))
+groupColours[3:4] <- "blue"
+
+# heatmap.2 (as.matrix(exprs(preprocessedData)[highVarGenes, order(SampleGroup)]),
+#          labCol = SampleGroup[order(SampleGroup)])
+```
+
+```{r}
+hmcol <- brewer.pal(11 , "RdBu")
+heatmap.2 (as.matrix(exprs(preprocessedData)[highVarGenes, order(SampleGroup)]) , 
+         labCol = SampleGroup[order(SampleGroup)],
+         col=hmcol,scale='row')
+```
+
+```{r}
+ supervised.clus <- pam(euc.dist,k=2)
+ clusplot(supervised.clus)
+#supervised.clus$clustering
+```
+ 
+PCA 
+
+```{r}
+pca.geneExpression <- prcomp(t(exprs(varFiltered)))
+summary(pca.geneExpression)
+# plot(pca.geneExpression)
+# plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2])
+# plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+#      pch=16,col=as.character(groupColours))
+plot(pca.geneExpression$x[,1],pca.geneExpression$x[,2],
+     pch=16,col=as.character(groupColours))
+legend("bottomright",fill=groupColours,legend=SampleGroup)
+text(pca.geneExpression$x[,1],pca.geneExpression$x[,2]-0.01,labels = pd$geo_accession)
+# boxplot(pca.geneExpression$x[,1] ~ SampleGroup)
+
+```
+
+DE analysis using limma
+create contrast matrix and run eBayes function
+
+```{r}
+pData(preprocessedData)$source_name_ch1[4] <- pData(preprocessedData)$source_name_ch1[3]
+design <- model.matrix(~0+droplevels(pData(preprocessedData)$source_name_ch1))
+#design
+colnames(design) <- c("CASE","CONTROL")
+ design
+```
+```{r}
+fit1<-lmFit(preprocessedData, design)
+contrasts <- makeContrasts(CASE - CONTROL, levels=design)
+fit2 <- contrasts.fit(fit1, contrasts)
+fit3 <- eBayes(fit2)
+topTable(fit3)
+```
+
+Get results and find ENSEMBL code match for all probeids
+
+```{r}
+tab<-topTable(fit3, number = 3e6, adjust.method = "BH", sort.by = "p")
+pr<-row.names(tab)
+tab$symbol <- rapply(strsplit(tab$gene_assignment," // "), function(x) x[2])
+x <- mogene10sttranscriptclusterENSEMBL
+mapped_genes <- mappedkeys(x)
+xx <- as.list(x[mapped_genes])
+sy <- xx[pr]
+head(sy,20)
+tab$ensemblid<- as.character(sapply(sy, function(k){k[1]}))
+# length(labels(sy)[!is.na(labels(sy))])
+head(tab,20)
+```
+
+Match also with ENTREZID
+
+```{r}
+xEN <- mogene10sttranscriptclusterENTREZID
+mapped_genesEN <- mappedkeys(xEN)
+xxEN <- as.list(xEN[mapped_genesEN])
+syEN <- xxEN[pr]
+length(labels(syEN)[!is.na(labels(syEN))])
+tab$entrezid<- as.character(sapply(syEN, function(k){k[1]}))
+head(tab,20)
+```
+
+WRITE AND SAVE RESULTS IN CSV FORMAT FOR GSEA ANALYSIS
+only top3000 genes (max in DAVID)
+
+```{r}
+outdataSUM <- as.data.frame(tab$symbol)
+outdataSUM$pval <- tab$P.Value
+outdataSUM$ensemblid <- tab$ensemblid
+outdataSUM$logFC <- tab$logFC
+write.table(outdataSUM[1:3000,],file="GSE30428_genes_out.csv",sep=",",quote=FALSE,row.names = FALSE,col.names=TRUE)
+```
+
+same for ranking (according to pvalue), to run GSEA offline
+
+```{r}
+outdataRNK <- as.data.frame(tab$symbol)
+outdataRNK$pval <- tab$P.Value*-1
+write.table(outdataRNK[1:3000,],file="GSE30428_genes_out.rnk",sep="\t",quote=FALSE,row.names = FALSE,col.names=FALSE)
+```
+
+Heatmap of top50 logfc expressed genes
+
+
+```{r}
+myGenesDF.logFCsort <- tab[order(abs(tab$logFC),decreasing=T),][,c(1,13:20)]
+# myGenesDF.logFCsort[1:30,]
+# match(selgenes,rownames(exprs(preprocessedData)))
+# exprs(preprocessedData)[28158,]
+selgenes <- as.numeric(myGenesDF.logFCsort$ID[1:30])
+selgenes.sym <- myGenesDF.logFCsort$symbol[1:30]
+bk = unique(c(seq(-2,-0.5, length=50),seq(-0.5,0.5, length=50), seq(0.5,2,length=50)))
+hmcol<- colorRampPalette(c("white","red2", "red4"))(length(bk)-1)
+heatmap.2 (as.matrix(exprs(preprocessedData))[match(selgenes,rownames(exprs(preprocessedData))),],labCol = SampleGroup[order(SampleGroup)],col=hmcol,labRow=selgenes.sym,trace='none',scale='row')
+```
+
+Expression levels of ANXA1 in all datasets
+```{r}
+mygene_expr <- "Anxa1"
+gene_row <- match(mygene_expr,tab$symbol)
+print(tab[gene_row,c(1,13:20)])
+probeid_row <- tab$ID[gene_row]
+probe_EXPR_row <- match(probeid_row,rownames(exprs(preprocessedData)))
+dotplot(as.matrix(exprs(preprocessedData)[probe_EXPR_row,]),ylab=SampleGroup,xlab=paste("MicroArray Raw expression level - ", mygene_expr),col=groupColours,groups=SampleGroup)
+```
+
+VOLCANO PLOT OF THE SAME DATASET HIGHLIGHTING THE TOP LOGFC
+
+```{r}
+volcanoplot(fit3,highlight=40,names=rapply(strsplit(fit3$genes$gene_assignment," // "), function(x) x[2]))
+```
+
+PATHWAY ANALYSIS
+
+```{r}
+# library(gage)
+# library(pathview)
+# 
+# data(kegg.gs)
+# exp.fc=tab$logFC
+# names(exp.fc)=tab$entrezid
+# fc.kegg.p <- gage(exp.fc, gsets = kegg.gs, ref = NULL, samp = NULL)
+# sel <- fc.kegg.p$greater[, "q.val"] < 0.1 &         !is.na(fc.kegg.p$greater[, "q.val"])
+# path.ids <- rownames(fc.kegg.p$greater)[sel]
+# sel.l <- fc.kegg.p$less[, "q.val"] < 0.1 &            !is.na(fc.kegg.p$less[,"q.val"])
+# path.ids.l <- rownames(fc.kegg.p$less)[sel.l]
+# path.ids2 <- substr(c(path.ids, path.ids.l), 1, 8)
+# head(path.ids)
+```
+
+Plot of pathways
+
+```{r}
+# pv.out.list <- sapply(path.ids2[1:3], function(pid) pathview(gene.data =  exp.fc, pathway.id = pid,                      species = "hsa", out.suffix="limma"))
+# library(png)
+# 
+# files <- list.files(pattern = 'limma.png')
+# for (i in files)
+# {
+# img <- readPNG(i)
+# grid::grid.raster(img)
+# }
+# 
+# # img <- readPNG(files[1])
+# # grid::grid.raster(img)
+```
+
