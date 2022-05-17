@@ -1,0 +1,3828 @@
+---
+title: "HLA and Cardiovascular Disease Project"
+subtitle: "Jonathan Noonan, Second stage report"
+author: "[Baker Bioinformatics](https://intranet.baker.edu.au/research-resources/platform-technologies/bioinformatics-program/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "bioinformatics@baker.edu.au"
+# output:
+#   html_notebook:
+#     css: "www/css/my.css"
+#     toc: true
+#     toc_depth: 3
+#     toc_float:
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     code_folding: hide
+#     number_sections: false
+output:
+   epuRate::BAKER:
+     # cssextra: "www/css/my.css"
+     toc: TRUE
+     number_sections: FALSE
+     code_folding: "hide"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# Project Summary
+
+Our research hypothesises is that there may be an autoimmune component to atherosclerosis. Human Leukocyte Antigen molecules can often be used as risk factors / predictors of classical autoimmune diseases. However, It has never been appropriately addressed whether there is an association between HLA molecules and cardiovascular disease / outcomes.
+
+We would like to use the biobank data to specifically test whether cardiovascular disease, or specific cardiovascular outcomes, is associated with HLA types.
+
+## Comments from word document {.unlisted .unnumbered .toc-ignore}
+
+Each gene has multiple alleles.
+
+Allelic data is really required for this study if possible - I anticipate we will need the sensitivity. As such, the imputed data may not be overly useful. We obviously won’t know until we try.
+However, if we do not see anything in the imputed data, I still think we should proceed with data that allows the allelic data to be utilised.
+
+Consequently, it’s down to you whether you think we should go straight for the data that allows us to discriminate HLA alleles from the get go. 
+
+## Questions to address {.unlisted .unnumbered .toc-ignore}
+
+Q1 – Is there a bias in HLA usage in patients who die from Ischaemic Heart Disease vs the general population
+
+Q2 – Is there a bias in HLA usage in patients who die from AMI vs Chronic Ischaemic Heart Disease vs Stroke
+
+Q3 – Is there a bias in HLA usage in patients who die from AMI and Stroke vs those who are diagnosed with these conditions?
+
+Q4 – Within patients who have a heart attack, is there a bias in HLA usage in those who go on to have a subsequent heart attack within 4 weeks?
+
+Q5 – Within patients who suffer from a heart attack, is there a bias in HLA usage in comparison to other related cardiac disorders?
+
+
+# UKBiobank Data Extraction
+
+## Preprocess
+
+<!-- ### Load libraries and functions -->
+
+First, we load libraries and functions we need for the downstream analysis.
+
+* Libraries
+
+```{r message=FALSE, warning=FALSE, results='hide',include=FALSE}
+# library(summarytools)
+# st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           # style        = "rmarkdown", # Always use this option in Rmd documents
+           # footnote     = NA,          # Makes html-rendered results more concise
+           # subtitle.emphasis = FALSE)  # Improves layout with some rmardown themes
+# library(lobstr)
+# library(knitr)
+# opts_chunk$set(results = 'markup',      # Can also be set at the chunk-level
+#                comment = NA,
+#                prompt  = FALSE,
+#                cache   = FALSE)
+# library(ukbtools)
+library(tidyverse)
+library(DT)
+# library(treemap)
+# library(stringr)
+# library(filesstrings)
+# library(lubridate)
+# library(scales)
+library(ggthemes)
+library(tidytext)
+library(cowplot)
+# library(VennDiagram)
+# library(ggrepel)
+library(paletteer)
+# library(colorspace)
+```
+
+* Functions
+
+```{r include=FALSE}
+files <- c("/Users/sruizcarmona/WORK/BIOINFO_PROJECTS/BAKER_UKBIOBANK/ukb_functions.R",
+           "/Users/sruizcarmona/WORK/BIOINFO_PROJECTS/bakergithub_ukbiobank/ukb_data_functions.R",
+           "/home/sruizcarmona/WORKSPACE/WORK/BIOINFO/UKBIOBANK/GIT_UKBIOBANK/ukb_functions.R")
+for (f in files){
+  if (file.exists(f)){
+    print(paste0("Sourcing from ", f))
+    source(f)
+  }
+}
+source("supp_functions_plots.R")
+load("../rda/icd10_definition_WHO.rda")
+```
+
+```{r include=FALSE}
+split_by_length <- function(x, n) {
+  sst <- strsplit(x, '')[[1]]
+  m <- matrix('', nrow=n, ncol=(length(sst)+n-1)%/%n)
+  m[seq_along(sst)] <- sst
+  apply(m, 2, paste, collapse='')
+}
+
+split_variable_name <- function(variable.s, s.length=30){
+  s.var <- str_split(variable.s,"\\\\\\\n")[[1]]
+  new.var <- paste(c(paste(split_by_length(s.var[1],s.length),collapse="\\\n\\"),s.var[2]),collapse="\\\n\\")
+  return(new.var)
+}
+
+labeller_fun <- function(variable,value){
+  return(str_wrap(value, width = 10))
+}
+```
+
+## Summarize UK Biobank
+
+<!-- * Selected ICD10 codes (for diabetes) -->
+
+<!-- ```{r echo=TRUE, warning=FALSE} -->
+<!-- diab_icd10 <- tribble( -->
+<!--   ~ICD10, ~Description, ~n, -->
+<!--   "E10", "Insulin-dependent diabetes mellitus", 3923, -->
+<!--   "E11", "Non-insulin-dependent diabetes mellitus", 28137, -->
+<!--   "E13", "Other specified diabetes mellitus", 295, -->
+<!--   "E14", "Unspecified diabetes mellitus", 3733, -->
+<!--   "ANY", "Any of the above definitions", 30087, -->
+<!-- ) -->
+<!-- datatable(diab_icd10,options = list(dom = 't')) -->
+<!-- diab_codes <- c("E10","E11","E13","E14") -->
+<!-- ``` -->
+
+* Selected fields with information:
+
+
+```{r echo=TRUE, warning=FALSE}
+selfields <- read.table('../input/selected_fields.txt',sep='\t',stringsAsFactors = F)
+colnames(selfields) <- c("FIELD_CODE","Description")
+selfields <- selfields %>% distinct(FIELD_CODE,.keep_all = TRUE)
+datatable(selfields)
+```
+
+## Load HLA info
+
+UKB is too big to load at once, so we will load the information as needed.
+So far, we only need the HLA information of each individual.
+
+What information do we have about HLA?
+
+- Imputed values for 11 loci
+- Each entry contains all HLA loci (one line per person)
+- A, B, C, DRB5, DRB4, DRB3, DRB1, DQB1, DQA1, DPB1, DPA1
+- There is one value (separated by commas) per imputed allele and only the best-guess alleles are reported. The quantities P(A1|D) and P(A2|D,A1) from the Q column of the HLA:IMP*2 output are reported for each locus.
+
+For further information on the calculation methodology and the Quality metric see [Resource 182](https://biobank.ctsu.ox.ac.uk/crystal/refer.cgi?id=182). 
+
+
+
+```{r include=FALSE, warning=FALSE}
+# only if you are in the cluster, otherwise, load the pre-saved subset rda in the second line and skip next chunk
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/ukb_data_clean.rda")
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/preprocessed_rdas/heart_exercise_women.rda")
+# load("../rda/ukb42488_hla_type_information_210817.rda")
+load("../rda/ukb42488_hla_type_information_211029.rda")
+# remove(hla)
+# gc()
+```
+
+```{r}
+datatable(hla_wide %>% sample_n(6) %>% select(-eid),
+          options = list(scrollX=T))
+```
+
+```{r message = F}
+# pdata <- hla_wide %>%
+#   # top_n(1000) %>% 
+#   pivot_longer(-eid) %>% 
+#   separate(name, into = c("name", NA), sep = "_") %>% 
+#   na.omit() %>% 
+#   group_by(name) %>%
+#   count(value, .drop = TRUE) %>% 
+#   arrange(name, -n) %>% 
+#   top_n(10) %>% 
+#   mutate(name = paste0("HLA-", name),
+#          value = reorder_within(value, -n, name))
+
+# pdata
+```
+
+```{r fig.width=8}
+ggplot(pdata, aes(x=value, y=n, fill=name)) +
+  # geom_col(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(width = 0.9, preserve = "single")) +
+  scale_x_reordered() +
+  facet_wrap(~ name, scales = "free", nrow=3) +
+  theme_few() +
+  # scale_fill_few("Dark") +
+  # scale_fill_paletteer_d("ggsci::schwifty_rickandmorty") +
+  scale_fill_paletteer_d("ggsci::planetexpress_futurama") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="HLA usage in all the individuals",
+    subtitle="imputed haplotypes, both alleles grouped"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 7),
+        axis.text.y = element_text(size=7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  ) 
+```
+
+
+```{r include=F}
+# hla_wide %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("2301", .))) %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("2902", .))) %>% 
+#   filter_at(vars(starts_with("B_")), any_vars(grepl("4403", .))) %>% 
+#   filter_at(vars(starts_with("B_")), any_vars(grepl("5201", .))) %>% 
+#   filter_at(vars(starts_with("C_")), any_vars(grepl("1202", .))) %>%
+#   filter_at(vars(starts_with("C_")), any_vars(grepl("1601", .))) %>%
+#   filter_at(vars(starts_with("DRB1_")), any_vars(grepl("701", .))) %>%
+#   # filter_at(vars(starts_with("DRB1_")), any_vars(grepl("1104", .))) %>% 
+#   filter_at(vars(starts_with("DQB1_")), any_vars(grepl("202", .))) %>%
+#   # filter_at(vars(starts_with("DQB1_")), any_vars(grepl("301", .))) %>% 
+#   # filter_at(vars(starts_with("DPB1_")), any_vars(grepl("201", .))) %>%
+#   filter_at(vars(starts_with("DPB1_")), any_vars(grepl("1101", .)))
+
+# hla_wide %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("2301", .))) %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("201", .))) %>% 
+#   filter_at(vars(starts_with("B_")), any_vars(grepl("4901", .))) %>%
+#   # filter_at(vars(starts_with("B_")), any_vars(grepl("5201", .))) %>%
+#   # filter_at(vars(starts_with("C_")), any_vars(grepl("1202", .))) %>%
+#   filter_at(vars(starts_with("C_")), any_vars(grepl("602", .))) %>%
+#   filter_at(vars(starts_with("DRB1_")), any_vars(grepl("701", .))) %>%
+#   filter_at(vars(starts_with("DRB1_")), any_vars(grepl("1104", .))) %>%
+#   filter_at(vars(starts_with("DQB1_")), any_vars(grepl("202", .))) %>%
+#   filter_at(vars(starts_with("DQB1_")), any_vars(grepl("301", .))) %>%
+#   # filter_at(vars(starts_with("DPB1_")), any_vars(grepl("201", .))) %>%
+#   filter_at(vars(starts_with("DPB1_")), any_vars(grepl("402", .)))
+```
+
+
+:::infonote
+This tables show how our HLA information data looks like (sample of 6 random individuals), but in total we have around **500.000 individuals (rows)** and allelic information on **11 HLA loci (columns)**.
+:::
+
+---
+
+# Q1 - Ischaemic Heart Disease
+
+:::question
+Is there a bias in HLA usage in patients who die from Ischaemic Heart Disease vs the general population?
+:::
+
+General population definition (possibilities):
+
+a) die, not from IHD, never had IHD
+b) die, not from IHD, had IHD
+c) die, not from IHD, never had any CVD
+d) die, not from IHD, had other CVD
+e) don't die, never IHD
+f) don't die, had IHD
+g) don't die, never had any CVD
+h) don't die, had other CVD
+
+For this first analysis, and to be pragmatic with numbers and definitions, we will assume we are interested in comparison a: 
+
+- Individuals that die from IHD
+
+vs
+
+- Individuals that die (not from IHD) and never had IHD
+
+## Subgroup definition
+
+```{r}
+# # run in cluster
+# dead_inds <- my_ukb_data %>%
+#   filter(!is.na(underlying_primary_cause_of_death_icd10_f40001_0_0) | !is.na(underlying_primary_cause_of_death_icd10_f40001_1_0))
+```
+
+```{r}
+load("../rda/ukb_dead_individuals.rda")
+ihd_icd10 <- c("I20", "I21", "I22", "I23", "I24", "I25")
+```
+
+* Selected ICD10 codes for IHD
+
+```{r, warning=F}
+datatable(
+  ICD %>% 
+    filter(coding_L2 == "Block I20-I25") %>% 
+    select(meaning_L3, meaning_L1, meaning_L2, ) %>% 
+    unique(),
+  options = list(scrollX=T,pageLength=10), rownames = FALSE)
+```
+
+```{r}
+# select dead by IHD
+## https://stackoverflow.com/questions/63399181/str-detect-multiple-columns-using-across
+## mutate(death_ihd = if_else(any(str_detect(c_across(contains("f40001")), paste(c(ihd_icd10,"I259","C800"),collapse = '|'))), 1, 0)) %>% 
+
+kk <- head(dead_inds)
+kk <- kk %>% 
+  rowwise() %>%
+  mutate(death_ihd = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains(c("f40001", "f40002"))))),
+                             1, 0)) %>% 
+  select(eid, contains(c("f40001","f40002")), death_ihd)
+
+# get individuals that ever had IHD  
+had_ihd_eid <- extract_diagnose_icd10_truncated(dead_inds, ihd_icd10) %>% pull(eid)
+
+# find individuals that died from IHD and add info about "ever having IHD", to filter later
+dead_inds <- dead_inds %>% 
+  rowwise() %>%
+  mutate(
+    death_ihd = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains(c("f40001","f40002"))))),
+                        1, 0),
+    death_ihd_prim = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains("f40001")))),
+                             1, 0),
+    death_ihd_sec = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains("f40002")))),
+                            1, 0)) %>% 
+  ungroup() %>% 
+  mutate(had_ihd = ifelse(eid %in% had_ihd_eid, 1, 0))
+
+# dead_inds %>% select(eid, contains(c("f40001","f40002")), contains("ihd"))
+# dead_inds %>% filter(eid == 1002193 | eid == 1078861) %>% select(eid, contains(c("ihd", "icd10", "f40002"))) %>% 
+#   mutate_all(., ~as.character(.)) %>% 
+#   pivot_longer(-eid) %>% 
+#   filter(!is.na(value))
+```
+
+
+
+
+```{r, fig.width=5,fig.height=6}
+
+#   geom_text(position="identity",
+#             aes(label=n),vjust=c(-3.5,1.6)) +
+#   geom_text(position="identity", vjust=c(-1.8,3),
+#             aes(label=paste0("(",perc,"%)"))) +
+#   labs(x="Incident MI", y="") +
+#   theme_bw() +
+#   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) +
+#   scale_fill_paletteer_d("awtools::mpalette") +
+#   theme(legend.position="none",
+#         # axis.text.y = element_blank(),
+#         # axis.ticks.y = element_blank(),
+#         panel.grid.major.x = element_blank())
+# 
+# # plot_grid(p1,p2,nrow=1)
+
+
+dead_inds %>%
+  select(eid, contains("death_ihd")) %>%
+  pivot_longer(-eid) %>% 
+  count(name, value) %>% 
+  group_by(name) %>% 
+  mutate(perc=round(n/sum(n)*100,1),
+         value=ifelse(value == 1, "Yes", "No"),
+         value=factor(value,levels=c("Yes","No"))) %>% 
+  ggplot(aes(x = value, y=n, fill = name)) +
+  theme_few_src() +
+  geom_col(width=0.8, position = position_dodge(width = 0.9)) +
+  scale_fill_paletteer_d("awtools::mpalette", labels = c("All causes of death", "Primary", "Secondary")) +
+  geom_text(position = position_dodge(width = 0.9), cex=3,
+            aes(label = n),vjust=c(-3.5)) +
+  geom_text(position = position_dodge(width = 0.9), cex = 3,
+            vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="UKB Death Information",
+       subtitle="Primary/secondary cause",
+       x="Death from IHD", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(0, 35000)) +
+  theme(legend.position="bottom",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+:::update
+At this point, we will only use IHD as Primary cause of death.
+
+* I will also remove all "Only secondary" individuals
+* and the individuals that did not die from IHD but had an episode of IHD during their life (according to ICD10 diagnoses)
+:::
+
+```{r fig.width=4,fig.height=6}
+# dead_inds %>%
+#   select(eid, contains("ihd"))
+ihd_dead_inds <- dead_inds %>% 
+  mutate(ihd_group = case_when(
+    death_ihd_prim == 1 ~ "ihd_prim",
+    death_ihd_prim == 0 & death_ihd_sec == 1 ~ "ihd_sec",
+    death_ihd == 0 & had_ihd == 1 ~ "had_ihd",
+    TRUE ~ "no_ihd"
+  )) %>% 
+  filter(grepl("ihd_prim|no_ihd", ihd_group)) %>% 
+  mutate(ihd_group = recode_factor(ihd_group, "ihd_prim" = "Died from IHD", "no_ihd" = "Died, never had IHD"))
+
+
+ihd_dead_inds %>%
+  select(eid, contains("ihd_group")) %>%
+  pivot_longer(-eid) %>% 
+  count(name, value) %>% 
+  group_by(name) %>% 
+  mutate(perc=round(n/sum(n)*100,1),
+         # value=ifelse(value == 1, "Yes", "No"),
+         # value=recode_factor(value, "ihd_prim" = "Death from IHD", "no_ihd" = "Never had IHD")
+         ) %>% 
+  ggplot(aes(x = value, y=n, fill = value)) +
+  theme_few_src() +
+  geom_col(width=0.6, position = position_dodge(width = 0.9)) +
+  # scale_fill_paletteer_d("awtools::mpalette")) +
+  # scale_fill_paletteer_d("awtools::spalette", direction = -1) +
+  scale_fill_few("Dark") +
+  geom_text(position = position_dodge(width = 0.9), cex=3,
+            aes(label = n),vjust=c(-3.5)) +
+  geom_text(position = position_dodge(width = 0.9), cex = 3,
+            vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="IHD subgroup definiton",
+       subtitle="Death/diagnose of IHD",
+       x="", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(0, 30000)) +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+:::infonote
+Out of the 26482 individuals, 3579 died from IHD and 22903 also died, but never had any type of IHD.
+:::
+
+
+## Dataset Summary {.tabset}
+
+:::question
+What differences between the groups can we identify with UK Biobank information? 
+At this moment, **ignoring HLA information**, some descriptive statistics to exemplify what information we have.
+:::
+
+### Sex
+
+```{r include=FALSE}
+# summary(t2d_adj$genetic_sex_f22001_0_0)
+```
+
+
+```{r echo=TRUE, fig.width=6,fig.height=5}
+f_id <- "f22001"
+pdata <- ihd_dead_inds %>%
+  select(eid, ihd_group, contains(f_id)) %>%
+  pivot_longer(!c(eid,ihd_group),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value, ihd_group) %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(n/sum(n)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(value=factor(value,levels=unique(value)))
+# pdata
+
+p <- ggplot(pdata,aes(x=ihd_group, y=n, fill=value)) +
+  geom_col(width=0.8, position = position_dodge(width = 0.9)) +
+  geom_text(position=position_dodge(width=0.9), vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+            aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width = 0.9), vjust = c(-2.2, -2.2, 4.1, 4.1), col=c(rep("black",2),rep("black",2)),
+            aes(label=paste0("(",perc,"%)")), cex=2.3) +
+  labs(x="", y="N. of individuals",
+       fill="Sex", col="Sex",
+       title="Sex differences in the IHD groups") +
+  theme_few_src() +
+  # facet_wrap(~ihd_group, scales = "free", nrow=1, drop=T) +
+  scale_fill_paletteer_d("rcartocolor::Pastel") +
+  theme(legend.position="right",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+
+p
+```
+
+### BMI
+
+```{r}
+summary_continuous(indata=ihd_dead_inds, field="_f21001_", type="num", xlab="BMI (kg/m2)", boxcol="white", 
+                   leg_pos=c(0.8,0.6), fillvar="ihd_group", fillname="IHD group", rel_heights = c(5.5,4,3,2.8),
+                   xlim=c(0,80))
+```
+
+### Year of birth
+
+```{r include=FALSE}
+# summary(t2d_adj$year_of_birth_f34_0_0)
+```
+
+```{r warning = F, fig.width=9,fig.height=5}
+f_id <- "f34_"
+pdata <- ihd_dead_inds %>%
+  select(eid, ihd_group, contains(f_id)) %>%
+  pivot_longer(!c(eid,ihd_group),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value, ihd_group) %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(n/sum(n)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(value=factor(value,levels=unique(value)))
+# pdata
+
+p <- ggplot(pdata,aes(x=as.numeric(as.character(value)), y=n, fill=ihd_group)) +
+  geom_col(width=0.8, position = position_dodge()) +
+  labs(x="Year of birth", y="N. of individuals",
+       fill="Sex", col="Sex",
+       title="Year of birth in each IHD group") +
+  theme_few_src() +
+  scale_x_continuous(breaks = scales::pretty_breaks(5)) +
+  facet_wrap(~ihd_group, scales = "free", nrow=1, drop=T) +
+  scale_fill_few("Dark") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        axis.text.x = element_text(angle=30, hjust=1),
+        )
+p
+```
+
+### Age at death
+
+```{r}
+summary_continuous(indata=ihd_dead_inds, field="_f40007_", type="num", xlab="Age at death", boxcol="white", 
+                   leg_pos=c(0.85,0.6), fillvar="ihd_group", fillname="IHD group", rel_heights = c(5.5, 4, 3, 2.8),
+                   xlim=c(30,100))
+```
+
+### Ethnic Background
+
+```{r}
+pdata <- ihd_dead_inds %>%
+  group_by(ihd_group,ethnic_background_f21000_0_0) %>%
+  summarize(tot=sum(n()),.groups = "drop") %>%
+  na.omit()
+```
+
+```{r fig.width=9,fig.height=6}
+pfacet <- pdata %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  arrange(tot) %>%   
+  mutate(short = factor(ethnic_background_f21000_0_0, unique(ethnic_background_f21000_0_0))) %>%
+  ggplot(aes(x=short, y=perc, fill=short)) +
+  geom_bar(stat="identity") +
+  ylim(c(0,100)) +
+  facet_wrap(~ihd_group) +
+  theme_few() +
+  labs(
+    x="Ethnic Background",
+    y="% of individuals",
+    title="Ethnic Background",
+    subtitle="in selected IHD groups"
+  ) +
+  geom_text(aes(label=paste0(perc,"%")),cex=3,
+            hjust=-0.3,
+            ) + 
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1)) +
+  coord_flip()
+
+pfacet
+
+
+# plot_grid(pall, pfacet, nrow=1)
+```
+
+
+:::infonote
+Almost 90% of the individuals have "White British" background, as most of the UK Biobank. Just to be aware, in case we need to correct wen checking HLA and other genetic information later.
+
+There are no significant differences between the different population groups.
+:::
+
+
+## {.unlisted .unnumbered .toc-ignore}
+
+---
+
+## HLA Information
+
+```{r}
+# fix hla headers so we can track them later
+names(hla_wide) <- c("eid", paste0("HLA-", names(hla_wide)[2:23]))
+# convert eid to int, same format as ihd_dead_inds
+hla_wide <- hla_wide %>% 
+  mutate(eid = as.integer(eid))
+```
+
+
+```{r}
+# dim(ihd_dead_inds)
+# dim(hla_wide)
+# dim(inner_join(ihd_dead_inds, hla_wide, by="eid"))
+hla_ihd_q1 <- inner_join(ihd_dead_inds, hla_wide, by="eid")
+```
+
+```{r message = F}
+pdata <- hla_ihd_q1 %>%
+  select(eid, ihd_group, contains("HLA")) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value) %>% 
+  summarize(tot=sum(n()),.groups = "drop") %>%
+  group_by(ihd_group, name) %>% 
+  arrange(ihd_group, name, -tot) %>% 
+  top_n(5) %>% 
+  ungroup() %>% 
+  mutate(value = reorder_within(value, -tot, name)) %>% 
+  na.omit()
+# pdata
+
+# pdata <- pdata %>% 
+#       group_by(.data[[facet]]) %>% arrange(.data[[facet]],-n) %>% top_n(10) %>% ungroup() %>% 
+#       mutate(value=reorder_within(value,-n,.data[[facet]]))
+# 
+# scale_x_reordered() +
+```
+
+```{r fig.width = 11, fig.height = 5}
+ggplot(pdata, aes(x=value, y=tot, fill=ihd_group)) +
+  geom_bar(stat="identity", width = 0.8) +
+  # ylim(c(0,100)) +
+  scale_x_reordered() +
+  facet_grid(ihd_group ~ name, scales = "free", space="free_x") +
+  theme_few() +
+  scale_fill_few("Dark") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="HLA usage in the different groups",
+    subtitle="imputed haplotypes, both alleles grouped"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+```
+
+
+## Association Models
+
+:::question
+Is there any significant association between the different haplotypes and death from IHD?
+:::
+
+### Numerical models {.tabset}
+
+:::update
+Each individual with HLA-A\*101 will have a variable called HLA-A\*101 with values 0, 1 or 2 depending on the number of alleles for that particular type. 
+
+In contrast, the categorical type was **wrongly** considering each allele as different individuals.
+:::
+
+```{r}
+# hla_wide %>% filter(eid==1000013)
+hla_info_012 <- hla_wide %>% 
+  # head(10) %>% 
+  pivot_longer(-eid) %>% 
+  separate(name, into=c("name", NA), sep="_") %>% 
+  mutate(name=str_replace(name, "-", "."),
+         type=paste(name, value, sep="_")) %>% 
+  group_by(eid, type) %>% 
+  summarise(n = n(), .groups = "drop") %>% 
+  arrange(type) %>% 
+  pivot_wider(names_from = type, values_from = n, values_fill = list(n = 0))
+
+hla_ihd_q1_012 <- inner_join(ihd_dead_inds %>% select(eid, ihd_group), hla_info_012, by="eid")
+```
+
+#### All loci
+
+```{r}
+logres_all <- hla_ihd_q1_012 %>% 
+  select(ihd_group, contains(c("HLA")), -contains("_NA") ) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0)))
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+# summary(logit1)
+# anova(logit1_null, logit1, test="Chisq")
+# summary(logitkk)
+# coef(logit1) %>% exp()
+# logit1$aic
+# confint(logit1) %>% exp()
+# logit1 %>% glance()
+```
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Test all HLA loci", col= "blue", print.auc = T, legacy.axes = T)
+```
+
+#### All loci (cleaned)
+
+For this final model, I cleaned a bit the input data, as the loci with really few presence in all the individuals were adding a lot of noise.
+
+I am removing all the loci with a count fewer than 100, which removes around 150 (50%).
+
+
+```{r}
+logres_all <- hla_ihd_q1_012 %>% 
+  select(ihd_group, contains(c("HLA")), -contains("_NA") ) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0) > 100)
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+
+# summary(logit1)
+# anova(logit1_null, logit1, test="Chisq")
+
+# summary(logitkk)
+# coef(logit1) %>% exp()
+# logit1$aic
+# confint(logit1) %>% exp()
+# logit1 %>% glance()
+
+# logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# logit1_res %>% arrange(-pred)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+                      col= "blue", print.auc = T, legacy.axes = T)
+```
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-ihd_group)) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(Pred,OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+How are these HLA types present on the two groups?
+
+
+```{r}
+top_hla <- OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  pull(Pred)
+pdata <- hla_ihd_q1_012 %>%
+  select(eid, ihd_group, one_of(top_hla)) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  # separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value, .drop = F) %>% 
+  summarise(tot=sum(n()), .groups = "drop") %>% 
+  pivot_wider(names_from = value, values_from = tot, values_fill = list(tot = 0)) %>% 
+  pivot_longer(-c(ihd_group, name), names_to = "value", values_to = "tot") %>% 
+  group_by(ihd_group,name) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(name = factor(name, levels = top_hla)) 
+```
+
+
+```{r fig.width = 11, fig.height = 5}
+ggplot(pdata, aes(x=ihd_group, y=perc, fill=factor(value))) +
+  # geom_bar(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(preserve = "single")) +
+  # ylim(c(0,100)) +
+  # scale_x_reordered() +
+  facet_wrap(~name, scales = "fixed", nrow = 2) +
+  theme_few() +
+  # geom_text( vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+  #           aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width=0.9), cex = 2.8, vjust = -2, 
+            aes(label = if_else(value > 0, paste0(as.character(perc), "%"), ""), col = factor(value))) +
+  # scale_fill_few("Dark") +
+  scale_fill_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  scale_color_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  labs(
+    x="IHD group",
+    y="% of individuals",
+    title="HLA usage in the most extreme HLA Odds Ratios",
+    fill = "N. of alleles",
+    color = "N. of alleles"
+  ) +
+  theme(legend.position="bottom",
+        # legend.position=c(0.7,0.8), 
+        legend.title = element_text(size=9), 
+        legend.text = element_text(size=8), 
+        legend.key.size = unit(0.7,"line"),
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 15, hjust = 1, size = 7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+```
+
+---
+
+
+<!-- # Q2 – Death in CVD -->
+
+<!-- :::question -->
+<!-- Is there a bias in HLA usage in patients who die from AMI vs Chronic Ischaemic Heart Disease vs Stroke? -->
+<!-- ::: -->
+
+<!-- # Q3 – Death vs survival in CVD -->
+
+<!-- :::question -->
+<!-- Is there a bias in HLA usage in patients who die from AMI and Stroke vs those who are diagnosed with these conditions? -->
+<!-- ::: -->
+
+<!-- # Q4 – Heart attack (subsequent) -->
+
+<!-- :::question -->
+<!-- Within patients who have a heart attack, is there a bias in HLA usage in those who go on to have a subsequent heart attack within 4 weeks? -->
+<!-- ::: -->
+
+<!-- # Q5 – Heart attack vs CVD -->
+
+<!-- :::question -->
+<!-- Within patients who suffer from a heart attack, is there a bias in HLA usage in comparison to other related cardiac disorders? -->
+<!-- ::: -->
+
+
+
+<!-- # Diabetic Inviduals -->
+
+<!-- In the next plots, we will summarize different aspects of the Diabetic Individuals subset of UK Biobank. -->
+
+<!-- ## Subgroup definition -->
+
+<!-- * First of all, compare individuals to know whether they have been selected for having an ICD10 associated with diabetes, being self-reported or adjudicated. -->
+
+<!-- ```{r} -->
+<!-- # get eids for each of the groups -->
+<!-- sel_icd10 <- extract_diagnose_icd10_truncated(diab_ukb,diab_codes) %>% pull(eid) -->
+<!-- sel_sr <- extract_self_reported_nc(diab_ukb,self_reported_diab_codes) %>% pull(eid) -->
+<!-- sel_adj <- diab_ukb %>% filter(fc1_no_diabetes == "Possible diabetes") %>% pull(eid) -->
+<!-- ``` -->
+
+
+<!-- ```{r include=FALSE} -->
+<!-- # stop creating logs -->
+<!-- futile.logger::flog.threshold(futile.logger::ERROR, name = "VennDiagramLogger") -->
+<!-- ``` -->
+
+
+<!-- ```{r fig.height=6, fig.width=6} -->
+<!-- # plot with a venn diagram -->
+<!-- my_colors <- viridis_pal(option="D")(3) -->
+<!-- my_colors_alpha <- alpha(my_colors,0.5) -->
+<!-- venndiag <- venn.diagram( -->
+<!--   x = list(sel_icd10, sel_sr, sel_adj), -->
+<!--   category.names = c(paste0("ICD10 (",length(sel_icd10),")"), -->
+<!--                      paste0("Self-reported (",length(sel_sr),")"), -->
+<!--                      paste0("Adjudicated (",length(sel_adj),")")), -->
+<!--   filename = NULL, -->
+<!--   output=FALSE, -->
+<!--   #output features -->
+<!--   # height = 480 , width = 480 , resolution = 300, -->
+<!--   # Circles -->
+<!--   lwd = 2, -->
+<!--   # lty = 'blank', -->
+<!--   fill = my_colors_alpha, -->
+<!--   col = my_colors, -->
+
+<!--   # Numbers -->
+<!--   cex = 1.3, -->
+<!--   fontface = "bold", -->
+<!--   fontfamily = "sans", -->
+
+<!--   # Set names -->
+<!--   cat.cex = 1, -->
+<!--   cat.fontface = "bold", -->
+<!--   cat.default.pos = "outer", -->
+<!--   cat.pos = c(-27, 27, 135), -->
+<!--   cat.dist = c(0.055, 0.055, 0.085), -->
+<!--   cat.fontfamily = "sans", -->
+<!--   rotation = 1, -->
+<!-- ) -->
+
+<!-- grid.newpage() -->
+<!-- grid.draw(venndiag) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- # create variables with which and amount of methods an individual is selected -->
+<!-- diab_ukb <- diab_ukb %>% -->
+<!--   mutate(sel_icd10=ifelse(eid %in% sel_icd10,1,0), -->
+<!--          sel_sr=ifelse(eid %in% sel_sr,1,0), -->
+<!--          sel_adj=ifelse(eid %in% sel_adj,1,0), -->
+<!--          sel_n=sel_icd10 + sel_sr + sel_adj) -->
+<!-- ``` -->
+
+
+<!-- :::infonote -->
+<!-- Around 20.000 individuals are classified as Diabetic based on the 3 methods. We will keep track of how many and which method has every individual been selected for for the downstream analysis. -->
+<!-- ::: -->
+
+<!-- :::question -->
+<!-- Adjudicated algorithm seems to work fine. It is correcting self reported status and also assigning T1D or T2D to general "diabetes" self reported status. -->
+
+<!-- - Which subset to use for the subsequent analysis? -->
+
+<!-- In my opinion, I would select both ICD10 and adjudicated individuals. Self reported individuals that are not in the adjudicated set should be removed. -->
+<!-- ::: -->
+
+<!-- :::update -->
+<!-- **UPDATE** -->
+
+<!-- After talking over email, we will continue with adjudicated individuals for **only T2D**. -->
+
+<!-- See below for a summary -->
+<!-- ::: -->
+
+<!--   ## T1D vs T2D -->
+
+<!-- * First of all, individuals will be split between T1D or T2D, according to their code definition. -->
+
+<!-- ```{r} -->
+<!-- # icd10_t1d <- "E10" -->
+<!-- # icd10_t2d <- "E11" -->
+<!-- diab_ukb <- diab_ukb %>% -->
+<!--   mutate(icd10_t1d=ifelse(eid %in% extract_diagnose_icd10_truncated(diab_ukb,"E10")$eid,1,0), -->
+<!--          icd10_t2d=ifelse(eid %in% extract_diagnose_icd10_truncated(diab_ukb,"E11")$eid,1,0)) -->
+
+<!-- # sr_t1d <- "1222" -->
+<!-- # sr_t2d <- "1223" -->
+<!-- diab_ukb <- diab_ukb %>% -->
+<!--   mutate(sr_t1d=ifelse(eid %in% extract_self_reported_nc(diab_ukb,"1222")$eid,1,0), -->
+<!--          sr_t2d=ifelse(eid %in% extract_self_reported_nc(diab_ukb,"1223")$eid,1,0)) -->
+
+<!-- # adj_t1d: fc1_poss_t1dm == Possible T1DM -->
+<!-- # adj_t2d: fc1_poss_t2dm == Possible T2DM -->
+<!-- diab_ukb <- diab_ukb %>% -->
+<!--   mutate(adj_t1d=ifelse(grepl("Possible", fc1_poss_t1dm),1,0), -->
+<!--          adj_t2d=ifelse(grepl("Possible", fc1_poss_t2dm),1,0)) -->
+<!-- ``` -->
+
+
+<!-- ```{r fig.width=5,fig.height=6} -->
+<!-- # create plot -->
+<!-- pdata <- diab_ukb %>% -->
+<!--   select(eid,contains("t1d"), contains ("t2d")) %>% -->
+<!--   select(-contains("t2dm"),-contains("t1dm")) -->
+<!-- pdata <- pdata %>% -->
+<!--   pivot_longer(-eid,names_to="names",values_to="values") %>% -->
+<!--   group_by(names,values) %>% -->
+<!--   select(-eid) %>% -->
+<!--   tally() %>% -->
+<!--   filter(values==1) %>% -->
+<!--   mutate(cat=factor(case_when( -->
+<!--     grepl("adj",names) ~ "Adjudicated", -->
+<!--     grepl("icd10",names) ~ "ICD10", -->
+<!--     TRUE ~ "Self-reported"),levels=c("ICD10","Self-reported","Adjudicated")), -->
+<!--     type=case_when( -->
+<!--       grepl("t1d",names) ~ "T1D", -->
+<!--       TRUE ~ "T2D" -->
+<!--     )) -->
+<!-- # -->
+<!-- # pdata -->
+<!-- # -->
+<!-- # mycols2 <- viridis_pal(option="D")(2) -->
+
+<!-- ggplot(pdata,aes(x=cat,y=n,col=cat)) + -->
+<!--   theme_few() + -->
+<!--   geom_point(cex=3) + -->
+<!--   scale_color_viridis_d() + -->
+<!--   labs(color="", -->
+<!--        y="N. of individuals", -->
+<!--        x="Selection method", -->
+<!--        title="T1D vs T2D Individuals", -->
+<!--        subtitle="Method selection comparison") + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(10), limits = c(0, NA)) + -->
+<!--   geom_segment(aes(x=cat, xend=cat, y=0, yend=n),cex=1.2,show.legend=F) + -->
+<!--   facet_wrap(~type,nrow = 1,scales="free_x") + -->
+<!--   theme( -->
+<!--     # legend.position="bottom", -->
+<!--     axis.text.x = element_blank(), -->
+<!--     axis.ticks.x = element_blank(), -->
+<!--     # axis.text.x = element_text(angle = 45,hjust = 1), -->
+<!--     # plot.margin = margin(t=6, r=6, b=-14, l=6,"pt"), -->
+<!--     # panel.spacing = unit(0.1, "lines"), -->
+<!--     # panel.spacing = unit(c(0.3, 0.4), "lines"), -->
+<!--     panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--     panel.grid.minor.y = element_line(colour = "gray",size=0.1), -->
+<!--     # panel.grid.major.x = element_line(colour = "gray",size=0.1) -->
+<!--   ) -->
+<!-- ``` -->
+
+<!-- A lot of self-reported individuals seem not to have a correct assignment (total of 25.000 individuals, see above). The reason for that is that a high number of those individuals have a general code assigned to "diabetes". The adjudicated method seems to correct that thanks to the different algorithms used. -->
+
+<!-- ## Date of diagnose -->
+
+<!-- Here we will extract the date of the diagnoses, as we will need it later to check incident cardiovascular episodes and other analysis. -->
+
+<!-- ```{r} -->
+<!-- # rename year of birth field to yob to make it easier for later -->
+<!-- # same with sex -->
+<!-- diab_ukb$yob <- diab_ukb[,grepl("_f34_",names(diab_ukb))] -->
+<!-- diab_ukb$sex <- diab_ukb$genetic_sex_f22001_0_0 -->
+<!-- ``` -->
+
+
+<!-- * ICD10 -->
+
+<!-- ```{r} -->
+<!-- diab_codes <- c("E10","E11","E13","E14") -->
+
+<!-- icd10_with_dates <- diab_ukb %>% select(eid,contains("f41270"), contains("f41280")) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   pivot_longer(-eid,names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","array"),"_0_") %>% -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   rename(icd10=diagnoses) %>% -->
+<!--   mutate(date=as.Date(date,format = "%d/%m/%Y")) -->
+
+<!-- diab_with_dates <- icd10_with_dates %>% -->
+<!--   filter(grepl(paste(diab_codes, collapse="|^", sep=""),icd10)) %>% -->
+<!--   mutate(diabetes_type=case_when( -->
+<!--     grepl("E10",icd10) ~ "t1d", -->
+<!--     grepl("E11",icd10) ~ "t2d", -->
+<!--     TRUE ~ "unk" -->
+<!--   )) -->
+
+<!-- diab_with_dates_long <- diab_with_dates %>% -->
+<!--   select(-array,-icd10) %>% -->
+<!--   group_by(eid,diabetes_type) %>% -->
+<!--   arrange(eid,date) %>% -->
+<!--   filter(row_number() == 1) %>% -->
+<!--   pivot_wider(names_from = diabetes_type, values_from = date) %>% -->
+<!--   rename(icd10_t2d_date=t2d, -->
+<!--          icd10_t1d_date=t1d, -->
+<!--          icd10_unk_date=unk) %>% -->
+<!--   mutate(icd10_all_date=coalesce(icd10_t2d_date,icd10_t1d_date,icd10_unk_date)) %>%  -->
+<!--   ungroup() -->
+
+<!-- if (!"icd10_t2d_date" %in% names(diab_ukb)){ -->
+<!--   diab_ukb <- diab_ukb %>% -->
+<!--     left_join(diab_with_dates_long,by="eid") -->
+<!-- } -->
+<!-- # diab_ukb <- diab_ukb %>% select(-contains("date.")) -->
+<!-- ``` -->
+
+<!-- * Self-reported (touch-screen and nurse interview) -->
+
+<!-- ```{r} -->
+<!-- # summary(diab_ukb$age_diabetes_diagnosed_f2976_0_0) -->
+<!-- # kk <- diab_ukb[1:5,] -->
+<!-- # kk$noncancer_illness_yearage_first_occurred_f87_0_0 -->
+
+<!-- diab_sr_dates <- diab_ukb %>% -->
+<!--   # filter(eid==1016381) %>% -->
+<!--   # filter(eid==1001130) %>% -->
+<!--   # filter(eid==1000238) %>% -->
+<!--   # filter(eid==1090023) %>%  -->
+<!--   # filter(eid == 1183904) %>% -->
+<!--   select(eid,yob,contains(c("f87_","f20002_","f20009_","f2976_"))) %>% -->
+<!--   mutate_at(vars(!eid),~as.numeric(.)) %>% -->
+<!--   # select(eid,yob,matches("_0_[012]")) %>% -->
+<!--   pivot_longer(-c(eid,yob),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   pivot_wider(names_from=info,values_from = values) %>% -->
+<!--   # assign age_ts to all rows, without instance and array -->
+<!--   rename(age_ts=age_diabetes_diagnosed_f2976) %>%  -->
+<!--   group_by(eid) %>% -->
+<!--   mutate(age_ts = ifelse(all(is.na(age_ts)), -->
+<!--                          NA, -->
+<!--                          ifelse(sum(age_ts > 0, na.rm = T) >= 1, min(age_ts[age_ts > 0], na.rm=T), min(age_ts, na.rm=T)))) %>%  -->
+<!--   ungroup() %>%  -->
+<!--   rename(selfreported_code = noncancer_illness_code_selfreported_f20002) %>% -->
+<!--   pivot_longer(contains("_age_"),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   mutate(date_ts=as.Date(ISOdate(round(round(age_ts-0.4999,0) + yob - 0.001,0),1,1)), -->
+<!--          age_ni=ifelse(values > 1900, values - yob, values), -->
+<!--          date_ni=as.Date(ISOdate(round(ifelse(values > 1900, -->
+<!--                                               values, -->
+<!--                                               ifelse(values < 0, -->
+<!--                                                      NA, -->
+<!--                                                      round(values-0.4999,0) + yob - 0.001)),0), -->
+<!--                                  ifelse(values < 1900 & (round(values,0)-values != 0), -->
+<!--                                         # convert the remainder to months -->
+<!--                                         round((values - round(values-0.5,0))*12,0), -->
+<!--                                         1), -->
+<!--                               1))) %>% -->
+<!--   group_by(eid,instance,array) %>% -->
+<!--   arrange(eid,instance,array,date_ni) %>% -->
+<!--   filter(row_number() == 1) %>% -->
+<!--   select(-c(info,values)) %>% -->
+<!--   ungroup() -->
+
+<!-- diab_sr_dates <- diab_sr_dates %>% -->
+<!--   # filter(grepl(paste(self_reported_diab_codes, collapse="|^", sep=""),selfreported_code)) %>% -->
+<!--   mutate(diabetes_type=case_when( -->
+<!--     grepl("1222",selfreported_code) ~ "t1d", -->
+<!--     grepl("1223",selfreported_code) ~ "t2d", -->
+<!--     grepl("1220",selfreported_code) ~ "diab", -->
+<!--     grepl("1221",selfreported_code) ~ "gest", -->
+<!--     grepl("1521",selfreported_code) ~ "dins", -->
+<!--     TRUE ~ "unk" -->
+<!--   )) %>%  -->
+<!--   mutate(age=case_when( -->
+<!--     diabetes_type == "unk" ~ age_ts, -->
+<!--     is.na(age_ni) & is.na(age_ts) ~ NA_real_, -->
+<!--     is.na(age_ni) & !is.na(age_ts) ~ age_ts, -->
+<!--     TRUE ~ age_ni -->
+<!--   ), -->
+<!--   date=case_when( -->
+<!--     diabetes_type == "unk" ~ date_ts, -->
+<!--     is.na(date_ni) & is.na(date_ts) ~ NA_Date_, -->
+<!--     is.na(date_ni) & !is.na(date_ts) ~ date_ts, -->
+<!--     TRUE ~ date_ni -->
+<!--   )) -->
+
+<!-- diab_sr_dates_long <- diab_sr_dates %>% -->
+<!--   # filter(eid==1010838) %>% -->
+<!--   select(-c(array, instance, selfreported_code, age_ni, date_ni, age_ts, date_ts, age, yob, starts_with("noncancer"))) %>% -->
+<!--   # select(-c(array,instance,age_ni,age_ts,yob)) %>% -->
+<!--   group_by(eid,diabetes_type) %>% -->
+<!--   arrange(eid,date) %>% -->
+<!--   filter(row_number() == 1) %>% -->
+<!--   pivot_wider(names_from = diabetes_type, values_from = date) %>% -->
+<!--   rename(ni_t1d_date=t1d, -->
+<!--          ni_t2d_date=t2d, -->
+<!--          ni_diab_date=diab, -->
+<!--          ni_gest_date=gest, -->
+<!--          ni_dins_date=dins, -->
+<!--          ts_diab_date=unk) %>% -->
+<!--   mutate(ni_all_date=coalesce(ni_t2d_date,ni_diab_date,ni_t1d_date,ni_gest_date,ni_dins_date)) %>%  -->
+<!--   ungroup() -->
+
+<!-- if (!"ni_t2d_date" %in% names(diab_ukb)){ -->
+<!--   diab_ukb <- diab_ukb %>% -->
+<!--     left_join(diab_sr_dates_long,by="eid",keep=FALSE) -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r eval=FALSE, include=FALSE} -->
+<!-- # # check people with ts date but no ni code or date -->
+<!-- # diab_sr_dates <- diab_ukb %>% -->
+<!-- #   # filter(eid==1016381) %>% -->
+<!-- #   # filter(eid==1001130) %>% -->
+<!-- #   # filter(eid==1000238) %>% -->
+<!-- #   filter(eid==1090023) %>%  -->
+<!-- #   select(eid,yob,contains(c("f87_","f20002_","f20009_","f2976_","f2443"))) %>% -->
+<!-- #   mutate_at(vars(!eid),~as.numeric(.)) %>% -->
+<!-- #   # select(eid,yob,matches("_0_[012]")) %>% -->
+<!-- #   pivot_longer(-c(eid,yob),names_to="info",values_to="values") %>% -->
+<!-- #   filter(!is.na(values)) %>% -->
+<!-- #   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!-- #   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!-- #   pivot_wider(names_from=info,values_from = values) %>% -->
+<!-- #   # assign age_ts to all rows, without instance and array -->
+<!-- #   rename(age_ts=age_diabetes_diagnosed_f2976) %>%  -->
+<!-- #   group_by(eid) %>% -->
+<!-- #   mutate(age_ts=ifelse(all(is.na(age_ts)),NA,min(age_ts,na.rm=T))) %>%  -->
+<!-- #   ungroup() %>%  -->
+<!-- #   rename(selfreported_code = noncancer_illness_code_selfreported_f20002) %>% -->
+<!-- #   pivot_longer(contains("_age_"),names_to="info",values_to="values") %>% -->
+<!-- #   filter(!is.na(values)) %>% -->
+<!-- #   mutate(date_ts=as.Date(ISOdate(round(round(age_ts-0.4999,0) + yob - 0.001,0),1,1)), -->
+<!-- #          age_ni=ifelse(values > 1900, values - yob, values), -->
+<!-- #          date_ni=as.Date(ISOdate(round(ifelse(values > 1900, -->
+<!-- #                                               values, -->
+<!-- #                                               ifelse(values < 0, -->
+<!-- #                                                      NA, -->
+<!-- #                                                      round(values-0.4999,0) + yob - 0.001)),0), -->
+<!-- #                                  ifelse(values < 1900 & (round(values,0)-values != 0), -->
+<!-- #                                         # convert the remainder to months -->
+<!-- #                                         round((values - round(values-0.5,0))*12,0), -->
+<!-- #                                         1), -->
+<!-- #                               1))) %>% -->
+<!-- #   group_by(eid,instance,array) %>% -->
+<!-- #   arrange(eid,instance,array,date_ni) %>% -->
+<!-- #   filter(row_number() == 1) %>% -->
+<!-- #   select(-c(info,values)) %>% -->
+<!-- #   ungroup() -->
+<!-- #  -->
+<!-- # kknodiab <- diab_sr_dates %>% -->
+<!-- #   filter(!grepl(paste(self_reported_diab_codes, collapse="|^", sep=""),selfreported_code)) %>%  -->
+<!-- #   pull(eid) %>% unique() -->
+<!-- #  -->
+<!-- # diab_sr_dates <- diab_sr_dates %>% -->
+<!-- #   filter(grepl(paste(self_reported_diab_codes, collapse="|^", sep=""),selfreported_code)) %>% -->
+<!-- #   mutate(diabetes_type=case_when( -->
+<!-- #     grepl("1222",selfreported_code) ~ "t1d", -->
+<!-- #     grepl("1223",selfreported_code) ~ "t2d", -->
+<!-- #     grepl("1220",selfreported_code) ~ "diab", -->
+<!-- #     grepl("1221",selfreported_code) ~ "gest", -->
+<!-- #     grepl("1521",selfreported_code) ~ "dins", -->
+<!-- #     TRUE ~ "unk" -->
+<!-- #   )) -->
+<!-- #  -->
+<!-- # kkdiab <- diab_sr_dates %>% -->
+<!-- #   pull(eid) %>% unique() -->
+<!-- #  -->
+<!-- # # RUN AGAIN TOP diab_sr_dates -->
+<!-- #  -->
+<!-- # kkk <- kknodiab[!kknodiab %in% kkdiab] -->
+<!-- # diab_sr_dates[diab_sr_dates$eid %in% kkk,] %>%  -->
+<!-- #   filter(!is.na(age_ts)) %>% pull(eid) %>% unique -->
+<!-- # table(diab_sr_dates[diab_sr_dates$eid %in% kkk,"age_ts"], useNA = "always" ) -->
+<!-- ``` -->
+
+
+<!-- ```{r include=F} -->
+<!-- # ### DO NOT DO IT AT THIS POINT, SO WE CAN CHOOSE ICD10 DATE OR NI OR TS -->
+<!-- # # merge dates and get the earliest one as diabetes date -->
+<!-- # diab_dates_collapse <- diab_ukb %>% -->
+<!-- #   select(eid,yob,ends_with(c("t1d","t2d","date"))) %>% -->
+<!-- #   pivot_longer(ends_with("date")) %>% -->
+<!-- #   filter(!is.na(value)) %>% -->
+<!-- #   group_by(eid) %>% -->
+<!-- #   arrange(eid,value) %>% -->
+<!-- #   mutate(diab_date=first(value), -->
+<!-- #          diab_age=year(diab_date)-yob) %>% -->
+<!-- #   ungroup() %>% -->
+<!-- #   pivot_wider(names_from = name, values_from = value) %>% -->
+<!-- #   select(eid,diab_date,diab_age) -->
+<!-- #  -->
+<!-- # if (!"diab_date" %in% names(diab_ukb)){ -->
+<!-- #   diab_ukb <- diab_ukb %>% -->
+<!-- #     left_join(diab_dates_collapse,by="eid") -->
+<!-- # } -->
+<!-- ``` -->
+
+
+<!-- Examples of some weird cases: -->
+
+<!--  * ICD10 dates and selfreported dates do not match -->
+<!--  * T1D and T2D diagnoses, which one to choose? -->
+<!--  * What do we take for "diabetes" on the self-reported codes? -->
+
+<!-- ```{r include=FALSE,eval=FALSE} -->
+<!-- diab_ukb %>% -->
+<!--   # filter(eid==1026074) %>% -->
+<!--   select(eid,yob,ends_with("_date")) %>% -->
+<!--   select(!contains("unk")) -->
+
+<!-- diab_ukb %>% -->
+<!--   filter(eid==1026074) %>% -->
+<!--   select(eid,yob,ends_with("_date")) %>% -->
+<!--   select(!contains("unk")) -->
+
+<!-- diab_ukb %>% -->
+<!--   filter(eid==1026074) %>% -->
+<!--   select_if(~sum(!is.na(.)) > 0) %>% -->
+<!--   mutate_at(vars(!eid),~as.character(.)) %>% -->
+<!--   # select(eid,yob,contains("age")) %>% -->
+<!--   pivot_longer(-c(eid,yob)) %>% -->
+<!--   separate(name,c(NA,"name"),sep="(?=_f[[:digit:]])") -->
+<!-- ``` -->
+
+
+<!-- That look like this: -->
+
+<!-- ```{r warning=FALSE, include=T, fig.width=7,fig.height=4} -->
+<!-- pDateTs <- diab_ukb %>% -->
+<!--   mutate(year=year(ts_diab_date), week=quarter(ts_diab_date)) %>% -->
+<!--   ggplot(aes(x=year, fill=year,color=year)) + -->
+<!--   theme_few() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA,5000)) + -->
+<!--   scale_x_continuous(breaks = scales::pretty_breaks(5)) + -->
+<!--   # scale_fill_few() + -->
+<!--   geom_histogram(binwidth = 2,fill=my_colors[1]) + -->
+<!--   # facet_wrap(~year, scales = "free_x", nrow=1) + -->
+<!--   labs(x="",y="N. of individuals", -->
+<!--        title=paste0("T1D/T2D date, n=",dim(diab_ukb)), -->
+<!--        subtitle=paste0("Touchscreen, N/A: ",sum(is.na(diab_ukb$ts_diab_date)))) + -->
+<!--   theme(legend.position="none", -->
+<!--         plot.title = element_text(size=10), -->
+<!--         plot.subtitle = element_text(size=8), -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         # plot.margin = margin(t=0, r=6, b=6, l=6,"pt"), -->
+<!--         axis.text.x=element_text(angle = 30,hjust=1), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+
+<!-- pDateNi <- diab_ukb %>% -->
+<!--   mutate(year=year(ni_all_date), week=quarter(ni_all_date)) %>% -->
+<!--   ggplot(aes(x=year, fill=year,color=year)) + -->
+<!--   theme_few() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA,5000)) + -->
+<!--   scale_x_continuous(breaks = scales::pretty_breaks(5)) + -->
+<!--   # scale_fill_few() + -->
+<!--   geom_histogram(binwidth = 2,fill=my_colors[1]) + -->
+<!--   # facet_wrap(~year, scales = "free_x", nrow=1) + -->
+<!--   labs(x="Year",y="", -->
+<!--        title="", -->
+<!--        subtitle=paste0("Nurse Interview, N/A: ",sum(is.na(diab_ukb$ni_all_date)))) + -->
+<!--   theme(legend.position="none", -->
+<!--         plot.title = element_text(size=10), -->
+<!--         plot.subtitle = element_text(size=8), -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         # plot.margin = margin(t=0, r=6, b=6, l=6,"pt"), -->
+<!--         axis.text.x=element_text(angle = 30,hjust=1), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+
+<!-- pDateICD <- diab_ukb %>% -->
+<!--   # mutate(icd10_all_date=coalesce(icd10_t2d_date,icd10_t1d_date)) %>%  -->
+<!--   mutate(year=year(icd10_all_date)) %>% -->
+<!--   ggplot(aes(x=year, fill=year,color=year)) + -->
+<!--   theme_few() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA,5000)) + -->
+<!--   scale_x_continuous(breaks = scales::pretty_breaks(8)) + -->
+<!--   # scale_fill_few() + -->
+<!--   geom_histogram(binwidth = 1,fill=my_colors[1]) + -->
+<!--   # facet_wrap(~year, scales = "free_x", nrow=1) + -->
+<!--   labs(x="",y="", -->
+<!--        title="", -->
+<!--        subtitle=paste0("ICD10, N/A: ",sum(is.na(diab_ukb$icd10_all_date)))) + -->
+<!--   theme(legend.position="none", -->
+<!--         plot.title = element_text(size=10), -->
+<!--         plot.subtitle = element_text(size=8), -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         # plot.margin = margin(t=0, r=6, b=6, l=6,"pt"), -->
+<!--         axis.text.x=element_text(angle = 30,hjust=1), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+
+<!-- plot_grid(pDateTs, pDateNi, pDateICD,nrow=1) -->
+<!-- ``` -->
+
+
+<!-- ## T2D Selection -->
+
+<!-- As mentioned above, we will run all the analysis considering only individuals with adjudicated T2D status. -->
+
+<!-- We are going to select as in the picture below, all individuals that are assigned to "Possible" and "Probable" T2D: -->
+
+
+<!-- Following these rules: -->
+
+
+<!-- ```{r} -->
+<!-- # our new working subset will be t2d_adj, instead of diab_ukb -->
+<!-- t2d_adj <- filter(diab_ukb,fc3_poss_t2dm == "Possible T2DM" | fc3_prob_t2dm == "Probable T2DM") -->
+<!-- # dim(t2d_adj) -->
+<!-- ``` -->
+
+
+<!-- :::update -->
+<!-- **UPDATE** -->
+
+<!-- The new subset contains 23.037 individuals that have a "Possible" or "Probable" T2D status according to the adjudicated algorithm. -->
+<!-- ::: -->
+
+<!-- As in the algorithm publication, we will use the same rule as they follow to deal with dates: -->
+
+<!-- *"Age of onset was taken from NI data if NI and TS data were available, and taken from TS data if NI data were not available"* -->
+
+<!-- ```{r} -->
+<!-- # diab date is the correct diabetes date for t2d -->
+<!-- # it prioritizes NI over TS and t2d specific over diabetes -->
+<!-- t2d_adj <- t2d_adj %>%  -->
+<!--   mutate( -->
+<!--     diab_date=case_when( -->
+<!--       is.na(ni_t2d_date) & is.na(ni_diab_date) & is.na(ts_diab_date) ~ NA_Date_, -->
+<!--       is.na(ni_t2d_date) & is.na(ni_diab_date) & !is.na(ts_diab_date) ~ ts_diab_date, -->
+<!--       is.na(ni_t2d_date) & !is.na(ni_diab_date) ~ ni_diab_date, -->
+<!--       TRUE ~ ni_t2d_date), -->
+<!--     diab_age=year(diab_date)-yob) -->
+<!--     # select(yob,ends_with("date")) -->
+<!-- ``` -->
+
+<!-- :::infonote -->
+<!-- From now on, all diabetes dates have been correctly assigned as follows: -->
+
+<!-- - If specific Nurse Interview **T2D** date is available, it will be used as diabetes date. -->
+<!-- - If only NI "generic diabetes" date is available, that's the one we will use. -->
+<!-- - If only TS date is available, it will be used as diabetes date. -->
+<!-- ::: -->
+
+<!-- --- -->
+
+<!-- ### ICD10-only study -->
+
+<!-- :::question -->
+<!-- What are we losing by removing all ICD10-only individuals? -->
+
+<!-- - Are we losing lots of people with an ICD10 date later than the recruitment date? e.g. incident diabetes? -->
+
+<!-- - What ICD10 codes do these individuals have, compared to the ones that overlap with the adjudicated-selected individuals? -->
+<!-- ::: -->
+
+
+<!-- #### Date of diagnose comparison -->
+
+<!-- To support our choice, we want to better understand the ICD10-only individuals. To answer that, we will compare the ICD10 dates with respect to the diabetes diagnose date and the recruitment date. This way, we can identify if those individuals are all (or most) incident diabetes cases, which might be interesting to incorporate, or they are noise. -->
+
+<!-- ```{r} -->
+<!-- diab_icd10_t2d <- filter(t2d_adj,sel_icd10 == 1) -->
+<!-- diab_icd10_noadj <- filter(diab_ukb,sel_adj == 0 & sel_icd10 == 1) -->
+<!-- # diab_icd10_t2d %>% -->
+<!-- #   select(starts_with("sel")) %>% -->
+<!-- #   summary() -->
+<!-- # dim(diab_icd10_t2d) -->
+<!-- # dim(diab_icd10_noadj) -->
+<!-- # dim(t2d_adj) -->
+<!-- # diab_icd10_t2d %>%  -->
+<!-- #   select(ends_with("date")) %>%  -->
+<!-- #   mutate(diff_years=as.numeric(year(icd10_all_date)-year(diab_date))) -->
+<!-- ``` -->
+
+
+<!-- ```{r warning=FALSE} -->
+<!-- pdata <- diab_icd10_t2d %>%  -->
+<!--   mutate(diff_years=as.numeric(year(icd10_all_date)-year(diab_date))) -->
+
+<!-- ggplot(pdata,aes(x=diff_years,fill=diff_years>0)) + -->
+<!--   geom_histogram(breaks=seq(-10,50,by=1)) + -->
+<!--   labs(title="Years between ICD10 and NI dates", -->
+<!--        subtitle="Subset with adjudicated T2D status", -->
+<!--        y="N. of individuals", -->
+<!--        fill="", -->
+<!--        x="Years") + -->
+<!--   theme_few() + -->
+<!--   scale_x_continuous(breaks = scales::pretty_breaks(8)) + -->
+<!--   scale_fill_viridis_d(option = "E", -->
+<!--                        labels=c(paste0("ICD10 before NI (", sum(pdata$diff_years <= 0, na.rm = T), -->
+<!--                                        ", ",round(sum(pdata$diff_years <= 0, na.rm = T)*100/length(pdata$diff_years),1),"%)"), -->
+<!--                                 paste0("ICD10 after NI (", sum(pdata$diff_years > 0, na.rm = T), -->
+<!--                                        ", ",round(sum(pdata$diff_years > 0, na.rm = T)*100/length(pdata$diff_years),1),"%)"))) + -->
+<!--   theme(legend.position=c(0.7,0.8), -->
+<!--         legend.title = element_text(size=10), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.9,"line"), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.minor.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+<!-- ``` -->
+
+<!-- For most of them (around 90%), ICD10 date comes after self-reported date with the Nurse Interview. This could suggest that most ICD10 dates are wrongly assigned to a latter date than the actual diagnose. -->
+
+<!-- However, more interestingly, we want to compare ICD10 diagnose date with the day of recruitment: -->
+
+<!-- ```{r warning=FALSE} -->
+<!-- pdata <- diab_icd10_t2d %>%  -->
+<!--   mutate(diff_years=as.numeric(year(icd10_all_date)- -->
+<!--                                  coalesce(year(date_of_attending_assessment_centre_f53_3_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_2_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_1_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_0_0)))) -->
+
+<!-- pdate_icd10  <- ggplot(pdata,aes(x=diff_years,fill=diff_years > 0)) + -->
+<!--   geom_histogram(breaks=seq(-50,10,by=1)) + -->
+<!--   labs(title="Years between ICD10 diagnose date and UKB recruitment", -->
+<!--        subtitle="Subset with adjudicated T2D status", -->
+<!--        y="N. of individuals", -->
+<!--        fill="", -->
+<!--        x="Years") + -->
+<!--   theme_few() + -->
+<!--   scale_x_continuous(breaks = scales::pretty_breaks(8)) + -->
+<!--   scale_fill_viridis_d(option = "E", -->
+<!--                        labels=c(paste0("ICD10 before recruitment (",sum(pdata$diff_years <= 0), -->
+<!--                                        ", ",round(sum(pdata$diff_years <= 0, na.rm = T)*100/length(pdata$diff_years),1),"%)"), -->
+<!--                                 paste0("ICD10 after recruitment (",sum(pdata$diff_years > 0), -->
+<!--                                        ", ",round(sum(pdata$diff_years > 0, na.rm = T)*100/length(pdata$diff_years),1),"%)"))) + -->
+<!--   theme(legend.position=c(0.3,0.7), -->
+<!--         legend.title = element_blank(), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.8,"line"), -->
+<!--         plot.title = element_text(size=11), -->
+<!--         plot.subtitle = element_text(size=10), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.minor.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+
+<!-- # second plot -->
+<!-- pdata <- diab_icd10_t2d %>%  -->
+<!--   mutate(diff_years=as.numeric(year(diab_date)- -->
+<!--                                  coalesce(year(date_of_attending_assessment_centre_f53_3_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_2_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_1_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_0_0)))) -->
+
+<!-- pdate_ni <- ggplot(pdata, aes(x=diff_years, fill=diff_years > 0)) + -->
+<!--   geom_histogram(breaks=seq(-50,10,by=1)) + -->
+<!--   labs(title="Years between T2D (NI) diagnose date and UKB recruitment", -->
+<!--        subtitle="Subset with adjudicated T2D status", -->
+<!--        y="N. of individuals", -->
+<!--        fill="", -->
+<!--        x="Years") + -->
+<!--   theme_few() + -->
+<!--   scale_x_continuous(breaks = scales::pretty_breaks(8)) + -->
+<!--   scale_fill_viridis_d(option = "E", -->
+<!--                        labels=c(paste0("T2D (NI) before recruitment (", sum(pdata$diff_years <= 0, na.rm = T),")"), -->
+<!--                                 paste0("T2D (NI) after recruitment (", sum(pdata$diff_years > 0, na.rm = T),")"))) + -->
+<!--   theme(legend.position = c(0.3,0.7), -->
+<!--         legend.title = element_blank(), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.9,"line"), -->
+<!--         plot.title = element_text(size=11), -->
+<!--         plot.subtitle = element_text(size=10), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.minor.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+
+<!-- plot_grid(pdate_icd10, pdate_ni,nrow=2) -->
+<!-- ``` -->
+
+<!-- :::infonote -->
+<!-- Around 45% of individuals have an ICD10 date assigned to diabetes after recruitment. However, no one has a T2D diagnose date, based on the Nurse Interview, after the recruitment date. -->
+<!-- ::: -->
+
+<!-- How does it look when we plot the same data for the individuals that do not have an adjudicated status?  -->
+
+<!-- ```{r} -->
+<!-- pdata <- diab_icd10_noadj %>%  -->
+<!--   mutate(diff_years=as.numeric(year(icd10_all_date)- -->
+<!--                                  coalesce(year(date_of_attending_assessment_centre_f53_3_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_2_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_1_0), -->
+<!--                                           year(date_of_attending_assessment_centre_f53_0_0)))) -->
+
+<!-- ggplot(pdata,aes(x=diff_years,fill=diff_years > 0)) + -->
+<!--   geom_histogram(breaks=seq(-20,10,by=1)) + -->
+<!--   labs(title="Years between ICD10 diagnose date and UKB recruitment", -->
+<!--        subtitle="Subset with ICD10-only, no adjudicated T2D status", -->
+<!--        y="N. of individuals", -->
+<!--        fill="", -->
+<!--        x="Years") + -->
+<!--   theme_few() + -->
+<!--   scale_x_continuous(breaks = scales::pretty_breaks(8)) + -->
+<!--   scale_fill_viridis_d(option = "E", -->
+<!--                        labels=c(paste0("ICD10 before recruitment (",sum(pdata$diff_years <= 0), -->
+<!--                                        ", ",round(sum(pdata$diff_years <= 0, na.rm = T)*100/length(pdata$diff_years),1),"%)"), -->
+<!--                                 paste0("ICD10 after recruitment (",sum(pdata$diff_years > 0), -->
+<!--                                        ", ",round(sum(pdata$diff_years > 0, na.rm = T)*100/length(pdata$diff_years),1),"%)"))) + -->
+<!--   theme(legend.position=c(0.3,0.8), -->
+<!--         legend.title = element_blank(), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.8,"line"), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.minor.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+<!-- ``` -->
+
+<!-- :::infonote -->
+<!-- Up from 45%, almost 90% of the ICD10-only subset have a T2D diagnose date after recruitment. It's not surprising, considering more than 15 years have passed since first UKB recruitment stage. -->
+<!-- ::: -->
+
+<!-- #### Comorbidities comparison -->
+
+<!-- Finally, are there any significant differences between the diseases for each of the two subsets? -->
+
+
+<!-- ```{r warning=FALSE, message=FALSE, fig.width=7, fig.height=8} -->
+<!-- pdis_adj <- summary_discrete_multiple(indata = diab_icd10_t2d, field="_f41270_", fillvar="n", fillname="", -->
+<!--                                       title = "Top diagnosed ICD10 codes", subtitle = "Subset with adjudicated T2D status", -->
+<!--                                       type="top", xlab="", ylab="N. of Individuals", -->
+<!--                                       leg_pos="none") -->
+<!-- pdis_adj <- pdis_adj + theme(plot.margin = margin(t=6, r=6, b=-14, l=6,"pt")) -->
+
+<!-- pdis_noadj <- summary_discrete_multiple(indata = diab_icd10_noadj, field="_f41270_", fillvar="n", fillname="", -->
+<!--                                         title = "", -->
+<!--                                         subtitle="Subset with ICD10-only, no adjudicated T2D status", -->
+<!--                                         type="top", xlab="", ylab="N. of Individuals", -->
+<!--                                         leg_pos="none") -->
+<!-- plot_grid(pdis_adj, pdis_noadj, nrow = 2) -->
+<!-- ``` -->
+
+
+<!-- :::infonote -->
+<!-- It does not look like there are any significant differences in Diabetes ICD10 diagnose or anything else. -->
+<!-- ::: -->
+
+
+<!-- :::update -->
+<!-- **UPDATE** -->
+
+<!-- This section was only shown for illustrative purposes. In case we needed to increase the number of diabetes individuals, we could process the "incident diabetes" as the ones with a diagnose date after recruitment.  -->
+
+<!-- Also, interesting in case we needed to compare with "healthy" individuals later, as these could be potential artifacts. -->
+<!-- ::: -->
+
+<!-- --- -->
+
+
+
+<!-- # {.unlisted .unnumbered .toc-ignore} -->
+
+<!-- --- -->
+
+<!-- # Secondary Outcomes -->
+
+<!-- Trying to address the second goal of the project, we will assess now other diseases that may have been diagnosed to the selected individuals. -->
+
+<!-- The following step will be to actually identify which of those are incident events, i.e. they happened after diabetes was diagnosed. -->
+
+<!-- :::infonote -->
+<!-- Summary of all diseases at this point, we will focus later on the selected codes and filter the incident ones. -->
+<!-- ::: -->
+
+
+<!-- --- -->
+
+<!-- ## All diseases -->
+
+<!-- To be able to classify and organize diseases, we need to first load WHO organization of all diseases by ICD10 (downloaded from [here](https://github.com/holtzy/UKB-Comorbidity)). -->
+
+
+<!-- ```{r} -->
+<!-- # load("../input/icd10_definition_WHO.rda") -->
+<!-- # head(ICD) -->
+<!-- ``` -->
+
+
+<!-- ```{r message=FALSE, warning=FALSE} -->
+<!-- dis_freq = t2d_adj %>% select(eid,contains(c("41270"))) %>% -->
+<!--   pivot_longer(!eid,names_to='names', values_to='value') %>% -->
+<!--   na.omit() %>% -->
+<!--   group_by(value) %>% -->
+<!--   count() %>% -->
+<!--   left_join(ICD, by = c("value" = "coding_L4")) -->
+
+<!-- datatable(dis_freq %>% -->
+<!--             group_by(node_L1) %>% -->
+<!--             select(-c(value,n,starts_with(c("node","parent")),ends_with("L5"))) %>% -->
+<!--             # arrange(-n) %>% -->
+<!--             slice(1) %>%  -->
+<!--             ungroup() %>%  -->
+<!--             select(-node_L1), -->
+<!--           options = list(scrollX=T,pageLength=4), rownames = FALSE) -->
+<!-- # dis_freq %>% filter(short=="Factor-influencing") %>% arrange(-n) %>% ungroup() %>% summarise(tot=sum(n)) -->
+<!-- ``` -->
+
+
+<!-- From which, in our subset, the following groups are the most common ones: -->
+
+<!-- ```{r} -->
+<!-- tmp = dis_freq %>% -->
+<!--   group_by(short,long) %>% -->
+<!--   summarize(tot=sum(n),.groups="drop") %>% -->
+<!--   na.omit() %>% -->
+<!--   arrange(-tot) -->
+
+<!-- # head(tmp) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # basic treemap -->
+<!-- p=treemap(tmp, -->
+<!--           index=c("short"), -->
+<!--           vSize="tot", -->
+<!--           type="index", -->
+<!--           title = "Common categories", -->
+<!--           # fontsize.labels = 9, -->
+<!--           # palette="RdYlBu", -->
+<!--           palette="Spectral", -->
+<!--           inflate.labels=T, -->
+<!-- ) -->
+<!-- ``` -->
+
+
+<!-- ### Cardiovascular Episodes -->
+
+<!-- But, as an example, which of those would be classified as "Circulatory"? -->
+
+
+<!-- ```{r message=F,warning=F} -->
+<!-- heart <- dis_freq %>% -->
+<!--   filter(node_L1==9) %>% -->
+<!--   arrange(-n) %>% -->
+<!--   select(value, n, meaning_L4, meaning_L3, meaning_L2, short) -->
+<!-- datatable(head(heart),options = list(dom = 't'), rownames = FALSE) -->
+<!-- ``` -->
+
+
+<!-- And these are the main "Cardiovascular" categories: -->
+
+
+<!-- ```{r} -->
+<!-- p=treemap(heart, -->
+<!--           index=c("meaning_L2", "meaning_L3"), -->
+<!--           vSize="n", -->
+<!--           type="index", -->
+<!--           title="Main Cardiovascular diseases", -->
+<!--           palette="Spectral", -->
+<!--           # inflate.labels=T, -->
+<!-- ) -->
+<!-- ``` -->
+
+<!-- ```{r message=F,warning=F} -->
+<!-- tmp = heart %>% arrange(desc(n)) %>% mutate(inPerc= round(n/nrow(t2d_adj) * 100,1)) -->
+
+<!-- datatable(tmp, filter = 'top', options=list(scrollX=T,pageLength=4), rownames = FALSE ) -->
+
+<!-- ``` -->
+
+<!-- ## Incident diseases -->
+
+<!-- We can check the diagnose date of a set of ICD10 codes, and compare them with the diabetes diagnose date. If the "other" disease was diagnosed after diabetes, that would correspond to an incident case. -->
+
+<!-- As an example: -->
+
+<!-- ```{r} -->
+<!-- tmp <- icd10_with_dates %>% -->
+<!--   inner_join(t2d_adj %>% select(eid,diab_date) %>% na.omit(),by="eid") %>% -->
+<!--   filter(!grepl(paste(diab_codes, collapse="|^", sep=""),icd10)) %>% -->
+<!--   mutate(diff_days=as.numeric(date-diab_date)) -->
+<!-- # dim(tmp) -->
+<!-- # tmp -->
+<!-- # length(t2d_adj$diab_date) -->
+<!-- # tmp[is.na(tmp$diff_days),] -->
+<!-- # t2d_adj %>% select(eid,diab_date) %>% na.omit() %>% filter(eid==1000312) -->
+<!-- # icd10_with_dates %>% filter(eid == 1000312) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # summary(tmp$diff_days) -->
+<!-- ggplot(tmp,aes(x=diff_days/365,fill=diff_days>0)) + -->
+<!--   geom_histogram(breaks=seq(-25,75,by=1)) + -->
+<!--   labs(x="Years after diabetes", -->
+<!--        y="Number of events", -->
+<!--        fill="Other disease") + -->
+<!--   theme_few() + -->
+<!--   scale_fill_viridis_d(option = "E",labels=c("Prevalent","Incident")) + -->
+<!--   theme(legend.position=c(0.8,0.8), -->
+<!--         legend.title = element_text(size=10), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.9,"line"), -->
+<!--         panel.grid.major.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.minor.y = element_line(colour = "gray",size=0.1), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+<!-- ``` -->
+
+<!-- ## Selected Outcomes {.tabset} -->
+
+<!-- Now, we want to check a few selected outcomes and only **incident** episodes. -->
+
+<!-- We will work with MI, Stroke and ESRD, all of them with an algorithmically-defined outcomes. Also, we will check Heart Failure, following the guidelines you shared a few emails back (15th April). -->
+
+
+<!-- ### Myocardial Infarction -->
+
+<!-- MI outcome has an "algorithmical" definition, similar to the diabetes algorithm we used before (but this is already included in the UK Biobank). -->
+<!-- It considers all ICD10 codes, self-reported, nurse interview and death codes to better classify individuals and have a correct date for the episode. -->
+
+<!-- In the next sections, we will identify the individuals that had MI after being diagnosed for diabetes. We will briefly summarize a few different aspects to check whether some of them are different between having or not having MI. -->
+
+<!-- ```{r fig.width=6,fig.height=6} -->
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(date_of_myocardial_infarction_f42000_0_0)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p1 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity",vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="MI", y="N. of individuals") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(date_of_myocardial_infarction_f42000_0_0)) %>% -->
+<!--   mutate(value=ifelse(!is.na(date_of_myocardial_infarction_f42000_0_0) & -->
+<!--                         !is.na(diab_date) & -->
+<!--                         date_of_myocardial_infarction_f42000_0_0 >= diab_date, -->
+<!--                       TRUE, -->
+<!--                       FALSE)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p2 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity", vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="Incident MI", y="") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- plot_grid(p1,p2,nrow=1) -->
+<!-- ``` -->
+
+<!-- :::infonote -->
+<!-- Around 2000 individuals (8.7%) have had an incident Myocardial Infarction. -->
+<!-- ::: -->
+
+
+<!-- ```{r} -->
+<!-- mi_ukb <- t2d_adj %>% -->
+<!--   mutate(m_infarction_0_0=ifelse(!is.na(date_of_myocardial_infarction_f42000_0_0) & -->
+<!--                                 !is.na(diab_date) & -->
+<!--                                 date_of_myocardial_infarction_f42000_0_0 >= diab_date,"Yes","No"), -->
+<!--          m_infarction_0_0=factor(m_infarction_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"m_infarction_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(mi_ukb %>% select(c(eid, m_infarction_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- ```{r message=FALSE, fig.width=10} -->
+<!-- p <- summary_discrete_mirror(indata=mi_ukb, field="m_infarction_",type="yesno", -->
+<!--                              xlab="Age Group", ylab="N. of Individuals", -->
+<!--                              vjustn=-2.5, vjustperc=-0.8 , -->
+<!--                              groupvar="diab_age_group", -->
+<!--                              xvar="diab_age_group", -->
+<!--                              ylim = c(NA,10000), -->
+<!--                              fillvar="value", fillname = "Incident MI", -->
+<!--                              leg_pos=c(0.12,0.87)) -->
+
+<!-- p2 <- summary_facet(indata=mi_ukb,field="m_infarction_",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc", ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Incident MI",ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid(p,p2,nrow=1) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- kk <- mi_ukb %>%  -->
+<!--   mutate(years_since_diabetes = as.numeric((date_of_myocardial_infarction_f42000_0_0 - diab_date)/365), -->
+<!--          age_at_mi = year(date_of_myocardial_infarction_f42000_0_0) - yob) %>%  -->
+<!--   # select(yob, years_since_diabetes, diab_date, date_of_stroke_f42006_0_0, age_at_stroke, diab_age, diab_age_group) %>% -->
+<!--   filter(years_since_diabetes > 0) -->
+
+<!-- p1 <- ggplot(kk, aes(x=years_since_diabetes,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="Incident MI cumulative distribution", -->
+<!--        y = "Proportion of cases", x="Years since diabetes", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() + -->
+<!--   theme(legend.position = "none", -->
+<!--         plot.title = element_text(size=10), -->
+<!--         plot.margin = margin(t=9, r=0, b=6, l=6,"pt")) -->
+
+<!-- p2 <- ggplot(kk, aes(x=age_at_mi,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="", -->
+<!--        y = "", x="Age at MI", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() -->
+
+<!-- plot_grid(p1,p2,nrow=1, rel_widths = c(1.5,2)) -->
+<!-- ``` -->
+
+<!-- ### Stroke -->
+
+<!-- Same as MI, stroke outcome also has an "algorithmical" definition, similar to the diabetes algorithm we used before (but this is already included in the UK Biobank). -->
+<!-- It considers all ICD10 codes, self-reported, nurse interview and death codes to better classify individuals and have a correct date for the episode. -->
+
+<!-- We will repeat the same process than with MI. -->
+
+<!-- ```{r include=FALSE} -->
+<!-- summary(t2d_adj$date_of_stroke_f42006_0_0) -->
+<!-- summary(t2d_adj$date_of_ischaemic_stroke_f42008_0_0) -->
+<!-- dim(t2d_adj) -->
+<!-- stroke_ukb <- t2d_adj %>% -->
+<!--   filter(!is.na(date_of_stroke_f42006_0_0)) -->
+
+<!-- dim(stroke_ukb) -->
+<!-- summary(stroke_ukb$date_of_ischaemic_stroke_f42008_0_0) -->
+<!-- ``` -->
+
+<!-- ```{r fig.width=6,fig.height=6} -->
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(date_of_stroke_f42006_0_0)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p1 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity",vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="Stroke", y="Number of individuals") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(date_of_stroke_f42006_0_0)) %>% -->
+<!--   mutate(value=ifelse(!is.na(date_of_stroke_f42006_0_0) & -->
+<!--                         !is.na(diab_date) & -->
+<!--                         date_of_stroke_f42006_0_0 >= diab_date, -->
+<!--                       TRUE, -->
+<!--                       FALSE)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p2 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity",vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="Incident stroke", y="") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- plot_grid(p1,p2,nrow=1) -->
+<!-- ``` -->
+
+
+<!-- :::infonote -->
+<!-- Around 1100 individuals have had an incident stroke. -->
+
+<!-- * Can we identify anything different with respect to the ones that did not have stroke? -->
+<!-- * What about comparing with prevalent stroke? -->
+<!-- ::: -->
+
+
+<!-- ```{r} -->
+<!-- stroke_ukb <- t2d_adj %>% -->
+<!--   mutate(adj_stroke_0_0=ifelse(!is.na(date_of_stroke_f42006_0_0) & -->
+<!--                                 !is.na(diab_date) & -->
+<!--                                 date_of_stroke_f42006_0_0 >= diab_date,"Yes","No"), -->
+<!--          adj_stroke_0_0=factor(adj_stroke_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"adj_stroke_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(stroke_ukb %>% select(c(eid, adj_stroke_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- ```{r message=FALSE, fig.width=10} -->
+<!-- p <- summary_discrete_mirror(indata=stroke_ukb, field="adj_stroke_",type="yesno", -->
+<!--                         xlab="Age Group", ylab="N. of Individuals", -->
+<!--                         vjustn=-2.5, vjustperc=-0.8 , -->
+<!--                         groupvar="diab_age_group", -->
+<!--                         xvar="diab_age_group", -->
+<!--                         ylim = c(NA,10000), -->
+<!--                         fillvar="value", fillname = "Incident Stroke", -->
+<!--                         leg_pos=c(0.15,0.87)) -->
+<!-- p2 <- summary_facet(indata=stroke_ukb,field="adj_stroke_",type="yesno",fillvar="value", fillname="", -->
+<!--               boxcol="black", yvar="perc", ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--               xlab="Incident Stroke",ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--               leg_pos="none") -->
+<!-- plot_grid(p,p2,nrow=1) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- kk <- stroke_ukb %>%  -->
+<!--   mutate(years_since_diabetes = as.numeric((date_of_stroke_f42006_0_0 - diab_date)/365), -->
+<!--          age_at_stroke = year(date_of_stroke_f42006_0_0) - yob) %>%  -->
+<!--   # select(yob, years_since_diabetes, diab_date, date_of_stroke_f42006_0_0, age_at_stroke, diab_age, diab_age_group) %>% -->
+<!--   filter(years_since_diabetes > 0) -->
+
+<!-- p1 <- ggplot(kk, aes(x=years_since_diabetes,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="Incident Stroke cumulative distribution", -->
+<!--        y = "Proportion of cases", x="Years since diabetes", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() + -->
+<!--   theme(legend.position = "none", -->
+<!--         plot.title = element_text(size=10), -->
+<!--         plot.margin = margin(t=9, r=0, b=6, l=6,"pt")) -->
+
+<!-- p2 <- ggplot(kk, aes(x=age_at_stroke,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="", -->
+<!--        y = "", x="Age at Stroke", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() -->
+
+<!-- plot_grid(p1,p2,nrow=1, rel_widths = c(1.5,2)) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- ggplot(kk, aes(x=years_since_diabetes, y=age_at_stroke, col=diab_age_group)) +  -->
+<!--   geom_point() + -->
+<!--   labs(title="Incident Stroke cumulative distribution", -->
+<!--        y = "Age at Stroke", x="Years since diabetes", -->
+<!--        col= "Age Group") + -->
+<!--   # scale_x_continuous(limits=c(0,80)) + -->
+<!--   # scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() -->
+<!-- ``` -->
+
+<!-- ### ESRD -->
+
+<!-- ESRT outcome has an "algorithmical" definition, as MI and Stroke. -->
+
+<!-- ```{r fig.width=6,fig.height=6} -->
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(date_of_end_stage_renal_disease_report_f42026_0_0)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p1 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity",vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="All ESRD", y="N. of individuals") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(date_of_end_stage_renal_disease_report_f42026_0_0)) %>% -->
+<!--   mutate(value=ifelse(!is.na(date_of_end_stage_renal_disease_report_f42026_0_0) & -->
+<!--                         !is.na(diab_date) & -->
+<!--                         date_of_end_stage_renal_disease_report_f42026_0_0 >= diab_date, -->
+<!--                       TRUE, -->
+<!--                       FALSE)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p2 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity", vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="Incident ESRD", y="") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- plot_grid(p1,p2,nrow=1) -->
+<!-- ``` -->
+
+<!-- :::infonote -->
+<!-- Around 180 individuals (0.8%) have had incident ESRD. -->
+<!-- ::: -->
+
+
+<!-- ```{r} -->
+<!-- esrd_ukb <- t2d_adj %>% -->
+<!--   mutate(esrd_0_0=ifelse(!is.na(date_of_end_stage_renal_disease_report_f42026_0_0) & -->
+<!--                                 !is.na(diab_date) & -->
+<!--                                 date_of_end_stage_renal_disease_report_f42026_0_0 >= diab_date,"Yes","No"), -->
+<!--          esrd_0_0=factor(esrd_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"esrd_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(esrd_ukb %>% select(c(eid, esrd_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- ```{r message=FALSE, fig.width=10} -->
+<!-- p <- summary_discrete_mirror(indata=esrd_ukb, field="esrd_",type="yesno", -->
+<!--                              xlab="Age Group", ylab="N. of Individuals", -->
+<!--                              vjustn=-2.5, vjustperc=-0.8 , -->
+<!--                              groupvar="diab_age_group", -->
+<!--                              xvar="diab_age_group", -->
+<!--                              ylim = c(NA,10000), -->
+<!--                              fillvar="value", fillname = "Incident ESRD", -->
+<!--                              leg_pos=c(0.15,0.87)) -->
+
+<!-- p2 <- summary_facet(indata=esrd_ukb,field="esrd_",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc", ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Incident ESRD",ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid(p,p2,nrow=1) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- kk <- esrd_ukb %>%  -->
+<!--   mutate(years_since_diabetes = as.numeric((date_of_end_stage_renal_disease_report_f42026_0_0 - diab_date)/365), -->
+<!--          age_at_esrd = year(date_of_end_stage_renal_disease_report_f42026_0_0) - yob) %>%  -->
+<!--   # select(yob, years_since_diabetes, diab_date, date_of_stroke_f42006_0_0, age_at_stroke, diab_age, diab_age_group) %>% -->
+<!--   filter(years_since_diabetes > 0) -->
+
+<!-- p1 <- ggplot(kk, aes(x=years_since_diabetes,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="Incident ESRD cumulative distribution", -->
+<!--        y = "Proportion of cases", x="Years since diabetes", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() + -->
+<!--   theme(legend.position = "none", -->
+<!--         plot.title = element_text(size=10), -->
+<!--         plot.margin = margin(t=9, r=0, b=6, l=6,"pt")) -->
+
+<!-- p2 <- ggplot(kk, aes(x=age_at_esrd,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="", -->
+<!--        y = "", x="Age at ESRD", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() -->
+
+<!-- plot_grid(p1,p2,nrow=1, rel_widths = c(1.5,2)) -->
+<!-- ``` -->
+
+
+<!-- ### Heart Failure -->
+
+<!-- Heart failure does not have algorithmic outcome, so the approach to identify incident HF cases is a bit different. -->
+
+<!-- As discussed previously, we will identify those cases as defined here: (from PMID 33390054) -->
+
+
+<!-- ![](www/img/cad_definitions_PMID33390054.png){class="tableimage"} -->
+
+<!-- For all disease definition, as follows (and ICD10 for deaths): -->
+
+<!-- - ICD9 definition with 428.x codes -->
+<!-- - ICD10 definition with I50.x codes -->
+<!-- - Self-reported with code 1076 -->
+
+<!-- After that, we will process as above, taking into account only incident cases. -->
+
+<!-- ```{r} -->
+<!-- hf_sr_dates <- diab_sr_dates %>%  -->
+<!--   select(-c(age_ts,date_ts)) %>%  -->
+<!--   filter(selfreported_code == "1076") %>%  -->
+<!--   rename(age_hf_self=age_ni, -->
+<!--          date_hf_self=date_ni) %>%  -->
+<!--   group_by(eid) %>%  -->
+<!--   arrange(-age_hf_self) %>%  # get most recent event, as it could be after diabetes -->
+<!--   filter(row_number() == 1) %>%  -->
+<!--   ungroup() %>%  -->
+<!--   select(eid, age_hf_self, date_hf_self, code_hf_self=selfreported_code) -->
+
+<!-- hf_icd10_dates <- icd10_with_dates %>%  -->
+<!--   # filter(eid==1025781) %>%  -->
+<!--   filter(grepl("I50",icd10)) %>%  -->
+<!--   select(-array) %>%  -->
+<!--   rename(hf_icd10 = icd10, -->
+<!--          hf_icd10_date = date) %>%  -->
+<!--   group_by(eid) %>%  -->
+<!--   arrange(hf_icd10_date) %>%   -->
+<!--   filter(row_number() == n()) %>%  # get most recent event, as it could be after diabetes -->
+<!--   ungroup() -->
+
+<!-- hf_icd9_dates <- t2d_adj %>% select(eid,contains("f41271"), contains("f41281")) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   pivot_longer(-eid,names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","array"),"_0_") %>% -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   rename(icd9=diagnoses) %>% -->
+<!--   mutate(date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(grepl("^428",icd9)) %>%  -->
+<!--   rename(hf_icd9 = icd9, -->
+<!--          hf_icd9_date = date) %>%  -->
+<!--   select(-array) -->
+
+<!-- hf_death_dates <- t2d_adj %>% select(eid,contains("f40001"), contains("f40000")) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   pivot_longer(-eid,names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   # separate(info,c("info","array"),"_0_") %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>%  -->
+<!--   # separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   rename(hf_code_death=starts_with("underlying"), -->
+<!--          hf_date_death=starts_with("date")) %>% -->
+<!--   mutate(hf_date_death=as.Date(hf_date_death,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(grepl("I50",hf_code_death)) %>%  -->
+<!--   select(-array,-instance)  -->
+
+
+<!-- if (!"hf_date_death" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(hf_icd10_dates,by="eid") %>%  -->
+<!--     left_join(hf_sr_dates,by="eid") %>%  -->
+<!--     left_join(hf_icd9_dates,by="eid") %>%  -->
+<!--     left_join(hf_death_dates,by="eid") -->
+<!--   # select(eid, yob, hf_icd10, hf_icd10_date, contains("hf")) -->
+<!-- } -->
+
+<!-- # t2d_adj %>% -->
+<!-- #   select(eid, yob, hf_icd10, hf_icd10_date, contains("hf")) %>% -->
+<!-- #   filter(!is.na(hf_code_death)) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # create a "hf_date_all" to work as in adjudicated outcomes. -->
+<!-- # it considers all the possible diagnose types, and get the most recent date -->
+<!-- t2d_adj <- t2d_adj %>% -->
+<!--   # filter(eid == 1000106) %>%  -->
+<!--   # filter(eid==1196012) %>% -->
+<!--   # select(eid, yob, hf_icd10, hf_icd10_date, contains("hf")) %>% -->
+<!--   rowwise() %>%  -->
+<!--   mutate( -->
+<!--     hf_date_all=if_else(all(is.na(c(hf_icd10_date, hf_date_death, date_hf_self, hf_icd9_date))), -->
+<!--                         NA_Date_, -->
+<!--                         max(hf_icd10_date, hf_date_death, date_hf_self, hf_icd9_date, as.Date("1900-1-1"), na.rm = T))) %>%  -->
+<!--   ungroup()  -->
+<!-- ``` -->
+
+<!-- And get the same reports as the previous outcomes: -->
+
+<!-- ```{r fig.width=6,fig.height=6} -->
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(hf_date_all)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p1 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity",vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="All Heart Failure", y="N. of individuals") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- pdata <- t2d_adj %>% -->
+<!--   mutate(value=!is.na(hf_date_all)) %>% -->
+<!--   mutate(value=ifelse(!is.na(hf_date_all) & -->
+<!--                         !is.na(diab_date) & -->
+<!--                         hf_date_all >= diab_date, -->
+<!--                       TRUE, -->
+<!--                       FALSE)) %>% -->
+<!--   count(value) %>% -->
+<!--   arrange(-value) %>% -->
+<!--   mutate(perc=round(n/sum(n)*100,1), -->
+<!--          value=ifelse(value == TRUE, "Yes", "No"), -->
+<!--          value=factor(value,levels=c("Yes","No"))) -->
+
+<!-- p2 <- ggplot(pdata,aes(x=value,y=n)) + -->
+<!--   geom_col(aes(fill=value),cex=1) + -->
+<!--   geom_text(position="identity", -->
+<!--             aes(label=n),vjust=c(-3.5,1.6)) + -->
+<!--   geom_text(position="identity", vjust=c(-1.8,3), -->
+<!--             aes(label=paste0("(",perc,"%)"))) + -->
+<!--   labs(x="Incident HF", y="") + -->
+<!--   theme_bw() + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) + -->
+<!--   scale_fill_paletteer_d("awtools::mpalette") + -->
+<!--   theme(legend.position="none", -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         panel.grid.major.x = element_blank()) -->
+
+<!-- plot_grid(p1,p2,nrow=1) -->
+<!-- ``` -->
+
+<!-- :::infonote -->
+<!-- Around 1500 individuals (6.7%) have had any incident Heart Failure event. -->
+<!-- ::: -->
+
+
+<!-- ```{r} -->
+<!-- hf_ukb <- t2d_adj %>% -->
+<!--   mutate(heartfailure_0_0=ifelse(!is.na(hf_date_all) & -->
+<!--                                 !is.na(diab_date) & -->
+<!--                                 hf_date_all >= diab_date,"Yes","No"), -->
+<!--          heartfailure_0_0=factor(heartfailure_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"heartfailure_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(hf_ukb %>% select(c(eid, heartfailure_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- ```{r message=FALSE, fig.width=10} -->
+<!-- p <- summary_discrete_mirror(indata=hf_ukb, field="heartfailure_",type="yesno", -->
+<!--                              xlab="Age Group", ylab="N. of Individuals", -->
+<!--                              vjustn=-2.5, vjustperc=-0.8 , -->
+<!--                              groupvar="diab_age_group", -->
+<!--                              xvar="diab_age_group", -->
+<!--                              ylim = c(NA,10000), -->
+<!--                              fillvar="value", fillname = "Incident HF", -->
+<!--                              leg_pos=c(0.15,0.87)) -->
+
+<!-- p2 <- summary_facet(indata=hf_ukb,field="heartfailure_",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc",  -->
+<!--                     ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Incident HF", -->
+<!--                     ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid(p,p2,nrow=1) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- kk <- hf_ukb %>%  -->
+<!--   mutate(years_since_diabetes = as.numeric((hf_date_all - diab_date)/365), -->
+<!--          age_at_hf = year(hf_date_all) - yob) %>%  -->
+<!--   # select(yob, years_since_diabetes, diab_date, date_of_stroke_f42006_0_0, age_at_stroke, diab_age, diab_age_group) %>% -->
+<!--   filter(years_since_diabetes > 0) -->
+
+<!-- p1 <- ggplot(kk, aes(x=years_since_diabetes,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="Incident HF cumulative distribution", -->
+<!--        y = "Proportion of cases", x="Years since diabetes", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() + -->
+<!--   theme(legend.position = "none", -->
+<!--         plot.title = element_text(size=10), -->
+<!--         plot.margin = margin(t=9, r=0, b=6, l=6,"pt")) -->
+
+<!-- p2 <- ggplot(kk, aes(x=age_at_hf,col=diab_age_group)) +  -->
+<!--   stat_ecdf(geom = "step",cex=1.2) + -->
+<!--   labs(title="", -->
+<!--        y = "", x="Age at HF", -->
+<!--        col= "Age Group") + -->
+<!--   scale_x_continuous(limits=c(0,80)) + -->
+<!--   scale_y_continuous(limits=c(0,1), labels=percent) + -->
+<!--   scale_color_few("Dark") + -->
+<!--   theme_few_src() -->
+
+<!-- plot_grid(p1,p2,nrow=1, rel_widths = c(1.5,2)) -->
+<!-- ``` -->
+
+
+<!-- # Conditions at Baseline {.tabset} -->
+
+<!-- :::infonote -->
+<!-- The plots from these sections below are informative and all groups will be assessed independently to create the summary table at the end of the report. -->
+<!-- ::: -->
+
+<!-- ## All-cause heart failure -->
+
+<!-- As previously discussed, we will use a set of rules for self-reported codes and ICD10 diagnose codes to select the correct individuals, at baseline: -->
+
+<!-- - Self-reported history of HF or cardiomyopathy during nurse interview (codes 1076 -PMID33390054- and 1079, respectively). -->
+<!-- - Hospitalization or death due to ICD10 code for hypertensive heart disease, cardiomyopathy or HF (I110, I130, I132, I255, I420, I425, I428, I429, I500, I501, I509). -->
+<!-- - Hospitalization due to ICD9 code for HF or other cardiomyopathies (4254, 4280, 4281, 4289). -->
+<!-- - **Excluding** individuals with hypertrophic cardiomyopathy during NI (code 1588) or hospitalization or death with ICD10 codes (I421, I422). -->
+
+<!-- :::question -->
+<!-- Where does this information come from? -->
+
+<!-- Note: ask for reference to keep evidence. -->
+<!-- ::: -->
+
+<!-- ![](www/img/hf_definition_baseline.png) -->
+
+<!-- ```{r} -->
+<!-- # add date of visit to t2d_adj -->
+<!-- if (!"first_visit" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <-  left_join(t2d_adj, get_date_visits(t2d_adj), by="eid") %>%  -->
+<!--   mutate(first_visit = ymd(first_visit), -->
+<!--          last_visit = ymd(last_visit)) -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # - Self-reported history of HF or cardiomyopathy during nurse interview (codes 1076 -PMID33390054- and 1079, respectively). -->
+<!-- baseline_hf_sr <- extract_self_reported_nc(t2d_adj,c("1076","1079")) %>% pull(eid) -->
+
+<!-- # - Hospitalization or death due to ICD10 code for hypertensive heart disease, cardiomyopathy or HF (I110, I130, I132, I255, I420, I425, I428, I429, I500, I501, I509). -->
+<!-- # get icd10-diagnosed people and only get the ones with a diagnose date before the first visit -->
+<!-- icd10_allcausehf <-  c("I110", "I130", "I132", "I255", "I420", "I425", "I428", "I429", "I500", "I501", "I509") -->
+
+<!-- baseline_hf_icd10 <- t2d_adj %>%  -->
+<!--   select(eid,first_visit, contains(c("f41270","f41280","f40001","f40000"))) %>% -->
+<!--   rename_at(vars(starts_with("underlying")), ~paste0("diagnoses_death_",.)) %>%  -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   # add 10 to instance to avoid duplicates with death info -->
+<!--   mutate(instance = ifelse(grepl("death", info), -->
+<!--                            as.character(as.numeric(instance)+10), -->
+<!--                            instance)) %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   rename(icd10 = diagnoses) %>% -->
+<!--   mutate(date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>%  -->
+<!--   filter(icd10 %in% icd10_allcausehf) %>%  -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+
+
+
+<!-- # - Hospitalization due to ICD9 code for HF or other cardiomyopathies (4254, 4280, 4281, 4289). -->
+<!-- baseline_hf_icd9 <- t2d_adj %>%  -->
+<!--   select(eid,first_visit, contains(c("f41271","f41281"))) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   mutate(date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>%  -->
+<!--   filter(diagnoses %in% c("4254", "4280", "4281", "4289")) %>%  -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+
+
+<!-- # - **Excluding** individuals with hypertrophic cardiomyopathy during NI (code 1588) or hospitalization or death with ICD10 codes (I421, I422). -->
+
+<!-- baseline_crdmpthy_exclude <- t2d_adj %>%  -->
+<!--   # filter(eid == 1166112) %>%  -->
+<!--   select(eid,first_visit, contains(c("f41270", "f41280", "f40001", "f40000")), contains(c("f20002_"))) %>% -->
+<!--   rename_at(vars(starts_with("underlying")), ~paste0("diagnoses_death_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("noncancer")), ~paste0("diagnoses_",.)) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   mutate_at(vars(!c(eid, first_visit)),~as.character(.)) %>%  -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   # add 10 to instance to avoid duplicates with death info -->
+<!--   mutate(instance = ifelse(grepl("death", info), -->
+<!--                            as.character(as.numeric(instance)+10), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("noncancer", info), -->
+<!--                            as.character(as.numeric(instance)+20), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("icd9", info), -->
+<!--                            as.character(as.numeric(instance)+30), -->
+<!--                            instance)) %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   mutate(date = ifelse(is.na(date), "01/01/1900", date), -->
+<!--          date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>%  -->
+<!--   filter(diagnoses %in% c("1588", "I421", "I422")) %>%  -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+<!-- ``` -->
+
+<!-- And apply filters to select the correct individuals: -->
+
+<!-- ```{r} -->
+<!-- baseline_hf <- t2d_adj %>%  -->
+<!--   mutate(baseline_hf_0_0 = ifelse(eid %in% c(baseline_hf_icd10, baseline_hf_icd9, baseline_hf_sr) & -->
+<!--                                     !eid %in% baseline_crdmpthy_exclude,"Yes","No"), -->
+<!--          baseline_hf_0_0 = factor(baseline_hf_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"baseline_hf_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(baseline_hf %>% select(c(eid, baseline_hf_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r message=FALSE, warning=F, fig.width=10} -->
+
+<!-- p1 <- summary_facet(indata=baseline_hf,field="baseline_hf_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="n",  -->
+<!--                     ylim=c(0,10000), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="All-cause HF (Baseline)", -->
+<!--                     ylab="N. of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- p2 <- summary_facet(indata=baseline_hf,field="baseline_hf_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc",  -->
+<!--                     ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="All-cause HF (Baseline)", -->
+<!--                     ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid_title(p1, p2, label = "All-cause Heart Failure in each Diabetes diagnose age group") -->
+<!-- ``` -->
+
+
+<!-- ## Coronary artery disease -->
+
+<!-- As previously, this is defined as: -->
+
+<!-- ![](www/img/cad_definition_baseline.png) -->
+
+<!-- ```{r} -->
+<!-- # self reported myocardial infarction. code 1075 -->
+<!-- bl_cad_sr <- extract_self_reported_nc(t2d_adj,c("1075")) %>% pull(eid) -->
+
+<!-- # self reported bypass and other operations (field 20004). codes: -->
+<!-- # - cor. art. bypass grafting: 1095 -->
+<!-- # - cor. art. angioplasty: 1070 -->
+<!-- # - triple heart bypass: 1523 -->
+<!-- # hospitalization due to OPCS-4 code (field 41272 and 41282 for dates) for: -->
+<!-- # - cor. art. bypass grafting (K40, K41, K45) -->
+<!-- # - cor. angioplasty (K49, K50.2, K75) -->
+
+<!-- bl_cad_oper <- t2d_adj %>%  -->
+<!--   # filter(eid == 1166112) %>%  -->
+<!--   select(eid, first_visit, -->
+<!--          # contains(c("f41270", "f41280", "f40001", "f40000")), -->
+<!--          contains(c("f20004_", "f41272_", "f41282_")) -->
+<!--          ) %>% -->
+<!--   rename_at(vars(starts_with("underlying")), ~paste0("diagnoses_death_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("operative")), ~paste0("operation_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("noncancer")), ~paste0("diagnoses_",.)) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   mutate_at(vars(!c(eid, first_visit)), ~as.character(.)) %>%  -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   # add 10 to instance to avoid duplicates with death info -->
+<!--   mutate(instance = ifelse(grepl("death", info), -->
+<!--                            as.character(as.numeric(instance)+10), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("noncancer", info), -->
+<!--                            as.character(as.numeric(instance)+20), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("icd9", info), -->
+<!--                            as.character(as.numeric(instance)+30), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("opcs4", info), -->
+<!--                            as.character(as.numeric(instance)+40), -->
+<!--                            instance)) %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   mutate(date = ifelse(is.na(date), "01/01/1900", date), -->
+<!--          date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>%  -->
+<!--   filter(operation %in% c("1095", "1070", "1523") |                               # sr codes -->
+<!--            grepl(paste(c("^K40", "K41", "K45", "K49", "K502", "K75"), collapse="|^", sep=""), operation)) %>%    # opcs4 codes -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+
+<!-- # hospitalization for or death due to ICD10 acute or subsequent myocardial infarction. codes I21, I22, I23, I241 and I252 -->
+<!-- # hospitalization due to ICD9 code for MI (410, 411, 412) -->
+
+<!-- bl_cad_icd <- t2d_adj %>%  -->
+<!--   select(eid, first_visit, -->
+<!--          contains(c("f41270", "f41280", # icd10 -->
+<!--                     "f40001", "f40000", # death -->
+<!--                     "f41271","f41281")) # icd9 -->
+<!--          ) %>% -->
+<!--   rename_at(vars(starts_with("underlying")), ~paste0("diagnoses_death_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("noncancer")), ~paste0("diagnoses_",.)) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   mutate_at(vars(!c(eid, first_visit)),~as.character(.)) %>%  -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   # add 10 to instance to avoid duplicates with death info -->
+<!--   mutate(instance = ifelse(grepl("death", info), -->
+<!--                            as.character(as.numeric(instance)+10), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("noncancer", info), -->
+<!--                            as.character(as.numeric(instance)+20), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("icd9", info), -->
+<!--                            as.character(as.numeric(instance)+30), -->
+<!--                            instance)) %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   mutate(date = ifelse(is.na(date), "01/01/1900", date), -->
+<!--          date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>%  -->
+<!--   filter(grepl(paste(c("^410", "411", "412"), collapse="|^", sep=""), diagnoses) | -->
+<!--            grepl(paste(c("^I21", "I22", "I23", "I241", "I252"), collapse="|^", sep=""), diagnoses)) %>%    # icd10 codes -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+<!-- ``` -->
+
+<!-- And apply filters to select the correct individuals: -->
+
+<!-- ```{r} -->
+<!-- bl_cad <- t2d_adj %>%  -->
+<!--   mutate(bl_cad_0_0 = ifelse(eid %in% c(bl_cad_sr, bl_cad_oper, bl_cad_icd),"Yes","No"), -->
+<!--          bl_cad_0_0 = factor(bl_cad_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"bl_cad_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(bl_cad %>% select(c(eid, bl_cad_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r message=FALSE, warning=F, fig.width=10} -->
+
+<!-- p1 <- summary_facet(indata=bl_cad,field="bl_cad_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="n",  -->
+<!--                     ylim=c(0,10000), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Coronary Artery Disease (Baseline)", -->
+<!--                     ylab="N. of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- p2 <- summary_facet(indata=bl_cad,field="bl_cad_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc",  -->
+<!--                     ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Coronary Artery Disease (Baseline)", -->
+<!--                     ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid_title(p1, p2, label = "Coronary Artery Disease (at baseline) in each Diabetes diagnose age group") -->
+<!-- ``` -->
+
+
+<!-- ## Atrial fibrillation -->
+
+<!-- As previously, this is defined as: -->
+
+<!-- ![](www/img/af_definition_baseline.png) -->
+
+<!-- ```{r} -->
+<!-- # self reported atrial fibrillation, atrial flutter (codes 1471,  1483) -->
+<!-- bl_af_sr <- extract_self_reported_nc(t2d_adj,c("1471", "1483")) %>% pull(eid) -->
+
+<!-- # self reported operations (field 20004). codes: -->
+<!-- # - cardioversion: 1524 -->
+
+<!-- bl_af_oper <- t2d_adj %>%  -->
+<!--   select(eid, first_visit, -->
+<!--          contains(c("f20004_", "f41272_", "f41282_")) -->
+<!--          ) %>% -->
+<!--   rename_at(vars(starts_with("underlying")), ~paste0("diagnoses_death_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("operative")), ~paste0("operation_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("noncancer")), ~paste0("diagnoses_",.)) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   mutate_at(vars(!c(eid, first_visit)), ~as.character(.)) %>%  -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   # add 10 to instance to avoid duplicates with death info -->
+<!--   mutate(instance = ifelse(grepl("death", info), -->
+<!--                            as.character(as.numeric(instance)+10), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("noncancer", info), -->
+<!--                            as.character(as.numeric(instance)+20), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("icd9", info), -->
+<!--                            as.character(as.numeric(instance)+30), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("opcs4", info), -->
+<!--                            as.character(as.numeric(instance)+40), -->
+<!--                            instance)) %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   mutate(date = ifelse(is.na(date), "01/01/1900", date), -->
+<!--          date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>%  -->
+<!--   filter(operation %in% c("1524")) %>% -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+
+<!-- # hospitalization for or death due to ICD10 atrial fibrilation and flutter: codes I48 -->
+<!-- # hospitalization due to ICD9 code for af (4273) -->
+
+<!-- bl_af_icd <- t2d_adj %>%  -->
+<!--   select(eid, first_visit, -->
+<!--          contains(c("f41270", "f41280", # icd10 -->
+<!--                     "f40001", "f40000", # death -->
+<!--                     "f41271","f41281")) # icd9 -->
+<!--          ) %>% -->
+<!--   rename_at(vars(starts_with("underlying")), ~paste0("diagnoses_death_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("noncancer")), ~paste0("diagnoses_",.)) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   mutate_at(vars(!c(eid, first_visit)),~as.character(.)) %>%  -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   # add 10 to instance to avoid duplicates with death info -->
+<!--   mutate(instance = ifelse(grepl("death", info), -->
+<!--                            as.character(as.numeric(instance)+10), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("noncancer", info), -->
+<!--                            as.character(as.numeric(instance)+20), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("icd9", info), -->
+<!--                            as.character(as.numeric(instance)+30), -->
+<!--                            instance)) %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   mutate(date = ifelse(is.na(date), "01/01/1900", date), -->
+<!--          date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>% -->
+<!--   filter(diagnoses %in% c("4273") | -->
+<!--            grepl("^I48", diagnoses)) %>%    # icd10 codes -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+
+<!-- ``` -->
+
+<!-- And apply filters to select the correct individuals: -->
+
+<!-- ```{r} -->
+<!-- bl_af <- t2d_adj %>%  -->
+<!--   mutate(bl_af_0_0 = ifelse(eid %in% c(bl_af_sr, bl_af_oper, bl_af_icd),"Yes","No"), -->
+<!--          bl_af_0_0 = factor(bl_af_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"bl_af_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(bl_af %>% select(c(eid, bl_af_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r message=FALSE, warning=F, fig.width=10} -->
+
+<!-- p1 <- summary_facet(indata=bl_af,field="bl_af_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="n",  -->
+<!--                     ylim=c(0,10000), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Atrial Fibrillation (Baseline)", -->
+<!--                     ylab="N. of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- p2 <- summary_facet(indata=bl_af,field="bl_af_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc",  -->
+<!--                     ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Atrial Fibrillation (Baseline)", -->
+<!--                     ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid_title(p1, p2, label = "Atrial Fibrillation (at baseline) in each Diabetes diagnose age group") -->
+<!-- ``` -->
+
+<!-- ## Stroke -->
+
+<!-- As previously, this is defined as: -->
+
+<!-- ![](www/img/stroke_definition_baseline.png) -->
+
+<!-- ```{r} -->
+<!-- # self reported stroke (codes ) -->
+<!-- bl_stroke_sr <- extract_self_reported_nc(t2d_adj,c("1081")) %>% pull(eid) -->
+
+<!-- # hospitalization for or death due to ICD10: -->
+<!-- # - nontraumatic subarachnoid/intracerebral hemorrhage, cerebral infarction or unspecified stroke (I60-I64) -->
+<!-- # hospitalization due to ICD9 code for: -->
+<!-- # - subarachnoid/intracerebral hemorrhage, occlusion of cerebral arteries, or acute cerebrovascular disease (430, 431, 434, 436) -->
+
+<!-- bl_stroke_icd <- t2d_adj %>%  -->
+<!--   select(eid, first_visit, -->
+<!--          contains(c("f41270", "f41280", # icd10 -->
+<!--                     "f40001", "f40000", # death -->
+<!--                     "f41271","f41281")) # icd9 -->
+<!--          ) %>% -->
+<!--   rename_at(vars(starts_with("underlying")), ~paste0("diagnoses_death_",.)) %>%  -->
+<!--   rename_at(vars(starts_with("noncancer")), ~paste0("diagnoses_",.)) %>% -->
+<!--   mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>% -->
+<!--   mutate_at(vars(!c(eid, first_visit)),~as.character(.)) %>%  -->
+<!--   pivot_longer(-c(eid, first_visit),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>% -->
+<!--   # add 10 to instance to avoid duplicates with death info -->
+<!--   mutate(instance = ifelse(grepl("death", info), -->
+<!--                            as.character(as.numeric(instance)+10), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("noncancer", info), -->
+<!--                            as.character(as.numeric(instance)+20), -->
+<!--                            instance), -->
+<!--          instance = ifelse(grepl("icd9", info), -->
+<!--                            as.character(as.numeric(instance)+30), -->
+<!--                            instance)) %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   mutate(date = ifelse(is.na(date), "01/01/1900", date), -->
+<!--          date=as.Date(date,format = "%d/%m/%Y")) %>%  -->
+<!--   filter(date < first_visit) %>% -->
+<!--   filter(grepl(paste(c("^430", "431", "434", "436"), collapse="|^", sep=""), diagnoses) | -->
+<!--            grepl(paste(c("^I60", "I61", "I62", "I63", "I64"), collapse="|^", sep=""), diagnoses)) %>%    # icd10 codes -->
+<!--   pull(eid) %>%  -->
+<!--   unique() -->
+<!-- ``` -->
+
+<!-- And apply filters to select the correct individuals: -->
+
+<!-- ```{r} -->
+<!-- bl_stroke <- t2d_adj %>%  -->
+<!--   mutate(bl_stroke_0_0 = ifelse(eid %in% c(bl_stroke_sr, bl_stroke_icd),"Yes","No"), -->
+<!--          bl_stroke_0_0 = factor(bl_stroke_0_0,levels=c("Yes","No"))) -->
+
+<!-- if (!"bl_stroke_0_0" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(bl_stroke %>% select(c(eid, bl_stroke_0_0)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r message=FALSE, warning=F, fig.width=10} -->
+
+<!-- p1 <- summary_facet(indata=bl_stroke,field="bl_stroke_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="n",  -->
+<!--                     ylim=c(0,10000), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Stroke (Baseline)", -->
+<!--                     ylab="N. of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- p2 <- summary_facet(indata=bl_stroke,field="bl_stroke_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc",  -->
+<!--                     ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="Stroke (Baseline)", -->
+<!--                     ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid_title(p1, p2, label = "Stroke (at baseline) in each Diabetes diagnose age group") -->
+<!-- ``` -->
+
+
+<!-- # Blood/Urine Biomarkers {.tabset} -->
+
+<!-- ## HbA1c -->
+
+<!-- ```{r} -->
+<!-- summary_continuous(indata=t2d_adj, field="_f30750_", type="num", xlab="HbA1c (mmol/mol)", boxcol="white",  -->
+<!--                    leg_pos=c(0.9,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,160)) -->
+<!-- ``` -->
+
+<!-- ## LDL cholesterol -->
+
+<!-- ```{r fig.width=10, fig.height= 9} -->
+<!-- pldl <- summary_continuous(indata=t2d_adj, field="_f30780_", type="num", xlab="LDL cholesterol (mmol/L)", boxcol="white",  -->
+<!--                    leg_pos=c(0.8,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,8)) -->
+<!-- phdl <- summary_continuous(indata=t2d_adj, field="_f30760_", type="num", xlab="HDL cholesterol (mmol/L)", boxcol="white",  -->
+<!--                    leg_pos=c(0.8,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,4)) -->
+
+<!-- ptotal <- summary_continuous(indata=t2d_adj, field="_f30690_", type="num", xlab="Total cholesterol (mmol/L)", boxcol="white",  -->
+<!--                    leg_pos=c(0.9,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,12)) -->
+
+<!-- plot_grid(plot_grid(pldl, phdl, nrow=1), ptotal, nrow = 2) -->
+<!-- ``` -->
+
+<!-- ## eGFR  -->
+
+<!-- We need Creatinine and Cystatin C: -->
+
+<!-- ```{r message=F, warning=FALSE} -->
+<!-- pcreat <- summary_continuous(indata=t2d_adj, field="_f30700_", type="num", xlab="Creatinine (umol/L)", boxcol="white",  -->
+<!--                    leg_pos=c(0.8,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,200)) -->
+<!-- pcys <- summary_continuous(indata=t2d_adj, field="_f30720_", type="num", xlab="Cystatin C (mg/L)", boxcol="white",  -->
+<!--                    leg_pos=c(0.8,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,3)) -->
+
+<!-- plot_grid(pcreat, pcys, nrow=1) -->
+<!-- ``` -->
+
+<!-- In order to calculate eGFR, we will use the formula published in previous studies (https://pubmed.ncbi.nlm.nih.gov/22762315/): -->
+
+<!-- ![](www/img/egfr_eq.png){class="tableimage"} -->
+
+<!-- :::infonote -->
+<!-- We will use the CKD-EPI creatinine-cystatin C equations, as they proved that this set performed better than any of the independent creatinine or cystatin C equations alone. -->
+<!-- ::: -->
+
+<!-- Creatinine has to be converted from umol/L to mg/dL with the following formula (Creatinine MW = 113.12 g/mol): -->
+
+
+
+<!-- Black ethnic background will be defined as in UK Biobank rules, that group any of the following ethnics: -->
+
+<!-- * Caribbean, African or "Any other Black background" -->
+
+<!-- ```{r} -->
+<!-- # we need creatinine, cystatin C, age, sex and ethnic background -->
+
+<!-- egfr_df <- t2d_adj %>% -->
+<!--   # filter(eid == 1012016) %>% -->
+<!--   select(eid, yob, sex, first_visit, starts_with("ethnic_background"), contains(c("_f21003_", "_f30700_", "_f30720_"))) %>%  -->
+<!--   mutate(age_calc = year(first_visit) - yob) %>%  -->
+<!--   mutate_at(vars(!c(eid, yob, sex, first_visit, age_calc)),~as.character(.)) %>%  -->
+<!--   pivot_longer(-c(eid, yob, sex, first_visit, age_calc), names_to="info", values_to="values") %>%  -->
+<!--   filter(!is.na(values)) %>%  -->
+<!--   separate(info,c("info", "insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA, "instance", "array"),sep="_") %>%  -->
+<!--   separate(info, "info", "_", extra="drop") %>% -->
+<!--   group_by(eid,instance) %>%  -->
+<!--   mutate(valuesok = sum(!is.na(values))) %>%  -->
+<!--   ungroup() %>%  -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   group_by(eid) %>%  -->
+<!--   arrange(eid,instance,valuesok) %>%  -->
+<!--   filter(row_number() == 1) %>%  -->
+<!--   ungroup() %>%  -->
+<!--   select(-c(instance,array, age_calc, valuesok, first_visit, yob)) %>%  -->
+<!--   mutate(creatinine = as.numeric(creatinine), -->
+<!--          cystatin = as.numeric(cystatin), -->
+<!--          age = as.numeric(age), -->
+<!--          creatinine_mg.dL = creatinine * 113.12 / 1e4) %>%  -->
+<!--   mutate(egfr = case_when( -->
+<!--     sex == "Female" & creatinine_mg.dL <= 0.7 & cystatin <= 0.8 ~  -->
+<!--       130 * (creatinine_mg.dL/0.7)^-0.248 * (cystatin/0.8)^-0.375 * 0.995^age, -->
+<!--     sex == "Female" & creatinine_mg.dL <= 0.7 & cystatin >  0.8 ~  -->
+<!--       130 * (creatinine_mg.dL/0.7)^-0.248 * (cystatin/0.8)^-0.711 * 0.995^age, -->
+<!--     sex == "Female" & creatinine_mg.dL >  0.7 & cystatin <= 0.8 ~  -->
+<!--       130 * (creatinine_mg.dL/0.7)^-0.601 * (cystatin/0.8)^-0.375 * 0.995^age, -->
+<!--     sex == "Female" & creatinine_mg.dL >  0.7 & cystatin >  0.8 ~  -->
+<!--       130 * (creatinine_mg.dL/0.7)^-0.601 * (cystatin/0.8)^-0.711 * 0.995^age, -->
+<!--     sex == "Male" & creatinine_mg.dL <= 0.9 & cystatin <= 0.8 ~  -->
+<!--       135 * (creatinine_mg.dL/0.9)^-0.207 * (cystatin/0.8)^-0.375 * 0.995^age, -->
+<!--     sex == "Male" & creatinine_mg.dL <= 0.9 & cystatin >  0.8 ~  -->
+<!--       135 * (creatinine_mg.dL/0.9)^-0.207 * (cystatin/0.8)^-0.711 * 0.995^age, -->
+<!--     sex == "Male" & creatinine_mg.dL >  0.9 & cystatin <= 0.8 ~  -->
+<!--       135 * (creatinine_mg.dL/0.9)^-0.601 * (cystatin/0.8)^-0.375 * 0.995^age, -->
+<!--     sex == "Male" & creatinine_mg.dL >  0.9 & cystatin >  0.8 ~  -->
+<!--       135 * (creatinine_mg.dL/0.9)^-0.601 * (cystatin/0.8)^-0.711 * 0.995^age, -->
+<!--     TRUE ~ NA_real_, -->
+<!--   )) %>%  -->
+<!--   mutate(egfr = if_else(ethnic %in% c("Caribbean","African","Any other Black background"), -->
+<!--                        round(egfr*1.08,3), -->
+<!--                        round(egfr,3)), -->
+<!--          age_at_enrolment = age) -->
+
+<!-- if (!"egfr" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(egfr_df %>% select(-c(sex,age)), by="eid") -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r message=F, warning=FALSE} -->
+<!-- summary_continuous(indata=t2d_adj, field="egfr", type="num", xlab="eGFR", boxcol="white",  -->
+<!--                    leg_pos=c(0.8,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,160)) -->
+<!-- ``` -->
+
+<!-- ```{r message=FALSE, warning=F, fig.width=10} -->
+<!-- bl_cad <- t2d_adj %>%  -->
+<!--   mutate(bl_cad_0_0 = ifelse(egfr < 60,"Yes","No"), -->
+<!--          bl_cad_0_0 = factor(bl_cad_0_0,levels=c("Yes","No"))) -->
+
+<!-- p1 <- summary_facet(indata=bl_cad,field="bl_cad_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="n",  -->
+<!--                     ylim=c(0,10000), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="eGFR < 60", -->
+<!--                     ylab="N. of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- p2 <- summary_facet(indata=bl_cad,field="bl_cad_0_0",type="yesno",fillvar="value", fillname="", -->
+<!--                     boxcol="black", yvar="perc",  -->
+<!--                     ylim=c(0,100), vjustn = rep(c(-2.5,1.8),4), vjustperc = rep(c(-1.2,4.1),4), -->
+<!--                     xlab="eGFR < 60", -->
+<!--                     ylab="% of Individuals", facet="diab_age_group", facet_row=1, facet_scale="fixed", -->
+<!--                     leg_pos="none") -->
+
+<!-- plot_grid_title(p1, p2, label = "Individuals with eGFR < 60 in each Diabetes diagnose age group") -->
+<!-- ``` -->
+
+<!-- ## Albuminuria -->
+
+<!-- First of all, we need to calculate the ratio of Albumin/Creatinine in urine: -->
+
+<!-- * Note the units are not the ones we need for the standard ratio (mg/g) -->
+
+<!-- ```{r message=F, warning=F} -->
+<!-- pcreat <- summary_continuous(indata=t2d_adj, field="_f30510_", type="num", xlab="Urine Creatinine (umol/L)", boxcol="white",  -->
+<!--                    leg_pos=c(0.8,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,30000)) -->
+<!-- palb <- summary_continuous(indata=t2d_adj, field="_f30500_", type="num", xlab="Urine microalbumin (mg/L)", boxcol="white",  -->
+<!--                    leg_pos=c(0.8,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,120)) -->
+
+<!-- plot_grid(palb, pcreat, nrow=1) -->
+<!-- ``` -->
+
+<!-- To calculate the Albumin:Creatinine ratio (in mg albumin/g Creatinine), we need to convert Creatinine umol/L to g/L with the following formula (Creatinine MW = 113.12 g/mol): -->
+
+
+
+
+<!-- ```{r} -->
+<!-- albcreat <- t2d_adj %>%  -->
+<!--   # filter(eid == 1010838) %>%  -->
+<!--   select(eid, contains(c("_f30510_","_f30500_", "_f30505"))) %>% -->
+<!--   mutate_at(vars(contains("f30505")), ~if_else(!is.na(.), as.numeric(str_replace(.,"<","")), NA_real_)) %>%  -->
+<!--   pivot_longer(-c(eid),names_to="info",values_to="values") %>% -->
+<!--   filter(!is.na(values)) %>% -->
+<!--   separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>% -->
+<!--   separate(insarray,c(NA,"instance","array"),sep="_") %>%  -->
+<!--   separate(info,"info","_", extra="drop") %>% -->
+<!--   group_by(eid,info) %>%  -->
+<!--   arrange(eid,info,instance) %>%  -->
+<!--   filter(row_number() == 1) %>%  -->
+<!--   ungroup() %>%  -->
+<!--   pivot_wider(names_from = info, values_from = values) %>% -->
+<!--   rename(creatinine_umol.l = creatinine) %>% -->
+<!--   mutate(creatinine_g.l = creatinine_umol.l * 113.12 / 1e6, -->
+<!--          albcreat_mg.g = round(microalbumin/creatinine_g.l,3)) %>%  -->
+<!--   select(-c(instance,array)) -->
+
+<!-- if (!"albcreat_mg.g" %in% names(t2d_adj)){ -->
+<!--   t2d_adj <- t2d_adj %>% -->
+<!--     left_join(albcreat, by="eid") -->
+<!-- } -->
+<!-- # # albcreat -->
+<!-- ``` -->
+
+<!-- ```{r message=F, warning=F} -->
+<!-- summary_continuous(indata=t2d_adj, field="albcreat_", type="num", xlab="Albumin/Creatinine ratio (mg/g)", boxcol="white",  -->
+<!--                    leg_pos=c(0.9,0.6), fillvar="diab_age_group", fillname="Age Group", rel_heights = c(5.5,4.5,3,2.5), -->
+<!--                    xlim=c(0,300)) -->
+<!-- ``` -->
+
+<!-- :::infonote -->
+<!-- Around 40% of individuals have a microalbumin result considered as "undetected", or below the 6.7 mg/L lower detection limit. -->
+
+<!-- All those individuals have been assigned a value of 6.7 mg/L, so the albumin:creatinine ratio could be calculated. -->
+<!-- ::: -->
+
+<!-- Now, we want to know which status all individuals have, as defined by: -->
+
+<!-- -	Normoalbuminuria (% with urine albumin:creatinine ratio <30 mg/g ) -->
+<!-- -	Microalbuminuria (% with urine albumin:creatinine ratio 30-300 mg/g) -->
+<!-- -	Macroalbuminuria (% with urine albumin:creatinine ratio >300 mg/g) -->
+
+
+<!-- ```{r} -->
+<!-- t2d_adj <- t2d_adj %>%  -->
+<!--   mutate(albuminuria_status = case_when( -->
+<!--     is.na(albcreat_mg.g) ~ NA_character_, -->
+<!--     albcreat_mg.g < 30 ~ "Normoalbuminuria", -->
+<!--     albcreat_mg.g > 300 ~ "Macroalbuminuria", -->
+<!--     TRUE ~ "Microalbuminuria" -->
+<!--   )) -->
+<!-- ``` -->
+
+<!-- ```{r fig.width=8, fig.height=6} -->
+<!-- field <- "albuminuria_status" -->
+<!-- groupvar <- "diab_age_group" -->
+<!-- pdata <- t2d_adj %>%  -->
+<!--   mutate(albuminuria_status = factor(albuminuria_status, -->
+<!--                                      levels = c("Normoalbuminuria", "Microalbuminuria", "Macroalbuminuria"))) %>%  -->
+<!--   count(diab_age_group, albuminuria_status) %>%  -->
+<!--   group_by(.data[[groupvar]]) %>%  -->
+<!--   mutate(perc=round(n/sum(n)*100,1)) %>%  -->
+<!--   ungroup() -->
+
+<!-- ggplot(pdata,aes(x=diab_age_group, y=perc, fill=fct_rev(albuminuria_status))) + -->
+<!--   # geom_bar(stat="identity",position="dodge",width=0.8,aes(fill=sex),alpha=1,cex=1) + -->
+<!--   geom_bar(stat="identity",width=0.7, -->
+<!--            alpha=1,cex=1,position=position_dodge(0.8)) + -->
+<!--   labs(x="Diabetes diagnose age group", y="N. of individuals", -->
+<!--        fill="Albuminuria", -->
+<!--        title = "Albuminuria status for the different groups") + -->
+<!--   theme_bw() +  -->
+<!--   coord_flip() + -->
+<!--   geom_text(position=position_dodge(0.8), -->
+<!--             aes(label= paste0(n, " (", perc, "%)")), hjust=-0.2, cex=3.3) + -->
+<!--   scale_x_discrete(limits = rev(levels(pdata$diab_age_group))[2:5]) + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8),limits=c(NA,100)) + -->
+<!--   scale_fill_paletteer_d("nord::aurora", direction = -1, breaks = rev, na.value = "grey80") + -->
+<!--   theme(legend.position="right", -->
+<!--         legend.title = element_text(size=10), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.9,"line"), -->
+<!--         axis.title.y.left = element_text(margin = margin(0, 15, 0, 1)), -->
+<!--         panel.grid.major.y = element_blank(), -->
+<!--         # legend.background = element_rect(fill="transparent"), -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         # axis.text.x = element_blank(), -->
+<!--         # axis.ticks.x = element_blank(), -->
+<!--         # plot.margin = margin(t=6, r=6, b=-11, l=6,"pt"), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+<!-- ``` -->
+
+<!-- # Medications -->
+
+<!-- ```{r fig.width=8, fig.height=6} -->
+<!-- field <- "f6177_" -->
+<!-- groupvar <- "diab_age_group" -->
+<!-- med_data <- t2d_adj %>%  -->
+<!--   select(eid,one_of(groupvar),contains(field)) %>%  -->
+<!--   pivot_longer(!c(eid,one_of(groupvar)),names_to="names",values_to="value") %>%   -->
+<!--   separate(names,c(NA,"rep"),field) %>% -->
+<!--   separate(rep,c("ins","array"),"_") %>%  -->
+<!--   filter(!is.na(value)) %>% -->
+<!--   mutate(value = case_when( -->
+<!--     value == "Insulin" ~ "Insulin", -->
+<!--     value == "Cholesterol lowering medication" ~ "Cholesterol lowering", -->
+<!--     value == "Blood pressure medication" ~ "BP lowering", -->
+<!--     TRUE ~ NA_character_ -->
+<!--   ), -->
+<!--   value = factor(value,levels = c("Insulin", "Cholesterol lowering", "BP lowering")) -->
+<!--   ) %>%  -->
+<!--   count(.data[[groupvar]],value) %>%  -->
+<!--   group_by(.data[[groupvar]]) %>%  -->
+<!--   mutate(perc=round(n/sum(n)*100,1)) %>%  -->
+<!--   ungroup() -->
+
+<!-- p <- ggplot(med_data,aes(x=diab_age_group, y=perc, fill=fct_rev(value))) + -->
+<!--   # geom_bar(stat="identity",position="dodge",width=0.8,aes(fill=sex),alpha=1,cex=1) + -->
+<!--   geom_bar(stat="identity",width=0.7, -->
+<!--            alpha=1,cex=1,position=position_dodge(0.8)) + -->
+<!--   labs(x="Diabetes diagnose age group", y="% of individuals", -->
+<!--        fill="Medication", -->
+<!--        title = "Medication use for the different groups") + -->
+<!--   theme_bw() +  -->
+<!--   coord_flip() + -->
+<!--   geom_text(position=position_dodge(0.8), -->
+<!--             aes(label= paste0(n, " (", perc, "%)")), hjust=-0.2, cex=3.3) + -->
+<!--   scale_x_discrete(limits = rev(levels(med_data$diab_age_group))[2:5]) + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8),limits=c(NA,100)) + -->
+<!--   scale_fill_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") + -->
+<!--   theme(legend.position=c(0.82,0.15), -->
+<!--         legend.title = element_text(size=10), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.9,"line"), -->
+<!--         axis.title.y.left = element_text(margin = margin(0, 15, 0, 1)), -->
+<!--         # legend.background = element_rect(fill="transparent"), -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         # axis.text.x = element_blank(), -->
+<!--         # axis.ticks.x = element_blank(), -->
+<!--         # plot.margin = margin(t=6, r=6, b=-11, l=6,"pt"), -->
+<!--         panel.grid.major.y = element_blank(), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+<!-- p -->
+<!-- ``` -->
+
+<!-- # HF risk category -->
+
+<!-- HF risk category is defined as follows (max score=7 points): -->
+
+<!-- * All-cause heart failure: 2 points -->
+<!-- * Coronary artery disease: 1 point -->
+<!-- * Atrial fibrillation: 1 point -->
+<!-- * eGFR <60: 1 point -->
+<!-- * Albuminuria: 1 point if microalbuminuria; 2 points if macroalbuminuria -->
+
+<!-- ```{r} -->
+<!-- t2d_adj <- t2d_adj %>%  -->
+<!--   mutate(hf_risk = 0, -->
+<!--          hf_risk = if_else(baseline_hf_0_0 == "Yes", hf_risk + 2, hf_risk), -->
+<!--          hf_risk = if_else(bl_cad_0_0 == "Yes", hf_risk + 1, hf_risk), -->
+<!--          hf_risk = if_else(bl_af_0_0 == "Yes", hf_risk + 1, hf_risk), -->
+<!--          hf_risk = if_else(!is.na(egfr) & egfr < 60, hf_risk + 1, hf_risk), -->
+<!--          hf_risk = case_when( -->
+<!--            albuminuria_status == "Microalbuminuria" ~ hf_risk + 1, -->
+<!--            albuminuria_status == "Macroalbuminuria" ~ hf_risk + 2,  -->
+<!--            TRUE ~ hf_risk), -->
+<!--          ) -->
+<!-- ``` -->
+
+
+<!-- ```{r fig.width=8, fig.height=6} -->
+<!-- field <- "hf_risk" -->
+<!-- groupvar <- "diab_age_group" -->
+<!-- pdata <- t2d_adj %>%  -->
+<!--   select(eid,one_of(groupvar),contains(field)) %>%  -->
+<!--   mutate(diab_age_group = factor(diab_age_group,levels=levels(diab_age_group)[1:4])) %>%  -->
+<!--   mutate(hf_risk = factor(hf_risk, levels=c("0","1","2","3","4","5","6","7"))) %>%  -->
+<!--   count(diab_age_group, hf_risk, .drop = F) %>%  -->
+<!--   group_by(.data[[groupvar]]) %>%  -->
+<!--   mutate(perc=round(n/sum(n)*100,1)) %>%  -->
+<!--   ungroup() -->
+
+<!-- ggplot(pdata,aes(x=diab_age_group, y=perc, fill=fct_rev(hf_risk))) + -->
+<!--   # geom_bar(stat="identity",position="dodge",width=0.8,aes(fill=sex),alpha=1,cex=1) + -->
+<!--   geom_bar(stat="identity",width=0.7, -->
+<!--            alpha=1,cex=1,position=position_dodge(0.8)) + -->
+<!--   labs(x="Diabetes diagnose age group", y="% of individuals", -->
+<!--        fill="HF Risk", -->
+<!--        title = "HF Risk for the different groups") + -->
+<!--   theme_bw() +  -->
+<!--   coord_flip() + -->
+<!--   geom_text(position=position_dodge(0.8), -->
+<!--             aes(label= paste0(n, " (", perc, "%)")),# y = rep(c(72, 30, rep(10, 6)), 4), -->
+<!--             # hjust=0, -->
+<!--             hjust=-0.2, -->
+<!--             cex=3) + -->
+<!--   scale_x_discrete(limits = rev(levels(pdata$diab_age_group))) + -->
+<!--   scale_y_continuous(breaks = scales::pretty_breaks(8),limits=c(NA,100)) + -->
+<!--   scale_fill_viridis_d(option = "C", direction = 1, breaks = rev) + -->
+<!--   # scale_fill_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") + -->
+<!--   theme(legend.position=c(0.92,0.18), -->
+<!--         legend.title = element_text(size=10), -->
+<!--         legend.text = element_text(size=9), -->
+<!--         legend.key.size = unit(0.9,"line"), -->
+<!--         axis.title.y.left = element_text(margin = margin(0, 15, 0, 1)), -->
+<!--         # legend.background = element_rect(fill="transparent"), -->
+<!--         # axis.text.y = element_blank(), -->
+<!--         # axis.ticks.y = element_blank(), -->
+<!--         # axis.text.x = element_blank(), -->
+<!--         # axis.ticks.x = element_blank(), -->
+<!--         # plot.margin = margin(t=6, r=6, b=-11, l=6,"pt"), -->
+<!--         panel.grid.major.y = element_blank(), -->
+<!--         panel.grid.minor.x = element_blank(), -->
+<!--         panel.grid.major.x = element_line(colour = "gray",size=0.1)) -->
+
+<!-- ``` -->
+
+
+<!-- # Final Summary -->
+
+
+
+<!-- ```{r message=FALSE, warning=FALSE} -->
+<!-- library(flextable) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # initiate final_sum with first cell -->
+<!-- final_sum <- setNames(data.frame(matrix(c("N. of individuals", as.numeric(dim(t2d_adj)[1]), summary(t2d_adj$diab_age_group)[1:4]), nrow=1)), -->
+<!--                       c("var","All", paste0("", age_group_labels[1:4]))) %>%  -->
+<!--   mutate_all(., ~as.character(.)) -->
+<!-- # final_sum -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # add necessary columns -->
+<!-- t2d_adj <- t2d_adj %>% -->
+<!--   mutate(time_since_diabetes = age_at_enrolment - diab_age, -->
+<!--          smoking_status = coalesce(smoking_status_f20116_0_0, -->
+<!--                                    smoking_status_f20116_1_0, -->
+<!--                                    smoking_status_f20116_2_0, -->
+<!--                                    smoking_status_f20116_3_0), -->
+<!--          currentsmoker = ifelse(smoking_status != "Current" | is.na(smoking_status),"No","Yes")) -->
+
+
+
+<!-- # append rows -->
+<!-- # age at diagnosis -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Age at diagnose, in years (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$diab_age),1)," \u00b1 ",round(sd(t2d_adj$diab_age),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(diab_age), -->
+<!--                                  sd = sd(diab_age), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+<!-- # Current age at UKB enrolment (mean ± SD) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Age at enrolment, in years (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$age_at_enrolment),1)," \u00b1 ",round(sd(t2d_adj$age_at_enrolment),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(age_at_enrolment), -->
+<!--                                  sd = sd(age_at_enrolment), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+
+<!-- # Duration of diabetes at UKB enrolment (median [IQR]) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Years since diabetes, at enrolment (median [IQR])", -->
+<!--                      paste0(round(median(t2d_adj$time_since_diabetes),1)," [",IQR(t2d_adj$time_since_diabetes),"]"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=median(time_since_diabetes), -->
+<!--                                  sd =IQR(time_since_diabetes), -->
+<!--                                  s = paste0(round(mean,1)," [",sd,"]")) %>%  -->
+<!--                        pull(s))) -->
+<!-- # Male (%) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Male (%)", -->
+<!--                      paste0(round(sum(t2d_adj$sex == "Male")/length(t2d_adj$sex) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=median(time_since_diabetes), -->
+<!--                                  sd =IQR(time_since_diabetes), -->
+<!--                                  s = paste0(round(sum(sex == "Male")/length(sex) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- # % British ethnicity -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("British Ethnicity (%)", -->
+<!--                      paste0(round(sum(t2d_adj$ethnic == "British", na.rm=T)/length(t2d_adj$ethnic) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=median(time_since_diabetes), -->
+<!--                                  sd =IQR(time_since_diabetes), -->
+<!--                                  s = paste0(round(sum(ethnic == "British", na.rm=T)/length(ethnic) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+
+<!-- # BMI (mean ± SD) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("BMI, in kg/m2 (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$body_mass_index_bmi_f21001_0_0, na.rm=T),1)," \u00b1 ",  -->
+<!--                             round(sd(t2d_adj$body_mass_index_bmi_f21001_0_0, na.rm=T),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(body_mass_index_bmi_f21001_0_0, na.rm=T), -->
+<!--                                  sd = sd(body_mass_index_bmi_f21001_0_0, na.rm=T), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+
+<!-- # Systolic BP (mean ± SD) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Systolic BP, in mmHg (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$sbp, na.rm=T),1)," \u00b1 ",  -->
+<!--                             round(sd(t2d_adj$sbp, na.rm=T),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(sbp, na.rm=T), -->
+<!--                                  sd = sd(sbp, na.rm=T), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+<!-- # Diastolic BP (mean ± SD) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Dyastolic BP, in mmHg (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$dbp, na.rm=T),1)," \u00b1 ",  -->
+<!--                             round(sd(t2d_adj$dbp, na.rm=T),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(dbp, na.rm=T), -->
+<!--                                  sd = sd(dbp, na.rm=T), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+<!-- # Current smoking (%) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Current smoking (%)", -->
+<!--                      paste0(round(sum(t2d_adj$currentsmoker == "Yes", na.rm=T)/length(t2d_adj$currentsmoker) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(currentsmoker == "Yes", na.rm=T)/length(currentsmoker) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- # IPAQ -->
+<!-- # -	Low -->
+<!-- # -	Mod -->
+<!-- # -	High -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("IPAQ low (%)", -->
+<!--                      paste0(round(sum(t2d_adj$ipaq_activity_group_f22032_0_0 == "low", na.rm=T)/length(t2d_adj$ipaq_activity_group_f22032_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(ipaq_activity_group_f22032_0_0 == "low", na.rm=T)/length(ipaq_activity_group_f22032_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("IPAQ mod (%)", -->
+<!--                      paste0(round(sum(t2d_adj$ipaq_activity_group_f22032_0_0 == "moderate", na.rm=T)/length(t2d_adj$ipaq_activity_group_f22032_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(ipaq_activity_group_f22032_0_0 == "moderate", na.rm=T)/length(ipaq_activity_group_f22032_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("IPAQ high (%)", -->
+<!--                      paste0(round(sum(t2d_adj$ipaq_activity_group_f22032_0_0 == "high", na.rm=T)/length(t2d_adj$ipaq_activity_group_f22032_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(ipaq_activity_group_f22032_0_0 == "high", na.rm=T)/length(ipaq_activity_group_f22032_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- ## Blood biomarkers -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Blood/Urine biomarkers", rep("", 5))) -->
+<!-- # HbA1c (mean ± SD) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("HbA1c, in mmol/mol (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$glycated_haemoglobin_hba1c_f30750_0_0, na.rm=T),1)," \u00b1 ",  -->
+<!--                             round(sd(t2d_adj$glycated_haemoglobin_hba1c_f30750_0_0, na.rm=T),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(glycated_haemoglobin_hba1c_f30750_0_0, na.rm=T), -->
+<!--                                  sd = sd(glycated_haemoglobin_hba1c_f30750_0_0, na.rm=T), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+<!-- # LDL cholesterol (mean ± SD) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("LDL cholesterol, in mmol/L (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$ldl_direct_f30780_0_0, na.rm=T),1)," \u00b1 ",  -->
+<!--                             round(sd(t2d_adj$ldl_direct_f30780_0_0, na.rm=T),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(ldl_direct_f30780_0_0, na.rm=T), -->
+<!--                                  sd = sd(ldl_direct_f30780_0_0, na.rm=T), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+<!-- # eGFR (mean ± SD) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("eGFR, in mL/min/1.73 m2 surface area (mean \u00b1 SD)", -->
+<!--                      paste0(round(mean(t2d_adj$egfr, na.rm=T),1)," \u00b1 ",  -->
+<!--                             round(sd(t2d_adj$egfr, na.rm=T),1)), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=mean(egfr, na.rm=T), -->
+<!--                                  sd = sd(egfr, na.rm=T), -->
+<!--                                  s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>%  -->
+<!--                        pull(s))) -->
+<!-- # % with eGFR <60 -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("eGFR < 60 (%)", -->
+<!--                      paste0(round(sum(t2d_adj$egfr < 60, na.rm=T)/length(t2d_adj$egfr) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(egfr <60, na.rm=T)/length(egfr) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+
+<!-- # Urine albumin:creatinine ratio (median [IQR]) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Urine albumin:creatinine ratio, in mg/g (median [IQR])", -->
+<!--                      paste0(round(median(t2d_adj$albcreat_mg.g, na.rm=T),1)," [", round(IQR(t2d_adj$albcreat_mg.g, na.rm=T),1) ,"]"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  mean=median(albcreat_mg.g, na.rm=T), -->
+<!--                                  sd =IQR(albcreat_mg.g, na.rm=T), -->
+<!--                                  s = paste0(round(mean,1)," [",round(sd,1),"]")) %>%  -->
+<!--                        pull(s))) -->
+<!-- # Albuminuria status -->
+<!-- # -	Normoalbuminuria (% with urine albumin:creatinine ratio <30 mg/g ) -->
+<!-- # -	Microalbuminuria (% with urine albumin:creatinine ratio 30-300 mg/g) -->
+<!-- # -	Macroalbuminuria (% with urine albumin:creatinine ratio >300 mg/g) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Albuminuria status", rep("",5))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Normoalbuminuria (%)", -->
+<!--                      paste0(round(sum(t2d_adj$albuminuria_status == "Normoalbuminuria", na.rm=T)/length(t2d_adj$albuminuria_status) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(albuminuria_status == "Normoalbuminuria", na.rm=T)/length(albuminuria_status) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Microalbuminuria (%)", -->
+<!--                      paste0(round(sum(t2d_adj$albuminuria_status == "Microalbuminuria", na.rm=T)/length(t2d_adj$albuminuria_status) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(albuminuria_status == "Microalbuminuria", na.rm=T)/length(albuminuria_status) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Macroalbuminuria (%)", -->
+<!--                      paste0(round(sum(t2d_adj$albuminuria_status == "Macroalbuminuria", na.rm=T)/length(t2d_adj$albuminuria_status) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(albuminuria_status == "Macroalbuminuria", na.rm=T)/length(albuminuria_status) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+
+<!-- # Medications (% treated with the following) -->
+<!-- # Insulin -->
+<!-- # Cholesterol lowering medication -->
+<!-- # BP lowering medication -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Medications treated with", rep("",5))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Insulin (%)", -->
+<!--                      med_data %>%  -->
+<!--                        group_by(value) %>%  -->
+<!--                        summarise(n=sum(n),.groups = "drop") %>%  -->
+<!--                        mutate(perc=paste0(round(n/sum(n)*100,1)," %")) %>%  -->
+<!--                        filter(value == "Insulin") %>% pull(perc), -->
+<!--                      paste0(med_data %>% filter(value == "Insulin") %>% pull(perc)," %"))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Cholesterol lowering (%)", -->
+<!--                      med_data %>%  -->
+<!--                        group_by(value) %>%  -->
+<!--                        summarise(n=sum(n),.groups = "drop") %>%  -->
+<!--                        mutate(perc=paste0(round(n/sum(n)*100,1)," %")) %>%  -->
+<!--                        filter(value == "Cholesterol lowering") %>% pull(perc), -->
+<!--                      paste0(med_data %>% filter(value == "Cholesterol lowering") %>% pull(perc)," %"))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("BP lowering (%)", -->
+<!--                      med_data %>%  -->
+<!--                        group_by(value) %>%  -->
+<!--                        summarise(n=sum(n),.groups = "drop") %>%  -->
+<!--                        mutate(perc=paste0(round(n/sum(n)*100,1)," %")) %>%  -->
+<!--                        filter(value == "BP lowering") %>% pull(perc), -->
+<!--                      paste0(med_data %>% filter(value == "BP lowering") %>% pull(perc)," %"))) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # Medical conditions at baseline (%) – see screenshot below for definitions -->
+<!-- # All-cause heart failure -->
+<!-- # Coronary artery disease -->
+<!-- # Atrial fibrillation -->
+<!-- # Stroke -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Medical conditions at baseline", rep("",5))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("All-cause heart failure (%)", -->
+<!--                      paste0(round(sum(t2d_adj$baseline_hf_0_0 == "Yes", na.rm=T)/length(t2d_adj$baseline_hf_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(baseline_hf_0_0 == "Yes", na.rm=T)/length(baseline_hf_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Coronary artery disease (%)", -->
+<!--                      paste0(round(sum(t2d_adj$bl_cad_0_0 == "Yes", na.rm=T)/length(t2d_adj$bl_cad_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(bl_cad_0_0 == "Yes", na.rm=T)/length(bl_cad_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Atrial fibrillation (%)", -->
+<!--                      paste0(round(sum(t2d_adj$bl_af_0_0 == "Yes", na.rm=T)/length(t2d_adj$bl_af_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(bl_af_0_0 == "Yes", na.rm=T)/length(bl_af_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Stroke (%)", -->
+<!--                      paste0(round(sum(t2d_adj$bl_stroke_0_0 == "Yes", na.rm=T)/length(t2d_adj$bl_stroke_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(bl_stroke_0_0 == "Yes", na.rm=T)/length(bl_stroke_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # Heart failure risk category – see below for points calculation -->
+<!-- # % with 0 points -->
+<!-- # % with 1 point -->
+<!-- # …2 points -->
+<!-- # …3 points -->
+<!-- # …4 points -->
+<!-- # …5 points -->
+<!-- # …6 points -->
+<!-- # …7 points -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Heart failure risk category", rep("",5))) -->
+<!-- for (i in c(0:7)){ -->
+<!--   final_sum <- rbind(final_sum, -->
+<!--                      c(paste0(" with ", i," points (%)"), -->
+<!--                        paste0(round(sum(t2d_adj$hf_risk == i, na.rm=T)/length(t2d_adj$hf_risk) * 100,1)," %"), -->
+<!--                        t2d_adj %>%  -->
+<!--                          group_by(diab_age_group) %>%  -->
+<!--                          summarise(.groups = "drop", -->
+<!--                                    s = paste0(round(sum(hf_risk == i, na.rm=T)/length(hf_risk) * 100,1)," %")) %>%  -->
+<!--                          pull(s))) -->
+<!-- } -->
+
+<!-- # Outcomes (i.e. incident cases) -->
+<!-- # Myocardial infarction -->
+<!-- # Stroke -->
+<!-- # ESRD -->
+<!-- # Heart failure -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Incident outcomes", rep("",5))) -->
+
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Myocardial infarction (%)", -->
+<!--                      paste0(round(sum(t2d_adj$m_infarction_0_0 == "Yes", na.rm=T)/length(t2d_adj$m_infarction_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(m_infarction_0_0 == "Yes", na.rm=T)/length(m_infarction_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Stroke (%)", -->
+<!--                      paste0(round(sum(t2d_adj$adj_stroke_0_0 == "Yes", na.rm=T)/length(t2d_adj$adj_stroke_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(adj_stroke_0_0 == "Yes", na.rm=T)/length(adj_stroke_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("ESRD (%)", -->
+<!--                      paste0(round(sum(t2d_adj$esrd_0_0 == "Yes", na.rm=T)/length(t2d_adj$esrd_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(esrd_0_0 == "Yes", na.rm=T)/length(esrd_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- final_sum <- rbind(final_sum, -->
+<!--                    c("Heart failure (%)", -->
+<!--                      paste0(round(sum(t2d_adj$heartfailure_0_0 == "Yes", na.rm=T)/length(t2d_adj$heartfailure_0_0) * 100,1)," %"), -->
+<!--                      t2d_adj %>%  -->
+<!--                        group_by(diab_age_group) %>%  -->
+<!--                        summarise(.groups = "drop", -->
+<!--                                  s = paste0(round(sum(heartfailure_0_0 == "Yes", na.rm=T)/length(heartfailure_0_0) * 100,1)," %")) %>%  -->
+<!--                        pull(s))) -->
+<!-- ``` -->
+
+<!-- ```{r fig.width=15} -->
+<!-- mytab <- flextable(final_sum) %>%  -->
+<!--   width(j=1, width = 15) %>%  -->
+<!--   width(j=c(2:6), width = 3) %>%  -->
+<!--   add_header_row( -->
+<!--     top = TRUE,                # New header goes on top of existing header row -->
+<!--     values = c("",     # Header values for each column below -->
+<!--                "All T2D", # This will be the top-level header for this and two next columns -->
+<!--                "Age at T2D diagnose", -->
+<!--                "", -->
+<!--                "", -->
+<!--                "")) %>%  -->
+<!--   set_header_labels(         # Rename the columns in original header row -->
+<!--       var = "", -->
+<!--       All = "All T2D") %>%  -->
+<!--   merge_at(i = 1:2, j = 2, part = "header") %>%  -->
+<!--   merge_at(i = 1, j = 3:6, part = "header") # Horizontally merge columns 3 to 5 in new header row -->
+
+<!-- # borders and background -->
+<!-- border_style = officer::fp_border(color="black", width=1) -->
+<!-- mytab <- mytab %>%  -->
+<!--   # Remove all existing borders -->
+<!--   border_remove() %>% -->
+<!--   # add horizontal lines via a pre-determined theme setting -->
+<!--   theme_booktabs() %>%  -->
+<!--   vline(part = "all", j = c(1,2), border = border_style) %>%  -->
+<!--   hline(part = "header", i = 1, j = 1, border = officer::fp_border(color="white")) -->
+
+<!-- # alignment -->
+<!-- mytab <- mytab %>%  -->
+<!--   flextable::align(align = "center", j = c(2:6), part = "all")  -->
+
+<!-- # font style -->
+<!-- mytab <- mytab %>%  -->
+<!--   fontsize(i = 1, size = 12, part = "header") %>%   # adjust font size of header -->
+<!--   bold(i = c(1,2), bold = TRUE, part = "header") %>%     # adjust bold face of header -->
+<!--   fontsize(part="body", size = 10) %>%  -->
+<!--   fontsize(i = c(14,20,24,28,33,42), size = 11, part = "body") %>%  -->
+<!--   bold(i = c(14,20,24,28,33,42), bold = TRUE, part = "body") %>%  -->
+<!--   # font(fontname = "HelveticaNeueLTCom-Md", part = "all")  -->
+<!--   font(fontname = "roboto", part = "all")  -->
+<!-- ``` -->
+
+<!-- ```{r eval=F} -->
+<!-- sys_fonts() %>%  -->
+<!--   filter(grepl("Cali", family)) -->
+<!-- ``` -->
+
+
+
+<!-- ```{r} -->
+<!-- mytab -->
+<!-- ``` -->
+
+<!-- And save in word format: -->
+
+<!-- ```{r} -->
+<!-- sect_properties <- officer::prop_section( -->
+<!--   page_size = officer::page_size(orient = "portrait"), -->
+<!--     # height = 8.3, height = 11.7), -->
+<!--   type = "continuous", -->
+<!--   page_margins = officer::page_mar() -->
+<!-- ) -->
+<!-- save_as_docx(mytab, path = "final_summary_table.docx", pr_section = sect_properties) -->
+<!-- ``` -->
+

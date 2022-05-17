@@ -1,0 +1,27 @@
+#!/bin/bash
+
+#SBATCH --job-name="dna2prot"	#Give the job a name:
+#SBATCH --output=restart_%A_%3a.out
+#SBATCH --error=restart_%A_%3a.err
+#SBATCH --array=__ARRAY__
+#SBATCH -p sysgen,sysgen_long		#Partition: 'Short' (<24h) or 'Long' (>24h)
+#SBATCH --nodes=1
+#SBATCH --ntasks=32		# Max n of tasks/CPU cores used by the job:
+###SBATCH --ntasks-per-node=8
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=4G
+#SBATCH --time=1-0:0:00 	# max time of the job in days-hours:mins:sec
+# The job command(s):
+
+# Print the task id.
+#echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
+#echo slurm jobid: $SLURM_ARRAY_JOB_ID
+
+source /home/sruizcarmona/miniconda3/etc/profile.d/conda.sh
+conda activate bioinfo-modeller
+
+SLURM_ARRAY_PAD=`printf %03d $SLURM_ARRAY_TASK_ID`
+export GREASY_NWORKERS=20
+export GREASY_LOGFILE=greasyarray_restart_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_PAD}.log
+/home/sruizcarmona/SOFT/greasy/bin/greasy __INPUT__
+

@@ -1,0 +1,1556 @@
+---
+title: "Diabetes and CVD in UK Biobank"
+subtitle: "Julian Sacre Project (starting April 2021)"
+author: "[Baker Bioinformatics](https://intranet.baker.edu.au/research-resources/platform-            technologies/bioinformatics-program/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "bioinformatics@baker.edu.au"
+# output:
+#  html_notebook:
+#    # css: www/css/my.css
+#    toc: true
+#    toc_depth: 3
+#    toc_float:
+#      collapsed: false
+#      smooth_scroll: true
+#    theme: cosmo
+#    df_print: paged
+#    highlight: tango
+#    code_folding: hide
+output:
+   epuRate::BAKER:
+     toc: TRUE
+     number_sections: FALSE
+     code_folding: "hide"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# Project Summary
+
+The research questions we wish to address initially relate to differences in risk/rates of complications (e.g. traditional complications: CV events, ESRD, etc; and novel complications: heart failure, Alzheimer’s disease) between older vs. younger onset diabetes (both type 1 and type 2). The specific complications to be assessed will partly depend on the nature of the endpoints available through the various linkages (hospitalisations, primary care, disease registries, etc).
+
+Main aims:
+
+1) Define subgroup with diabetes, stratified by type 1 vs. type 2 (applying published algorithm)
+ 
+2) Within the diabetes subgroup (likely type 2 only), quantify incidence rates of:
+
+ * MI (algorithmically defined outcome)
+ * Stroke (algorithmically defined outcome)
+ * ESRD (algorithmically defined outcome)
+ 
+Outcomes with no adjudicated algorithm:
+
+ * CAD (MI as per algorithm, OR any of the criteria from the table below inclusive of: ischaemic heart disease, MI, STEMI, NSTEMI, stable angina, unstable angina)
+ * Peripheral vascular disease (defined per table below)
+ * Transient ischemic attack (defined per table below)
+ * Atherosclerotic CVD (any of CAD, stroke, or peripheral vascular disease per above criteria)
+ * Heart failure (defined per table below)
+ 
+3) Assess distribution of age of onset of diabetes (will be used to assess feasibility of quantifying above incidence rates stratified by age of onset)
+
+# UKBiobank Data Extraction
+
+## Preprocessing the data
+
+<!-- ### Load libraries and functions -->
+
+First, we load libraries and functions we need for the downstream analysis.
+
+* CSS rules
+
+```{css echo=FALSE}
+div.datatables {
+  border-color: #d43347;
+  border-style: solid;
+  padding: 10px;
+}
+div.infonote {
+  padding: 1em;
+  margin: 1em 0;
+  padding-left: 100px;
+  background-size: 70px;
+  background-repeat: no-repeat;
+  background-position: 15px center;
+  min-height: 120px;
+  color: #185ea6;
+  background-color: #bed3ec;
+  border: solid 5px #185ea6;
+  font-size: large;
+}
+
+ div.infonote {
+   background-image: url("www/img/info.png");
+ }
+ 
+ .subtitle {
+   text-align: center;
+ }
+```
+
+
+* Libraries
+
+```{r message=FALSE, warning=FALSE, results='hide',include=FALSE}
+# library(summarytools)
+# st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           # style        = "rmarkdown", # Always use this option in Rmd documents
+           # footnote     = NA,          # Makes html-rendered results more concise
+           # subtitle.emphasis = FALSE)  # Improves layout with some rmardown themes
+library(lobstr)
+library(knitr)
+opts_chunk$set(results = 'markup',      # Can also be set at the chunk-level
+               comment = NA,
+               prompt  = FALSE,
+               cache   = FALSE)
+library(ukbtools)
+library(tidyverse)
+library(DT)
+library(treemap)
+library(stringr)
+library(filesstrings)
+library(lubridate)
+library(scales)
+library(ggthemes)
+library(tidytext)
+library(cowplot)
+library(VennDiagram)
+```
+
+```{r include=FALSE}
+# st_css()
+```
+
+* Functions
+
+```{r include=FALSE}
+files <- c("/Users/sruizcarmona/WORK/BIOINFO_PROJECTS/BAKER_UKBIOBANK/ukb_functions.R",
+           "/home/sruizcarmona/WORKSPACE/WORK/BIOINFO/UKBIOBANK/GIT_UKBIOBANK/ukb_functions.R")
+for (f in files){
+  if (file.exists(f)){
+    source(f)
+  }
+}
+source("supp_functions_plots.R")
+```
+
+```{r include=FALSE}
+split_by_length <- function(x, n) {
+  sst <- strsplit(x, '')[[1]]
+  m <- matrix('', nrow=n, ncol=(length(sst)+n-1)%/%n)
+  m[seq_along(sst)] <- sst
+  apply(m, 2, paste, collapse='')
+}
+
+split_variable_name <- function(variable.s, s.length=30){
+  s.var <- str_split(variable.s,"\\\\\\\n")[[1]]
+  new.var <- paste(c(paste(split_by_length(s.var[1],s.length),collapse="\\\n\\"),s.var[2]),collapse="\\\n\\")
+  return(new.var)
+}
+
+labeller_fun <- function(variable,value){
+  return(str_wrap(value, width = 10))
+}
+```
+
+## Summarize UK Biobank data
+
+Now, we need to load the prefiltered UKB dataset based on the diagnosed ICD10 codes, self-reported diabetes codes and adjudicated diabetes (from PLoS One publication algorithm) individuals we want and the fields we need to summarize:
+
+* Selected ICD10 codes (for diabetes)
+
+```{r echo=TRUE, warning=FALSE}
+diab_icd10 <- tribble(
+  ~ICD10, ~Description, ~n,
+  "E10", "Insulin-dependent diabetes mellitus", 3923,
+  "E11", "Non-insulin-dependent diabetes mellitus", 28137,
+  "E13", "Other specified diabetes mellitus", 295,
+  "E14", "Unspecified diabetes mellitus", 3733,
+  "ANY", "Any of the above definitions", 30087,
+)
+datatable(diab_icd10,options = list(dom = 't'))
+diab_codes <- c("E10","E11","E13","E14")
+```
+
+* Selected self-reported codes
+
+```{r}
+self_reported_diab_codes <- c(1220,1221,1222,1223,1521)
+
+diab_sr <- tribble(
+  ~"Self-reported Code", ~Description, ~n,
+  "1220", "Diabetes", 29444,
+  "1221", "Gestational diabetes", 314,
+  "1222", "Type 1 diabetes", 545,
+  "1223", "Type 2 diabetes", 4557,
+  "1521", "Diabetes insipidus", 29,
+  "ANY",  "Any of the above definitions", 26307,
+)
+datatable(diab_sr,options = list(dom = 't'))
+```
+
+
+* Adjudicated T2D status, according to algorithm published [here](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0162388)
+  * Table below only reporting filter 1.1 from the image.
+
+```{r}
+# adj_csv <- read_csv("../adjudicated/ukb_t2d_adjudicated/ukb42488_t2d.csv")
+diab_adj <- tribble(
+  ~"Adjudicated Status", ~n,
+  "Possible diabetes", 25784,
+  "Diabetes unlikely", 461495,
+)
+datatable(diab_adj,options = list(dom = 't'))
+```
+
+
+* Figure 2, from the PLoS One paper:
+
+![](www/img/pone.0162388.g002.PNG_L.png)
+
+
+
+* Selected fields with information:
+
+
+```{r echo=TRUE, warning=FALSE}
+selfields <- read.table('../input/selected_fields.txt',sep='\t',stringsAsFactors = F)
+colnames(selfields) <- c("FIELD_CODE","Description")
+selfields <- selfields %>% distinct(FIELD_CODE,.keep_all = TRUE)
+datatable(selfields)
+```
+
+## Load UKB dataset
+
+* Load the actual dataset and the correct fields from the UK Biobank
+
+  * The only filter we are using so far is the ICD10 codes for "Diagnoses - ICD10" field, as detailed above, so we only get individuals with diagnosed diabetes.
+  * After discussing over a couple emails, we will also extract individuals using the published T2D algorithm: it "adjudicates" diabetes status according to self-reported codes and different variables (see PLoS One publication [here](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0162388))
+
+```{r include=FALSE, warning=FALSE}
+# only if you are in the cluster, otherwise, load the pre-saved subset rda in the second line and skip next chunk
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/ukb_data_clean.rda")
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/preprocessed_rdas/heart_exercise_women.rda")
+load("../rda/diabetes_ukb_adj_selfields.rda")
+dim(diab_ukb)
+diab_ukb.bkp <- diab_ukb
+```
+
+
+```{r echo=TRUE, warning=FALSE}
+selected.fields <- selfields$FIELD_CODE
+fields.pattern <- paste0("f",as.character(selected.fields),"_\\d")
+fields.pattern.first <- paste0("f",as.character(selected.fields),"_0_0")
+get_fields_from_pattern <- function(mydata, f.pattern) {
+  myfields <- unlist(sapply(f.pattern,function(x){names(mydata)[str_detect(names(mydata),x)]}))
+  return(myfields)
+}
+all.fields <- get_fields_from_pattern(diab_ukb,fields.pattern)
+all.fields.first <- get_fields_from_pattern(diab_ukb,fields.pattern.first)
+datatable(diab_ukb[1:5,c(2:10,1775:1800)],options = list(scrollX=T, dom="t"))
+# datatable(diab_ukb[1:5,1400:1600],options = list(scrollX=T, dom="t"))
+```
+
+:::infonote
+This table shows how our data looks like (first 5 rows and selected columns), but in total we have around **40000 individuals (rows)** and **5000 variables (columns)**.
+:::
+
+
+# Diabetic Inviduals
+
+## Summary
+
+In the next plots, we will summarize different aspects of the Diabetic Individuals subset of UK Biobank.
+
+
+### Subgroup definition
+
+* First of all, compare individuals to know whether they have been selected for having an ICD10 associated with diabetes, being self-reported or adjudicated.
+
+```{r}
+# get eids for each of the groups
+sel_icd10 <- extract_diagnose_icd10_truncated(diab_ukb,diab_codes) %>% pull(eid)
+sel_sr <- extract_self_reported_nc(diab_ukb,self_reported_diab_codes) %>% pull(eid)
+sel_adj <- diab_ukb %>% filter(fc1_no_diabetes == "Possible diabetes") %>% pull(eid)
+```
+
+
+```{r include=FALSE}
+# stop creating logs
+futile.logger::flog.threshold(futile.logger::ERROR, name = "VennDiagramLogger")
+```
+
+
+```{r fig.height=6, fig.width=6}
+# plot with a venn diagram
+my_colors <- viridis_pal(option="D")(3)
+my_colors_alpha <- alpha(my_colors,0.5)
+venndiag <- venn.diagram(
+  x = list(sel_icd10, sel_sr, sel_adj),
+  category.names = c(paste0("ICD10 (",length(sel_icd10),")"),
+                     paste0("Self-reported (",length(sel_sr),")"),
+                     paste0("Adjudicated (",length(sel_adj),")")),
+  filename = NULL,
+  output=FALSE,
+  #output features
+  # height = 480 , width = 480 , resolution = 300,
+  # Circles
+  lwd = 2,
+  # lty = 'blank',
+  fill = my_colors_alpha,
+  col = my_colors,
+
+  # Numbers
+  cex = 1.3,
+  fontface = "bold",
+  fontfamily = "sans",
+
+  # Set names
+  cat.cex = 1,
+  cat.fontface = "bold",
+  cat.default.pos = "outer",
+  cat.pos = c(-27, 27, 135),
+  cat.dist = c(0.055, 0.055, 0.085),
+  cat.fontfamily = "sans",
+  rotation = 1,
+)
+
+grid.newpage()
+grid.draw(venndiag)
+```
+
+:::infonote
+Around 20.000 individuals are classified as Diabetic based on the 3 methods. We will keep track of how many and which method has every individual been selected for for the downstream analysis.
+:::
+
+
+```{r}
+# create variables with which and amount of methods an individual is selected
+diab_ukb <- diab_ukb %>%
+  mutate(sel_icd10=ifelse(eid %in% sel_icd10,1,0),
+         sel_sr=ifelse(eid %in% sel_sr,1,0),
+         sel_adj=ifelse(eid %in% sel_adj,1,0),
+         sel_n=sel_icd10 + sel_sr + sel_adj)
+```
+
+
+> **_Questions and comments_**
+>
+> Adjudicated algorithm seems to work fine. It is correcting self reported status and also assigning T1D or T2D to general "diabetes" self reported status.
+> 
+> - Which subset to use for the subsequent analysis?
+> 
+> In my opinion, I would select both ICD10 and adjudicated individuals. Self reported individuals that are not in the adjudicated set should be removed.
+
+
+### T1D vs T2D
+
+* First of all, individuals will be split between T1D or T2D, according to their code definition.
+
+```{r}
+# icd10_t1d <- "E10"
+# icd10_t2d <- "E11"
+diab_ukb <- diab_ukb %>%
+  mutate(icd10_t1d=ifelse(eid %in% extract_diagnose_icd10_truncated(diab_ukb,"E10")$eid,1,0),
+         icd10_t2d=ifelse(eid %in% extract_diagnose_icd10_truncated(diab_ukb,"E11")$eid,1,0))
+
+# sr_t1d <- "1222"
+# sr_t2d <- "1223"
+diab_ukb <- diab_ukb %>%
+  mutate(sr_t1d=ifelse(eid %in% extract_self_reported_nc(diab_ukb,"1222")$eid,1,0),
+         sr_t2d=ifelse(eid %in% extract_self_reported_nc(diab_ukb,"1223")$eid,1,0))
+
+# adj_t1d --> fc1_poss_t1dm == Possible T1DM
+# adj_t2d --> fc1_poss_t2dm == Possible T2DM
+diab_ukb <- diab_ukb %>%
+  mutate(adj_t1d=ifelse(grepl("Possible", fc1_poss_t1dm),1,0),
+         adj_t2d=ifelse(grepl("Possible", fc1_poss_t2dm),1,0))
+```
+
+
+```{r fig.width=5,fig.height=6}
+# create plot
+pdata <- diab_ukb %>%
+  select(eid,contains("t1d"), contains ("t2d")) %>%
+  select(-contains("t2dm"),-contains("t1dm"))
+pdata <- pdata %>%
+  pivot_longer(-eid,names_to="names",values_to="values") %>%
+  group_by(names,values) %>%
+  select(-eid) %>%
+  tally() %>%
+  filter(values==1) %>%
+  mutate(cat=factor(case_when(
+    grepl("adj",names) ~ "Adjudicated",
+    grepl("icd10",names) ~ "ICD10",
+    TRUE ~ "Self-reported"),levels=c("ICD10","Self-reported","Adjudicated")),
+    type=case_when(
+      grepl("t1d",names) ~ "T1D",
+      TRUE ~ "T2D"
+    ))
+#
+# pdata
+#
+# mycols2 <- viridis_pal(option="D")(2)
+
+ggplot(pdata,aes(x=cat,y=n,col=cat)) +
+  theme_few() +
+  geom_point(cex=3) +
+  scale_color_viridis_d() +
+  labs(color="",
+       y="N. of individuals",
+       x="Selection method",
+       title="T1D vs T2D Individuals",
+       subtitle="Method selection comparison") +
+  scale_y_continuous(breaks = scales::pretty_breaks(10), limits = c(0, NA)) +
+  geom_segment(aes(x=cat, xend=cat, y=0, yend=n),cex=1.2,show.legend=F) +
+  facet_wrap(~type,nrow = 1,scales="free_x") +
+  theme(
+    # legend.position="bottom",
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    # axis.text.x = element_text(angle = 45,hjust = 1),
+    # plot.margin = margin(t=6, r=6, b=-14, l=6,"pt"),
+    # panel.spacing = unit(0.1, "lines"),
+    # panel.spacing = unit(c(0.3, 0.4), "lines"),
+    panel.grid.major.y = element_line(colour = "gray",size=0.1),
+    panel.grid.minor.y = element_line(colour = "gray",size=0.1),
+    # panel.grid.major.x = element_line(colour = "gray",size=0.1)
+  )
+```
+
+A lot of self-reported individuals seem not to have a correct assignment (total of 25.000 individuals, see above). The reason for that is that a high number of those individuals have a general code assigned to "diabetes". The adjudicated method seems to correct that thanks to the different algorithms used.
+
+### Date of diagnose
+
+Here we will extract the date of the diagnoses, as we will need it later to check incident cardiovascular episodes.
+
+```{r}
+# rename year of birth field to yob to make it easier for later
+# same with sex
+diab_ukb$yob <- diab_ukb[,grepl("_f34_",names(diab_ukb))]
+diab_ukb$sex <- diab_ukb$genetic_sex_f22001_0_0
+```
+
+
+* ICD10
+
+```{r}
+diab_codes <- c("E10","E11","E13","E14")
+
+icd10_with_dates <- diab_ukb %>% select(eid,contains("f41270"), contains("f41280")) %>%
+  mutate_at(vars(starts_with("date")),~format(., '%d/%m/%Y')) %>%
+  pivot_longer(-eid,names_to="info",values_to="values") %>%
+  filter(!is.na(values)) %>%
+  separate(info,c("info","array"),"_0_") %>%
+  separate(info,"info","_", extra="drop") %>%
+  pivot_wider(names_from = info, values_from = values) %>%
+  rename(icd10=diagnoses) %>%
+  mutate(date=as.Date(date,format = "%d/%m/%Y"))
+
+diab_with_dates <- icd10_with_dates %>%
+  filter(grepl(paste(diab_codes, collapse="|^", sep=""),icd10)) %>%
+  mutate(diabetes_type=case_when(
+    grepl("E10",icd10) ~ "t1d",
+    grepl("E11",icd10) ~ "t2d",
+    TRUE ~ "unk"
+  ))
+
+diab_with_dates_long <- diab_with_dates %>%
+  select(-array,-icd10) %>%
+  group_by(eid,diabetes_type) %>%
+  arrange(eid,date) %>%
+  filter(row_number() == 1) %>%
+  pivot_wider(names_from = diabetes_type, values_from = date) %>%
+  rename(icd10_t2d_date=t2d,
+         icd10_t1d_date=t1d,
+         icd10_unk_date=unk) %>%
+  ungroup()
+
+if (!"icd10_t2d_date" %in% names(diab_ukb)){
+  diab_ukb <- diab_ukb %>%
+    left_join(diab_with_dates_long,by="eid")
+}
+# diab_ukb <- diab_ukb %>% select(-contains("date."))
+```
+
+* Self-reported (and adjudicated)
+
+```{r}
+# summary(diab_ukb$age_diabetes_diagnosed_f2976_0_0)
+# kk <- diab_ukb[1:5,]
+# kk$noncancer_illness_yearage_first_occurred_f87_0_0
+
+diab_sr_dates <- diab_ukb %>%
+  # filter(eid==1016381) %>%
+  # filter(eid==1001130) %>%
+  select(eid,yob,contains(c("f87_","f20002_","f20009_"))) %>%
+  mutate_at(vars(!eid),~as.numeric(.)) %>%
+  # select(eid,yob,matches("_0_[012]")) %>%
+  pivot_longer(-c(eid,yob),names_to="info",values_to="values") %>%
+  filter(!is.na(values)) %>%
+  separate(info,c("info","insarray"),sep="(?=_[[:digit:]]_)") %>%
+  separate(insarray,c(NA,"instance","array"),sep="_") %>%
+  pivot_wider(names_from=info,values_from = values) %>%
+  rename(selfreported_code = noncancer_illness_code_selfreported_f20002) %>%
+  pivot_longer(contains("age_"),names_to="info",values_to="values") %>%
+  filter(!is.na(values)) %>%
+  mutate(age=ifelse(values > 1900, values - yob, values),
+         date=as.Date(ISOdate(round(ifelse(values > 1900,
+                                           values,
+                                           ifelse(values < 0,
+                                                  NA,
+                                                  round(values-0.4999,0) + yob - 0.001)),0),
+                              ifelse(values < 1900 & (round(values,0)-values != 0),
+                                     # convert the remainder to months
+                                     round((values - round(values-0.5,0))*12,0),
+                                     1),
+                              1))) %>%
+  group_by(eid,instance,array) %>%
+  arrange(eid,instance,array,date) %>%
+  filter(row_number() == 1) %>%
+  select(-c(info,values)) %>%
+  ungroup()
+
+diab_sr_dates <- diab_sr_dates %>%
+  filter(grepl(paste(self_reported_diab_codes, collapse="|^", sep=""),selfreported_code)) %>%
+  mutate(diabetes_type=case_when(
+    grepl("1222",selfreported_code) ~ "t1d",
+    grepl("1223",selfreported_code) ~ "t2d",
+    grepl("1220",selfreported_code) ~ "diab",
+    grepl("1221",selfreported_code) ~ "gest",
+    grepl("1521",selfreported_code) ~ "dins",
+    TRUE ~ "unk"
+  ))
+
+diab_sr_dates_long <- diab_sr_dates %>%
+  select(-c(array,instance,selfreported_code,age,yob)) %>%
+  group_by(eid,diabetes_type) %>%
+  arrange(eid,date) %>%
+  filter(row_number() == 1) %>%
+  pivot_wider(names_from = diabetes_type, values_from = date) %>%
+  rename(sr_t1d_date=t1d,
+         sr_t2d_date=t2d,
+         sr_diab_date=diab,
+         sr_gest_date=gest,
+         sr_dins_date=dins) %>%
+  ungroup()
+
+if (!"sr_t2d_date" %in% names(diab_ukb)){
+  diab_ukb <- diab_ukb %>%
+    left_join(diab_sr_dates_long,by="eid")
+}
+```
+
+```{r}
+# merge dates and get the earliest one as diabetes date
+diab_dates_collapse <- diab_ukb %>%
+  select(eid,yob,ends_with(c("t1d","t2d","date"))) %>%
+  pivot_longer(ends_with("date")) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  arrange(eid,value) %>%
+  mutate(diab_date=first(value),
+         diab_age=year(diab_date)-yob) %>%
+  ungroup() %>%
+  pivot_wider(names_from = name, values_from = value) %>%
+  select(eid,diab_date,diab_age)
+
+if (!"diab_date" %in% names(diab_ukb)){
+  diab_ukb <- diab_ukb %>%
+    left_join(diab_dates_collapse,by="eid")
+}
+```
+
+
+Examples of some weird cases:
+
+ * ICD10 dates and selfreported dates do not match
+ * T1D and T2D diagnoses, which one to choose?
+ * What do we take for "diabetes" on the self-reported codes?
+
+```{r include=FALSE}
+diab_ukb %>%
+  # filter(eid==1026074) %>%
+  select(eid,yob,ends_with("_date")) %>%
+  select(!contains("unk"))
+
+diab_ukb %>%
+  filter(eid==1026074) %>%
+  select(eid,yob,ends_with("_date")) %>%
+  select(!contains("unk"))
+
+diab_ukb %>%
+  filter(eid==1026074) %>%
+  select_if(~sum(!is.na(.)) > 0) %>%
+  mutate_at(vars(!eid),~as.character(.)) %>%
+  # select(eid,yob,contains("age")) %>%
+  pivot_longer(-c(eid,yob)) %>%
+  separate(name,c(NA,"name"),sep="(?=_f[[:digit:]])")
+```
+
+
+That look like this:
+
+```{r warning=FALSE}
+diab_ukb %>%
+  mutate(year=year(diab_date), week=quarter(diab_date)) %>%
+  ggplot(aes(x=year, fill=year,color=year)) +
+  theme_few() +
+  scale_x_continuous(breaks = scales::pretty_breaks(8)) +
+  # scale_fill_few() +
+  geom_histogram(binwidth = 2,fill=my_colors[1]) +
+  # facet_wrap(~year, scales = "free_x", nrow=1) +
+  ylab("Number of individuals") +
+  xlab("Year") +
+  theme(legend.position="none",
+          # axis.text.y = element_blank(),
+          # axis.ticks.y = element_blank(),
+          # plot.margin = margin(t=0, r=6, b=6, l=6,"pt"),
+          # axis.text.x=element_text(angle = 10,hjust=1),
+          panel.grid.major.y = element_line(colour = "gray",size=0.1),
+          panel.grid.major.x = element_line(colour = "gray",size=0.1))
+```
+
+### Age of diagnose
+
+```{r warning=FALSE}
+diab_ukb %>%
+  mutate(year=year(diab_date),
+         week=quarter(diab_date),
+         age=diab_age) %>%
+  ggplot(aes(x=age, fill=year,color=year)) +
+  theme_bw() +
+  scale_x_continuous(breaks = scales::pretty_breaks(8)) +
+  # scale_fill_few() +
+  geom_histogram(binwidth = 2,fill=my_colors[1]) +
+  # facet_wrap(~year, scales = "free_x", nrow=1) +
+  ylab("Number of individuals") +
+  xlab("Age") +
+  theme(legend.position="none",
+          # axis.text.y = element_blank(),
+          # axis.ticks.y = element_blank(),
+          # plot.margin = margin(t=0, r=6, b=6, l=6,"pt"),
+          # axis.text.x=element_text(angle = 10,hjust=1),
+          panel.grid.major.y = element_line(colour = "gray",size=0.1),
+          panel.grid.major.x = element_line(colour = "gray",size=0.1))
+```
+
+> **_Questions and comments_**
+>
+> At this moment, we have selected the **earliest** date of diabetes diagnose, regardless of the type. Could be addressed and modified later, if necessary.
+> 
+> - The rationale behind this is that "if there is a date, there is a diagnose". ICD10 dates tend to be more recent, which seems reasonable as hospital diagnose might come later than a GP diagnose.
+> 
+> - Do you agree with this?
+> 
+> - Also, how do you want to deal with multiple type diagnoses?
+
+
+<!-- ### Multiple diagnoses -->
+
+<!-- Another question would be, are there individuals with different types of diagnosed diabetes? -->
+
+<!-- ```{r} -->
+<!-- diab_ukb[1:10,] %>% -->
+<!--   filter((icd10_t1d == 1 | sr_t1d == 1 | adj_t1d == 1) & (icd10_t2d == 1 | sr_t2d == 1 | adj_t2d == 1)) %>%  -->
+<!--   select_if(~sum(!is.na(.)) > 0) %>%  -->
+<!--   select(eid,yob,ends_with(c("t1d","t2d","date"))) %>%  -->
+<!--   pivot_longer(ends_with("date")) %>%  -->
+<!--   filter(!is.na(value)) %>%  -->
+<!--   group_by(eid) %>%  -->
+<!--   group_by(icd10_t1d,adj_t1d) %>%  -->
+<!--   arrange(eid,icd10_t1d,adj_t1d,value) %>%  -->
+<!--   mutate(t1d_date=ifelse(icd10_t1d == 1 & adj_t1d == 1, -->
+<!--                          first(value), -->
+<!--                          ifelse(icd10_t1d == 1, ))) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- diab_ukb[1:10,] %>% -->
+<!--   filter((icd10_t1d == 1 | sr_t1d == 1 | adj_t1d == 1) & (icd10_t2d == 1 | sr_t2d == 1 | adj_t2d == 1)) %>%  -->
+<!--   select_if(~sum(!is.na(.)) > 0) %>%  -->
+<!--   select(eid,yob,ends_with(c("t1d","t2d","date"))) %>%  -->
+<!--   pivot_longer(ends_with("date")) %>%  -->
+<!--   filter(!is.na(value)) %>%  -->
+<!--   group_by(eid) %>%  -->
+<!--   group_by(icd10_t1d,adj_t1d) %>%  -->
+<!--   arrange(eid,icd10_t1d,adj_t1d,value) %>%  -->
+<!--   mutate(t1d_date=ifelse(icd10_t1d == 1 & adj_t1d == 1, -->
+<!--                          first(value), -->
+<!--                          ifelse(icd10_t1d == 1, ))) -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- # %>% -->
+<!--   # mutate_at(vars(!eid),~as.character(.)) %>% -->
+<!--   # select(eid,yob,contains("age")) %>%  -->
+<!--   # pivot_longer(-c(eid,yob)) %>%  -->
+<!--   # filter(!is.na(value)) %>%  -->
+<!--   # separate(name,c(NA,"name"),sep="(?=_f[[:digit:]])") -->
+
+
+
+<!--   #  -->
+<!--   # mutate(year=year(sr_diab_date), -->
+<!--   #        week=quarter(sr_diab_date), -->
+<!--   #        age=year-yob) %>% -->
+<!--   # ggplot( aes(x=age, fill=year,color=year)) + -->
+<!--   # theme_bw() + -->
+<!--   # # scale_fill_few() + -->
+<!--   # geom_histogram(binwidth = 2) + -->
+<!--   # # facet_wrap(~year, scales = "free_x", nrow=1) + -->
+<!--   # ylab("Number of diagnoses (self-reported)") + -->
+<!--   # xlab("Age") + -->
+<!--   # theme( -->
+<!--   #   legend.position="bottom" -->
+<!--   # ) -->
+
+<!-- ``` -->
+
+
+### Population Distribution
+
+#### Sex
+
+```{r include=FALSE}
+summary(diab_ukb$genetic_sex_f22001_0_0)
+```
+
+
+```{r echo=FALSE, include=FALSE}
+f_id <- "f22001"
+pdata <- diab_ukb %>% select(eid,contains(f_id)) %>%
+  pivot_longer(!c(eid),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value) %>%
+  mutate(perc=round(n/sum(n)*100,1))
+# pdata
+```
+
+```{r echo=TRUE, fig.width=3,fig.height=6}
+ggplot(pdata,aes(x=value,y=n)) +
+  geom_col(aes(fill=value,col=value),cex=1) +
+  geom_text(position="identity",col=c("white","white"),
+            aes(y=n-500,label=n)) +
+  geom_text(position="identity",col=c("white","white"),
+            aes(y=n-1300,label=paste0("(",perc,"%)"))) +
+  labs(x="Sex", y="Number of individuals",
+       fill="Sex", col="Sex") +
+  theme_bw() +
+  scale_color_few("Dark") +
+  scale_fill_few("Dark") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+#### BMI
+
+```{r}
+summary_continuous(field="_f21001_",type="num",xlab="BMI (kg/m2)",
+                   leg_pos=c(0.9,0.7),
+                   xlim=c(0,80))
+```
+
+#### Year of birth
+
+```{r include=FALSE}
+summary(diab_ukb$year_of_birth_f34_0_0)
+```
+
+
+```{r include=TRUE}
+f_id <- "_f34_"
+pdata <- diab_ukb %>%
+  select(eid,sex,contains(f_id)) %>%
+  pivot_longer(!c(eid,sex),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(sex,value)
+# pdata
+```
+
+```{r }
+p1 <- ggplot(pdata,aes(x=value,y=n)) +
+  geom_bar(stat="identity",position="dodge",width=0.8,aes(fill=sex),alpha=1,cex=1) +
+  labs(x="Year of birth", y="Number of Individuals",
+       fill="Sex", col="Sex") +
+  scale_x_continuous(breaks = scales::pretty_breaks(8)) +
+  theme_bw() +
+  scale_color_few("Dark") +
+  scale_fill_few("Dark") +
+  # xlim(1900,2000) +
+  theme(legend.position=c(0.9,0.8),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=9),
+        legend.key.size = unit(0.9,"line"),
+        # legend.background = element_rect(fill="transparent"),
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        # axis.text.x = element_blank(),
+        # axis.ticks.x = element_blank(),
+        # plot.margin = margin(t=6, r=6, b=-11, l=6,"pt"),
+        panel.grid.major.x = element_line(colour = "gray",size=0.1))
+
+p1
+```
+
+
+#### Ethnic group
+
+```{r}
+pdata <- diab_ukb %>%
+  group_by(ethnic_background_f21000_0_0) %>%
+  summarize(tot=sum(n()),.groups = "drop") %>%
+  na.omit()
+
+
+# basic treemap
+p=treemap(pdata,
+          index=c("ethnic_background_f21000_0_0"),
+          vSize="tot",
+          type="index",
+          title = "Ethnic Background",
+)
+```
+
+```{r}
+pdata %>%
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  arrange(tot) %>%   
+  mutate(short = factor(ethnic_background_f21000_0_0, ethnic_background_f21000_0_0)) %>%
+  ggplot(aes(x=short, y=tot, fill=short)) +
+  geom_bar(stat="identity") +
+  theme_bw() +
+  labs(
+    x="Ethnic Background",
+    y="Number of individuals",
+    title="Ethnic Background",
+    subtitle="in selected UKB individuals"
+  ) +
+  geom_text(aes(label=paste0(perc,"%")),cex=2.5,hjust=c(rep(-0.8,21),1.2)) + 
+  theme(legend.position="none") +
+  coord_flip()
+```
+
+
+:::infonote
+More than 80% of the individuals have "White British" background, as most of the UK Biobank. Just to be aware, in case we need to run polygenic risk score or any other genomic-related approaches later.
+:::
+
+
+#### Sleep
+
+```{r include=FALSE}
+table(diab_ukb$sleep_duration_f1160_0_0)
+```
+
+```{r include=TRUE}
+f_id <- "_f1160_"
+pdata <- diab_ukb %>%
+  select(eid,sex,contains(f_id)) %>%
+  pivot_longer(!c(eid,sex),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0"))+1,
+         value=if_else(value<0, NA_integer_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(sex,value)
+# pdata
+```
+
+```{r}
+p1 <- ggplot(pdata,aes(x=value,y=n)) +
+  geom_bar(stat="identity",position="dodge",width=0.8,aes(fill=sex),alpha=1,cex=1) +
+  labs(x="Sleeping Hours", y="Number of Individuals",
+       fill="Sex", col="Sex") +
+  scale_x_continuous(breaks = scales::pretty_breaks(8),limits=c(0,15)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(8)) +
+  theme_bw() +
+  scale_color_few("Dark") +
+  scale_fill_few("Dark") +
+  theme(legend.position=c(0.9,0.8),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=9),
+        legend.key.size = unit(0.9,"line"),
+        # legend.background = element_rect(fill="transparent"),
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        # axis.text.x = element_blank(),
+        # axis.ticks.x = element_blank(),
+        # plot.margin = margin(t=6, r=6, b=-11, l=6,"pt"),
+        panel.grid.major.x = element_line(colour = "gray",size=0.1))
+
+# p1
+```
+
+
+```{r}
+summary_discrete(field="_f1160_",type="num",xlab="Sleeping Hours",ylab="Number of Individuals",
+                 leg_pos=c(0.8,0.9))
+```
+
+
+#### Smoking
+
+```{r include=TRUE, fig.height=6, fig.width=4}
+summary_discrete(field="_f20160_",type="yesno",xlab="Ever smoked",ylab="Number of Individuals",
+                 leg_pos=c(0.8,0.9))
+```
+
+#### Alcohol
+
+```{r fig.height=6, fig.width=6}
+p <- summary_facetbysex(field="_f1558_",type="alcohol",fillvar="value", fillname="Alcohol",
+                   xlab="Alcohol Intake",ylab="Number of Individuals",
+                   leg_pos="right")
+p
+```
+
+
+#### Diet
+
+:::infonote
+Lots of variables related to "Diet". Only fresh fruit intake to exemplify.
+:::
+
+```{r}
+# summary_discrete("_f1309_",type="alcohol",fillvar = "Alcohol",
+                   # xlab="Alcohol Intake",ylab="Number of Individuals",
+                   # leg_pos="right")
+summary_discrete(field="_f1309_",type="num",xlab="Fresh fruit intake (pieces/day)",
+                 ylab="Number of Individuals",
+                 leg_pos=c(0.9,0.85),
+                 xlim=c(NA,10.5))
+```
+
+#### Blood pressure
+
+```{r message=FALSE, warning=FALSE}
+plot_dbp <- summary_continuous(field="_f4079_",type="num",xlab="DBP (mmHg)",
+                               ylab="Number of Individuals",
+                               leg_pos=c(0.8,0.7),
+                               xlim=c(50,120))
+plot_sbp <- summary_continuous(field="_f4080_",type="num",xlab="SBP (mmHg)",
+                               ylab="Number of Individuals",
+                               leg_pos=c(0.8,0.7),
+                               xlim=c(70,210))
+plot_grid(plot_dbp,plot_sbp,nrow=1)
+```
+
+#### Mortality
+
+```{r include=TRUE, fig.height=6, fig.width=3}
+summary_discrete(field="_f40001_",type="deathcount",xlab="Death Information",ylab="Number of Individuals",
+                 leg_pos=c(0.2,0.9))
+```
+
+```{r message=FALSE, warning=FALSE}
+p <- summary_facetbysex(field="_f40001_",type="death",fillvar="sex", fillname="Sex",
+                   xlab="Death ICD10 Codes",ylab="Number of Individuals",
+                   leg_pos=c(0.2,0.9))
+p
+```
+
+
+
+```{r warning=FALSE, include=TRUE}
+death_icd10 <- read.table('../input/death_icd10codes_description.txt', stringsAsFactors = F, sep="\t",quote = "")
+
+death_icd10 <- death_icd10 %>%
+  rename(code=V1, Description=V2) %>%
+  separate(Description,into=c("Description","n"),sep="(?=[[:digit:]])",extra = "merge")
+
+# death_icd10
+```
+
+```{r warning=FALSE}
+d_codes <- diab_ukb %>%
+  select(eid,sex,contains("_f40001_")) %>%
+  pivot_longer(!c(eid,sex),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),"_f40001_") %>%
+  mutate_if(is.ordered,as.character) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0"))+1,
+         value=if_else(!is.na(value) & value < 0,
+                       ifelse(is.numeric(value),NA_integer_,NA_character_),
+                       value)
+  ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(sex,value) %>%
+  group_by(sex) %>% arrange(sex,-n) %>% top_n(10) %>% ungroup() %>%
+  mutate(value=reorder_within(value,-n,sex)) %>%
+  separate(value,c("code",NA),"___") %>%
+  pull(code) %>%
+  unique()
+# d_codes
+
+death_sum <- data.frame(ICD10=character(), Description=character())
+for (code in d_codes) {
+  if(nchar(code) == 4){
+    tmp <- data.frame(ICD10=str_sub(code,1,3),
+                      Description=death_icd10$Description[death_icd10$code == str_sub(code,1,3)])
+    tmp <- rbind(tmp,data.frame(ICD10=code,
+                                Description=death_icd10$Description[death_icd10$code == code]))
+    death_sum <- rbind(death_sum,tmp)
+  } else {
+    tmp <- data.frame(ICD10=code,
+                      Description=death_icd10$Description[death_icd10$code == code])
+    death_sum <- rbind(death_sum,tmp)
+  }
+}
+datatable(death_sum)
+```
+
+#### Physical activity
+
+```{r message=FALSE, warning=FALSE, fig.height=6, fig.width=5}
+p <- summary_facetbysex(field="_f22032_",type="ipaq",fillvar="value", fillname="",
+                   xlab="IPAQ Activity Group",ylab="Number of Individuals",
+                   leg_pos="bottom")
+p
+```
+
+:::infonote
+Activity from the questionnaire, such as the IPAQ Activity Group above, is available for around **80%** of individuals.
+:::
+
+# Secondary Outcomes
+
+Trying to address the second goal of the project, we will assess now other diseases that may have been diagnosed to the selected individuals.
+
+The following step will be to actually identify which of those are incident events, i.e. they happened after diabetes was diagnosed.
+
+:::infonote
+Summary of all diseases at this point, we will focus later on the selected codes and filter the incident ones.
+:::
+
+## All diseases
+
+To be able to classify and organize diseases, we need to first load WHO organization of all diseases by ICD10 (downloaded from [here](https://github.com/holtzy/UKB-Comorbidity)).
+
+
+```{r}
+load("../input/icd10_definition_WHO.rda")
+# head(ICD)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+dis_freq = diab_ukb %>% select(eid,contains(c("41270"))) %>%
+  pivot_longer(!eid,names_to='names', values_to='value') %>%
+  na.omit() %>%
+  group_by(value) %>%
+  count() %>%
+  left_join(ICD, by = c("value" = "coding_L4"))
+
+datatable(dis_freq %>%
+            group_by(node_L1) %>%
+            select(-c(value,n)) %>%
+            # arrange(-n) %>%
+            slice(1),
+          options = list(scrollX=T,pageLength=3), rownames = FALSE)
+# dis_freq %>% filter(short=="Factor-influencing") %>% arrange(-n) %>% ungroup() %>% summarise(tot=sum(n))
+```
+
+
+From which, in our subset, the following groups are the most common ones:
+
+```{r}
+tmp = dis_freq %>%
+  group_by(short,long) %>%
+  summarize(tot=sum(n),.groups="drop") %>%
+  na.omit() %>%
+  arrange(-tot)
+
+# head(tmp)
+```
+
+
+```{r}
+# basic treemap
+p=treemap(tmp,
+          index=c("short"),
+          vSize="tot",
+          type="index",
+          title = "Common categories",
+          # fontsize.labels = 9,
+          # palette="RdYlBu",
+          palette="Spectral",
+          inflate.labels=T,
+)
+```
+
+
+### Cardiovascular Episodes
+
+But, as an example, which of those would be classified as "Circulatory"?
+
+
+```{r message=F,warning=F}
+heart <- dis_freq %>%
+  filter(node_L1==9) %>%
+  arrange(-n) %>%
+  select(value, n, meaning_L4, meaning_L3, meaning_L2, short)
+datatable(head(heart),options = list(dom = 't'), rownames = FALSE)
+```
+
+
+And these are the main "Cardiovascular" categories:
+
+
+```{r}
+p=treemap(heart,
+          index=c("meaning_L2", "meaning_L3"),
+          vSize="n",
+          type="index",
+          title="Main Cardiovascular diseases",
+          palette="Spectral",
+          # inflate.labels=T,
+)
+```
+
+```{r message=F,warning=F}
+tmp = heart %>% arrange(desc(n)) %>% mutate(inPerc= round(n/nrow(diab_ukb) * 100,1))
+
+datatable(tmp, filter = 'top', rownames = FALSE )
+```
+
+## Incident diseases
+
+We can check the diagnose date of a set of ICD10 codes, and compare them with the diabetes diagnose date. If the "other" disease was diagnosed after diabetes, that would correspond to an incident case.
+
+As an example:
+
+```{r}
+tmp <- icd10_with_dates %>%
+  inner_join(diab_ukb %>% select(eid,diab_date) %>% na.omit(),by="eid") %>%
+  filter(!grepl(paste(diab_codes, collapse="|^", sep=""),icd10)) %>%
+  mutate(diff_days=as.numeric(date-diab_date))
+# dim(tmp)
+# tmp
+# length(diab_ukb$diab_date)
+# tmp[is.na(tmp$diff_days),]
+# diab_ukb %>% select(eid,diab_date) %>% na.omit() %>% filter(eid==1000312)
+# icd10_with_dates %>% filter(eid == 1000312)
+```
+
+
+```{r}
+# summary(tmp$diff_days)
+ggplot(tmp,aes(x=diff_days/365,fill=diff_days>0)) +
+  geom_histogram(breaks=seq(-25,75,by=1)) +
+  labs(x="Years after diabetes",
+       y="Number of cases",
+       fill="Other disease") +
+  theme_few() +
+  scale_fill_viridis_d(option = "E",labels=c("Prevalent","Incident")) +
+  theme(legend.position=c(0.8,0.8),
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=9),
+        legend.key.size = unit(0.9,"line"),
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        panel.grid.minor.y = element_line(colour = "gray",size=0.1),
+        panel.grid.major.x = element_line(colour = "gray",size=0.1))
+```
+
+## Selected Outcomes
+
+Now, we want to check a few selected outcomes and only **incident** episodes.
+
+As first examples, we will work with MI and Stroke, both of them with an algorithmically-defined outcomes, as you suggested.
+
+### Myocardial Infarction
+
+MI outcome has an "algorithmical" definition, similar to the diabetes algorithm we used before (but this is already included in the UK Biobank).
+It considers all ICD10 codes, self-reported, nurse interview and death codes to better classify individuals and have a correct date for the episode.
+
+In the next sections, we will identify the individuals that had MI after being diagnosed for diabetes. We will briefly summarize a few different aspects to check whether some of them are different between having or not having MI.
+
+```{r fig.width=6,fig.height=6}
+pdata <- diab_ukb %>%
+  mutate(value=!is.na(date_of_myocardial_infarction_f42000_0_0)) %>%
+  count(value) %>%
+  arrange(-value) %>%
+  mutate(perc=round(n/sum(n)*100,1),
+         value=ifelse(value == TRUE, "Yes", "No"),
+         value=factor(value,levels=c("Yes","No")))
+
+p1 <- ggplot(pdata,aes(x=value,y=n)) +
+  geom_col(aes(fill=value,col=value),cex=1) +
+  geom_text(position="identity",
+            aes(label=n),vjust=c(-3.5,1.6)) +
+  geom_text(position="identity",vjust=c(-1.8,3),
+            aes(label=paste0("(",perc,"%)"))) +
+  labs(x="MI", y="Number of individuals") +
+  theme_bw() +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 40000)) +
+  scale_color_few("Medium") +
+  scale_fill_few("Medium") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+
+pdata <- diab_ukb %>%
+  mutate(value=!is.na(date_of_myocardial_infarction_f42000_0_0)) %>%
+  mutate(value=ifelse(!is.na(date_of_myocardial_infarction_f42000_0_0) &
+                        !is.na(diab_date) &
+                        date_of_myocardial_infarction_f42000_0_0 >= diab_date,
+                      TRUE,
+                      FALSE)) %>%
+  count(value) %>%
+  arrange(-value) %>%
+  mutate(perc=round(n/sum(n)*100,1),
+         value=ifelse(value == TRUE, "Yes", "No"),
+         value=factor(value,levels=c("Yes","No")))
+
+p2 <- ggplot(pdata,aes(x=value,y=n)) +
+  geom_col(aes(fill=value,col=value),cex=1) +
+  geom_text(position="identity",
+            aes(label=n),vjust=c(-3.5,1.6)) +
+  geom_text(position="identity", vjust=c(-1.8,3),
+            aes(label=paste0("(",perc,"%)"))) +
+  labs(x="Incident MI", y="") +
+  theme_bw() +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 40000)) +
+  scale_color_few("Medium") +
+  scale_fill_few("Medium") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+
+plot_grid(p1,p2,nrow=1)
+```
+
+:::infonote
+Around 3000 individuals have had an incident Myocardial Infarction.
+:::
+
+```{r}
+mi_ukb <- diab_ukb %>%
+  mutate(m_infarction=ifelse(!is.na(date_of_myocardial_infarction_f42000_0_0) &
+                                !is.na(diab_date) &
+                                date_of_myocardial_infarction_f42000_0_0 >= diab_date,"Yes","No"),
+         m_infarction=factor(m_infarction,levels=c("Yes","No")))
+```
+
+
+* Sex
+
+```{r fig.width=4,fig.height=6}
+f_id <- "f22001"
+pdata <- mi_ukb %>%
+  select(eid,m_infarction,contains(f_id)) %>%
+  pivot_longer(!c(eid,m_infarction),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value,m_infarction) %>%
+  group_by(m_infarction) %>%
+  mutate(perc=round(n/sum(n)*100,1)) %>%
+  ungroup()
+
+ggplot(pdata,aes(x=m_infarction,y=n,fill=value)) +
+  geom_bar(stat="identity",
+           position=position_dodge(),cex=1) +
+  geom_text(position=position_dodge(0.9), col=c("black","white","black","black"),
+            aes(y=n-50,label=n),vjust=c(-3.5,1.6,-3.5,1.6),cex=3) +
+  geom_text(position=position_dodge(0.9),vjust=c(-1.8,3,-1.8,3),
+            cex=3,col=c("black","white","black","black"),
+            aes(y=n-90,label=paste0("(",perc,"%)"))) +
+  labs(x="MI", y="Number of individuals",
+       fill="Sex", col="Sex") +
+  theme_bw() +
+  scale_color_few("Dark") +
+  scale_fill_few("Dark") +
+  theme(legend.position="right",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+* BMI
+
+```{r}
+summary_continuous(mi_ukb,field="_f21001_",type="num",xlab="BMI (kg/m2)",
+                               leg_pos=c(0.9,0.7), fillvar = "m_infarction", fillname = "MI",
+                               xlim=c(0,80))
+```
+
+* Years since diabetes (to today)
+
+```{r warning=F}
+mi_ukb <- mi_ukb %>%
+  mutate(years_since_diab= 2021 - year(diab_date))
+summary_continuous(mi_ukb,field="years_since_diab",type="num",xlab="Years since diabetes",
+                   leg_pos=c(0.9,0.7), fillvar = "m_infarction", fillname = "MI",
+                   xlim=c(0,80))
+```
+
+
+* Diabetes diagnose age
+
+```{r warning=F}
+# summary_discrete(mi_ukb,type="num",xlab="Age at diabetes",ylab="Number of Individuals",
+#                  field="diab_age",leg_pos=c(0.9,0.7), fillvar = "m_infarction", fillname = "m_infarction",
+#                  xlim=c(0,90))
+summary_continuous(mi_ukb,field="diab_age",type="num",xlab="Age at diabetes",
+                               leg_pos=c(0.9,0.7), fillvar = "m_infarction", fillname = "MI",
+                               xlim=c(0,80))
+```
+
+* Smoking
+
+```{r include=TRUE, fig.height=6, fig.width=4}
+summary_discrete(mi_ukb,field="_f20160_",type="yesno",xlab="Ever smoked",
+                 fillvar="m_infarction",fillname = "MI",
+                 ylab="Number of Individuals",
+                 leg_pos=c(0.8,0.9))
+```
+
+* Blood Pressure
+
+```{r message=FALSE, warning=FALSE}
+plot_dbp <- summary_continuous(mi_ukb,field="_f4079_",type="num",xlab="DBP (mmHg)",
+                               ylab="Number of Individuals", fillvar = "m_infarction", fillname = "MI",
+                               leg_pos=c(0.8,0.7),
+                               xlim=c(50,120))
+plot_sbp <- summary_continuous(mi_ukb,field="_f4080_",type="num",xlab="SBP (mmHg)",
+                               ylab="Number of Individuals", fillvar = "m_infarction", fillname = "MI",
+                               leg_pos=c(0.8,0.7),
+                               xlim=c(70,210))
+plot_grid(plot_dbp,plot_sbp,nrow=1)
+```
+
+
+### Stroke
+
+Same as MI, stroke outcome also has an "algorithmical" definition, similar to the diabetes algorithm we used before (but this is already included in the UK Biobank).
+It considers all ICD10 codes, self-reported, nurse interview and death codes to better classify individuals and have a correct date for the episode.
+
+We will repeat the same process than with MI.
+
+```{r include=FALSE}
+summary(diab_ukb$date_of_stroke_f42006_0_0)
+summary(diab_ukb$date_of_ischaemic_stroke_f42008_0_0)
+dim(diab_ukb)
+stroke_ukb <- diab_ukb %>%
+  filter(!is.na(date_of_stroke_f42006_0_0))
+
+dim(stroke_ukb)
+summary(stroke_ukb$date_of_ischaemic_stroke_f42008_0_0)
+```
+
+```{r fig.width=6,fig.height=6}
+pdata <- diab_ukb %>%
+  mutate(value=!is.na(date_of_stroke_f42006_0_0)) %>%
+  count(value) %>%
+  arrange(-value) %>%
+  mutate(perc=round(n/sum(n)*100,1),
+         value=ifelse(value == TRUE, "Yes", "No"),
+         value=factor(value,levels=c("Yes","No")))
+
+p1 <- ggplot(pdata,aes(x=value,y=n)) +
+  geom_col(aes(fill=value,col=value),cex=1) +
+  geom_text(position="identity",
+            aes(label=n),vjust=c(-3.5,1.6)) +
+  geom_text(position="identity",vjust=c(-1.8,3),
+            aes(label=paste0("(",perc,"%)"))) +
+  labs(x="Stroke", y="Number of individuals") +
+  theme_bw() +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 40000)) +
+  scale_color_few("Medium") +
+  scale_fill_few("Medium") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+
+pdata <- diab_ukb %>%
+  mutate(value=!is.na(date_of_stroke_f42006_0_0)) %>%
+  mutate(value=ifelse(!is.na(date_of_stroke_f42006_0_0) &
+                        !is.na(diab_date) &
+                        date_of_stroke_f42006_0_0 >= diab_date,
+                      TRUE,
+                      FALSE)) %>%
+  count(value) %>%
+  arrange(-value) %>%
+  mutate(perc=round(n/sum(n)*100,1),
+         value=ifelse(value == TRUE, "Yes", "No"),
+         value=factor(value,levels=c("Yes","No")))
+
+p2 <- ggplot(pdata,aes(x=value,y=n)) +
+  geom_col(aes(fill=value,col=value),cex=1) +
+  geom_text(position="identity",
+            aes(label=n),vjust=c(-3.5,1.6)) +
+  geom_text(position="identity",vjust=c(-1.8,3),
+            aes(label=paste0("(",perc,"%)"))) +
+  labs(x="Incident stroke", y="") +
+  theme_bw() +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 40000)) +
+  scale_color_few("Medium") +
+  scale_fill_few("Medium") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+
+plot_grid(p1,p2,nrow=1)
+```
+
+
+:::infonote
+Around 1500 individuals have had an incident stroke.
+
+* Can we identify anything different with respect to the ones that did not have stroke?
+* What about comparing with prevalent stroke?
+:::
+
+```{r}
+stroke_ukb <- diab_ukb %>%
+  mutate(stroke=ifelse(!is.na(date_of_stroke_f42006_0_0) &
+                                !is.na(diab_date) &
+                                date_of_stroke_f42006_0_0 >= diab_date,"Yes","No"),
+         stroke=factor(stroke,levels=c("Yes","No")))
+```
+
+
+* Sex
+
+```{r fig.width=4,fig.height=6}
+f_id <- "f22001"
+pdata <- stroke_ukb %>%
+  select(eid,stroke,contains(f_id)) %>%
+  pivot_longer(!c(eid,stroke),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value,stroke) %>%
+  group_by(stroke) %>%
+  mutate(perc=round(n/sum(n)*100,1)) %>%
+  ungroup()
+
+ggplot(pdata,aes(x=stroke,y=n,fill=value)) +
+  geom_bar(stat="identity",
+           position=position_dodge(),cex=1) +
+  geom_text(position=position_dodge(0.9), col=c("black","white","black","black"),
+            aes(y=n-50,label=n),vjust=c(-3.5,1.6,-3.5,1.6),cex=3) +
+  geom_text(position=position_dodge(0.9),vjust=c(-1.8,3,-1.8,3),
+            cex=3,col=c("black","white","black","black"),
+            aes(y=n-90,label=paste0("(",perc,"%)"))) +
+  labs(x="Stroke", y="Number of individuals",
+       fill="Sex", col="Sex") +
+  theme_bw() +
+  scale_color_few("Dark") +
+  scale_fill_few("Dark") +
+  theme(legend.position="right",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+* BMI
+
+```{r}
+summary_continuous(stroke_ukb,field="_f21001_",type="num",xlab="BMI (kg/m2)",
+                               leg_pos=c(0.9,0.7), fillvar = "stroke", fillname = "Stroke",
+                               xlim=c(0,80))
+```
+
+* Years since diabetes
+
+```{r warning=F}
+stroke_ukb <- stroke_ukb %>%
+  mutate(years_since_diab= 2021 - year(diab_date))
+summary_continuous(stroke_ukb,field="years_since_diab",type="num",xlab="Years since diabetes",
+                               leg_pos=c(0.9,0.7), fillvar = "stroke", fillname = "Stroke",
+                               xlim=c(0,80))
+```
+
+
+* Diabetes diagnose age
+
+```{r warning=F}
+# summary_discrete(stroke_ukb,type="num",xlab="Age at diabetes",ylab="Number of Individuals",
+#                  field="diab_age",leg_pos=c(0.9,0.7), fillvar = "stroke", fillname = "Stroke",
+#                  xlim=c(0,90))
+summary_continuous(stroke_ukb,field="diab_age",type="num",xlab="Age at diabetes",
+                               leg_pos=c(0.9,0.7), fillvar = "stroke", fillname = "Stroke",
+                               xlim=c(0,80))
+```
+
+* Smoking
+
+```{r include=TRUE, fig.height=6, fig.width=4}
+summary_discrete(stroke_ukb,field="_f20160_",type="yesno",xlab="Ever smoked",
+                 fillvar="stroke",fillname = "Stroke",
+                 ylab="Number of Individuals",
+                 leg_pos=c(0.8,0.9))
+```
+
+* Blood Pressure
+
+```{r message=FALSE, warning=FALSE}
+plot_dbp <- summary_continuous(stroke_ukb,field="_f4079_",type="num",xlab="DBP (mmHg)",
+                               ylab="Number of Individuals", fillvar = "stroke", fillname = "Stroke",
+                               leg_pos=c(0.85,0.68),
+                               xlim=c(50,120))
+plot_sbp <- summary_continuous(stroke_ukb,field="_f4080_",type="num",xlab="SBP (mmHg)",
+                               ylab="Number of Individuals", fillvar = "stroke", fillname = "Stroke",
+                               leg_pos=c(0.85,0.68),
+                               xlim=c(70,210))
+plot_grid(plot_dbp,plot_sbp,nrow=1)
+```
+
+
+> **_Questions and comments_**
+>
+> This is a possible pipeline for each of the outcomes you selected. 
+> If we agree on the diabetes subset and analysis with the suggested pipeline, we could run different models to identify any associated variables with respect to having secondary outcome or not. 
+> 
+> - Would you be interested in comparing the secondary outcomes with or without having had diabetes?
+> 
+> - Any other suggestions?
