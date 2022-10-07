@@ -1,0 +1,158 @@
+---
+title: "UKBiobank"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    theme: cosmo
+    df_print: paged
+    highlight: tango
+    # code_folding: hide
+# output:
+#   epuRate::BAKER:
+#     toc: TRUE
+#     number_sections: FALSE
+#     code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# UK Biobank Playground
+
+In this file, you will find a walkthrough to understand how UK Biobank is organized and acccessible via R. It will help you on the following steps: 
+
+* Take the ICD10 classification for your diagnosed disease
+* Get a subset for your selected disease from the whole UKB (server only)
+* Understand how visits and other HES data were harvested and stored
+* Summarize the population of your subset
+
+Tutorial inspired by [Yan Holtz analysis](<!-- https://holtzy.github.io/UKB-Comorbidity/1_DataWrangling.html# -->)
+
+## Preprocessing the data
+
+### Load libraries and functions
+
+Libraries:
+
+```{r warning=FALSE, results='hide'}
+library(summarytools)
+st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           style        = "rmarkdown", # Always use this option in Rmd documents
+           footnote     = NA,          # Makes html-rendered results more concise
+           subtitle.emphasis = FALSE)  # Improves layout with some rmardown themes
+# library(lobstr)
+library(knitr)
+opts_chunk$set(results = 'asis',      # Can also be set at the chunk-level
+comment = NA,
+prompt  = FALSE,
+cache   = FALSE)
+# library(ukbtools)
+library(tidyverse)
+library(DT)
+library(treemap)
+```
+
+Pre-generated functions:
+
+```{r}
+source("../ukb_functions.R")
+```
+
+For this example, we will work with Acute Myocardial Infarction, for this example.
+
+On the [ICD10 Classification](https://en.wikipedia.org/wiki/ICD-10), it corresponds to the code I21.
+
+If you are interested in a different disease, here you can see the summary of the [ICD10 Classification in UK Biobank](https://biobank.ndph.ox.ac.uk/showcase/field.cgi?id=41202).
+
+## Hospital Episode Data
+
+Suppose somebody has 3 ICD10 diseases. We want to know WHEN each disease was discovered. The HES (Hospital Episode Statistics) data provides this information.
+This data will give us that information and we can assign all different diagnoses to their corresponding date. This way, we can later find whether some biomarkers or medications, for instance, were taken before or after the onset of the disease.
+
+
+## Load UK Biobank data
+
+So, let's do this! Load UK Biobank data and get our hands dirty.
+
+```{r}
+# only if you are in the cluster, otherwise, load the pre-saved subset rda in the second line and skip next chunk
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/ukb_data_clean.rda")
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/preprocessed_rdas/acute_myocardial_infarction_subset.rda")
+load("~/sgcluster/acute_myocardial_infarction_subset.rda")
+```
+
+From the whole UK Biobank dataset, we want to select the ones corresponding to I21. We will use the function `extract_diagnose_icd10`:
+
+```{r}
+# my_heart_subset <- extract_diagnose_icd10(ukb_data_clean,c('I21'))
+# # save the subset to avoid loading the full dataset again
+# save(my_heart_subset,file='/baker/datasets/ukb55469/phenotype_traits/R-env/preprocessed_rdas/acute_myocardial_infarction_subset.rda')
+```
+
+## Basic summary of subset
+
+* Sex
+* Height
+* BMI
+* Place of birth
+* Ethnic origin
+
+```{r warning=FALSE}
+sum.patterns <- c("sex_f","standing_height_f50","bmi_f21001","ethnic_background")
+sum.fields<- unlist(sapply(sum.patterns,function(x){names(my_heart_subset)[str_detect(names(my_heart_subset),x)]}))
+# sum.fields
+dfSummary(my_heart_subset[,sum.fields],style="grid",headings=F,valid.col=T,tmp.img.dir = "/tmp",varnumbers = T)
+```
+
+```{r}
+tmp=as.data.frame(table(my_heart_subset$ethnic_background_f21000_0_0 ))
+colnames(tmp)=c("value","freq")
+
+# make the treemap
+treemap(tmp, index=c("value"), vSize="freq", type="index",
+        inflate.labels=T,
+        fontface.labels=1,
+        fontsize.labels=2)
+```
+
+
+```{r fig.height=8, fig.width=5, warning=FALSE}
+sum.patterns <- c("place_of_birth_in_uk_")
+sum.fields<- unlist(sapply(sum.patterns,function(x){names(my_heart_subset)[str_detect(names(my_heart_subset),x)]}))
+my_heart_subset %>%
+  #head(1000) %>%
+  ggplot( aes(y=place_of_birth_in_uk_north_coordinate_f129_0_0, x=place_of_birth_in_uk_east_coordinate_f130_0_0) ) +
+    #stat_density_2d(geom = "raster", aes(fill = log(..density..)), contour = FALSE) +
+    geom_point(alpha=0.05, size=0.8) +
+    theme_minimal() +
+    labs(
+      x="",
+      y="",
+      title="Where our UK Biobank dataset people were born",
+      sub=paste("n:",nrow(data))
+    ) +
+  theme(
+    legend.position="none",
+    axis.title=element_blank(),
+    axis.ticks = element_blank(),
+    axis.text = element_blank(),
+    panel.grid=element_blank(),
+    panel.background = element_rect(color="black", fill= alpha("skyblue",0.1))
+  )
+```
+
+

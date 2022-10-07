@@ -1,0 +1,311 @@
+---
+title: "UKBiobank"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    theme: cosmo
+    df_print: paged
+    highlight: tango
+    # code_folding: hide
+# output:
+#   epuRate::BAKER:
+#     toc: TRUE
+#     number_sections: FALSE
+#     code_folding: "show"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# Play around with UKBiobank
+
+## Plots for Mike presentation
+
+### Load Libraries
+
+```{r warning=FALSE, results='hide'}
+library(summarytools)
+library(stringr)
+st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           style        = "rmarkdown", # Always use this option in Rmd documents
+           footnote     = NA,          # Makes html-rendered results more concise
+           subtitle.emphasis = FALSE)  # Improves layout with some rmardown themes
+library(lobstr)
+library(knitr)
+opts_chunk$set(results = 'asis',      # Can also be set at the chunk-level
+               comment = NA,
+               prompt  = FALSE,
+               cache   = FALSE)
+library(ukbtools)
+library(tidyverse)
+```
+
+### Load data
+
+Load data in the cluster and save selected fields for reports
+
+```{r}
+# # to run in the cluster
+# library(stringr)
+# # load("/baker/datasets/ukb55469/R-env/my_ukb_data.rda")
+# nm <- names(my_ukb_data)
+# field.patterns.illness <- tolower(c("eid","cholesterol", "DL_", "Vitamin_d", "Calcium","Creatinine","IGF1",
+#                                     "Creactive","Lipoprotein","lbumin","noncancer_illness_code_selfreported_f20002"))
+# sel.fields.illness <- unlist(sapply(field.patterns.illness,function(x){nm[str_detect(nm,x)]}))
+# names(sel.fields.illness) <- NULL
+# mydata.illness <- my_ukb_data[,sel.fields.illness]
+# save(mydata.illness,file="~/my_ukb_data_selectedfields_illness.rda")
+# 
+# #########
+# field.patterns <- tolower(c("eid","cholesterol", "DL_", "Vitamin_d", "Calcium","Creatinine","IGF1","Creactive","Lipoprotein","lbumin"))
+# sel.fields <- unlist(sapply(field.patterns,function(x){nm[str_detect(nm,x)]}))
+# names(sel.fields) <- NULL
+# mydata <- my_ukb_data[,sel.fields]
+# save(mydata,file="~/my_ukb_data_selectedfields.rda")
+```
+
+*** 
+
+### Load files from cluster
+
+Files from cluster are mounted in sgcluster_workspace in my laptop
+Load Rodrigo's functions too
+
+```{r}
+# load("/sysgen/workspace/users/sruizcarmona/WORK/BIOINFO/UKBIOBANK/r-objects/my_ukb_data_selectedfields_illness.rda")
+# load("/sysgen/workspace/users/sruizcarmona/WORK/BIOINFO/UKBIOBANK/r-objects/my_ukb_data_selectedfields.rda")
+load("~/sgcluster/WORKSPACE/WORK/BIOINFO/UKBIOBANK/RDA_FILES/my_ukb_data_selectedfields_illness.rda")
+load("~/sgcluster/WORKSPACE/WORK/BIOINFO/UKBIOBANK/RDA_FILES/my_ukb_data_selectedfields.rda")
+source("../ukb_functions.R")
+```
+
+***
+
+## Data reports
+
+Summarize a couple of variables
+
+```{r}
+sum.fields <- c("cholesterol_f30690_0_0","cholesterol_f30690_1_0","cholesterol_assay_date_f30691_0_0","cholesterol_assay_date_f30691_1_0")
+dfSummary(mydata.illness[,sum.fields],style="grid",headings=F,valid.col=T,tmp.img.dir = "/tmp",varnumbers = T)
+```
+
+Extract info from selfreported diseases
+
+* Heart attack / miocardial infacrtion
+* Type 2 Diabetes
+
+```{r}
+# self reported subsets
+# heart attack / miocardial 1075
+heartattack <- extract_self_reported_nc(mydata.illness,1075)
+# t2d 1223
+t2d <- extract_self_reported_nc(mydata.illness,1223)
+```
+
+### Heart Attack
+
+Heart attack vs high ldl
+
+```{r}
+# ldl in mmol/L
+# high ldl is above 130 mg/dL, which corresponds to 3.4 mmol/L
+# https://medlineplus.gov/ldlthebadcholesterol.html
+mydata.illness$heartattack <- "No"
+mydata.illness$heartattack[mydata.illness$eid %in% heartattack$eid] <- "Yes"
+chol <- mydata.illness[!is.na(mydata.illness$ldl_direct_f30780_0_0),] %>% 
+  mutate(highldl = ldl_direct_f30780_0_0 > 3.4)
+# dfSummary(mydata.illness[,sum.fields],style="grid",headings=F,valid.col=F,tmp.img.dir = "/tmp")
+print(ctable(x = chol$heartattack, y = chol$highldl , prop = "r",style="grid",headings=F,plain.ascii=T,justify="c"),
+      method = "render")
+```
+
+## Reports with small set
+
+The idea is to check with the small subset and then use the session in the cluster to create the same reports for the whole dataset
+
+```{r}
+# load("~/sgcluster_home/small_ukb_set.rda")
+```
+
+
+```{r}
+# sum.patterns <- c("ethnic_background")
+# sum.patterns <- c("4272")
+# sum.fields<- unlist(sapply(sum.patterns,function(x){names(small_ukb_set)[str_detect(names(small_ukb_set),x)]}))
+# sum.fields
+# dfSummary(small_ukb_set[,sum.fields],style="grid",headings=F,valid.col=T,tmp.img.dir = "/tmp",varnumbers = T)
+```
+```{r}
+# load("~/sgcluster/eth.rda")
+```
+
+
+```{r}
+# eth <- as.data.frame(k)
+# colnames(eth)<-'Individuals'
+# eth$Ethnicity <- rownames(eth)
+# # require(scales)
+# options(scipen=10000)
+# point <- format_format(big.mark = " ", decimal.mark = ",", scientific = FALSE)
+# ggplot(eth, aes(x=Ethnicity,y=Individuals)) +
+#   geom_bar(stat='identity') +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 45,hjust = 1))
+
+```
+
+***
+
+# Tidy data for visits and medications
+
+```{r}
+load("../../RDA_FILES/preprocessed_rdas/small_ukb_set.rda")
+```
+
+## Clean small dataset
+
+* Test with date of assessment (4 possible fields)
+* And first medication reported for each of the visits
+
+```{r}
+# k <- small_ukb_set[,c('eid','date_of_attending_assessment_centre_f53_0_0','date_of_attending_assessment_centre_f53_1_0','date_of_attending_assessment_centre_f53_2_0','date_of_attending_assessment_centre_f53_3_0','treatmentmedication_code_f20003_0_0','treatmentmedication_code_f20003_1_0','treatmentmedication_code_f20003_2_0','treatmentmedication_code_f20003_3_0')]
+date_fields <- str_subset(names(small_ukb_set),"date_of_attending_assessment")
+med_fields <- str_subset(names(small_ukb_set),"treatmentmedication_code_")
+sel_fields <- c('eid',date_fields,med_fields)
+# k <- small_ukb_set[,c('eid','date_of_attending_assessment_centre_f53_0_0','date_of_attending_assessment_centre_f53_1_0','date_of_attending_assessment_centre_f53_2_0','date_of_attending_assessment_centre_f53_3_0','treatmentmedication_code_f20003_0_0','treatmentmedication_code_f20003_0_1')]
+k <- small_ukb_set[,sel_fields]
+names(k) <- str_replace(names(k),"treatmentmedication_code_f20003_","med_")
+names(k) <- str_replace(names(k),"date_of_attending_assessment_centre_f53_","visit_")
+k$med_2_0 <- c(rep(NA,5),"12345",rep(NA,4))
+names(k)[names(k) %in% "visit"] <- str_replace(names(k),"_0$","")
+# testdf <- k[1:2,]
+```
+
+```{r}
+library(lubridate)
+```
+
+```{r}
+# as.data.frame(k %>% pivot_longer(cols=c(names(k)[grepl("visit",names(k))]), names_to="visit", values_to = "date") %>% separate(visit,into=c("k","visit_n"),convert=T,sep="_") %>% select(-k))
+k %>%
+  # mutate_if(is.numeric, as.character) %>% 
+  # mutate_if(is.Date,as.character) %>% 
+  # pivot_longer(-eid,values_drop_na = T) %>% 
+  # # mutate(visit=case_when(grepl("visit",name) ~ str_replace(name,"_0$",""))) %>% 
+  # separate(name,into=c("type","visit_n","array_n"),sep="_",convert=T) %>%
+  # mutate(visit_n=visit_n+1,array_n=paste0("med_",array_n+1)) %>%
+  # pivot_wider(id_cols = visit_n, values_from = value, names_from = type) %>% 
+  data.frame()
+```
+
+```{r}
+coalesce_by_column <- function(df) {
+  return(coalesce(df[1], df[2]))
+}
+# https://stackoverflow.com/questions/45515218/combine-rows-in-data-frame-containing-na-to-make-complete-row
+```
+
+
+```{r}
+# as.data.frame(k %>% pivot_longer(cols=c(names(k)[grepl("visit",names(k))]), names_to="visit", values_to = "date") %>% separate(visit,into=c("k","visit_n"),convert=T,sep="_") %>% select(-k))
+k %>%
+  mutate_if(is.numeric, as.character) %>% 
+  mutate_if(is.Date,as.character) %>% 
+  pivot_longer(-eid,values_drop_na = T) %>% 
+  separate(name,into=c("type","visit_n","array_n"),sep="_",convert=T) %>% 
+  mutate(visit_n=visit_n+1,array_n=paste0("med_",array_n+1)) %>%
+  pivot_wider(values_from = value, names_from = type)  %>%
+  mutate(date=visit) %>%
+  select(-visit) %>%
+  pivot_wider(names_from = array_n,values_from = med) %>%
+  group_by(eid,visit_n) %>%
+  summarise_all(coalesce_by_column) %>%
+  ungroup() %>%
+  data.frame()
+```
+
+```{r}
+k %>%
+  mutate_if(is.numeric, as.character) %>% 
+  mutate_if(is.Date,as.character) %>% 
+  pivot_longer(-eid,values_drop_na = T) %>% 
+  separate(name,into=c("type","visit_n","array_n"),sep="_",convert=T) %>% 
+  mutate(visit_n=visit_n+1,array_n=paste0("med_",array_n+1)) %>%
+  pivot_wider(values_from = value, names_from = type)  %>%
+  mutate(date=as.Date(visit)) %>%
+  select(-visit) %>%
+  pivot_wider(names_from = array_n,values_from = med) %>%
+  group_by(eid,visit_n) %>%
+  summarise_all(coalesce_by_column) %>%
+  ungroup() %>%
+  pivot_longer(starts_with('med'), names_to="med_n",values_to='med',values_drop_na = T) %>%
+  filter(med %in% c('1140868226','2038460150')) %>%
+  pivot_wider(names_from=med_n,values_from=med) %>%
+  data.frame()
+```
+
+```{r}
+mydf <- data.frame(matrix(c(1, "a", "b", "c",  "1", "2", "3",2,"d", "e", "f",  "4", '5', "6"),byrow =T,ncol=7))
+names(mydf) <- c("eid", "i1", "i2", "i3", "d1", "d2", "d3")
+mydf %>% 
+  pivot_longer(starts_with("i"),names_to = 'k1',values_to = "i") %>% 
+  separate(k1,into = c("val1","id1"),sep="i") %>% 
+  pivot_longer(starts_with("d"),names_to = 'k2',values_to = "d") %>%
+  separate(k2,into = c("val2","id2"),sep="d") %>%
+  filter(id1==id2) %>%
+  select(eid,i,d) %>%
+  data.frame()
+
+```
+
+example with dates and icd10
+
+```{r}
+load("/baker/datasets/ukb55469/phenotype_traits/R-env/preprocessed_rdas/small_ukb_set.rda")
+date_fields <- str_subset(names(small_ukb_set),"date_of_first_inpatient_diagnosis_icd10_f41280")
+med_fields <- str_subset(names(small_ukb_set),"diagnoses_icd10_f41270")
+sel_fields <- c('eid',date_fields,med_fields)
+k <- small_ukb_set[,sel_fields]
+names(k) <- str_replace(names(k),"date_of_first_inpatient_diagnosis_icd10_f41280_","icd10diagdate_")
+names(k) <- str_replace(names(k),"diagnoses_icd10_f41270_","icd10_")
+```
+
+```{r}
+k[1,] %>%
+  select_if(~sum(!is.na(.)) > 0)%>% 
+  data.frame()
+```
+
+
+```{r}
+k %>%
+  mutate_if(is.numeric, as.character) %>% 
+  mutate_if(is.Date,as.character) %>% 
+  pivot_longer(-eid,values_drop_na = T) %>% 
+  separate(name,into=c("type","visit_n","array_n"),sep="_",convert=T) %>%
+  mutate(visit_n=visit_n+1,array_n=paste0("icd10_",array_n+1)) %>%
+  pivot_wider(values_from = value, names_from = type)  %>%
+  mutate(date=icd10diagdate) %>%
+  select(eid,date,icd10) %>%
+  # pivot_wider(names_from = array_n,values_from = icd10) %>%
+  # group_by(eid,visit_n) %>%
+  # summarise_all(coalesce_by_column) %>%
+  # ungroup() %>%
+  data.frame()
+```
+
