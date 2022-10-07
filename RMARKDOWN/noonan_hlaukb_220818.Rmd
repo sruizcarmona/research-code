@@ -1,0 +1,3209 @@
+---
+title: "HLA and Cardiovascular Disease Project"
+subtitle: "Jonathan Noonan"
+author: "[Baker Bioinformatics](https://intranet.baker.edu.au/research-resources/platform-technologies/bioinformatics-program/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "bioinformatics@baker.edu.au"
+# output:
+#   html_notebook:
+#     css: "www/css/my.css"
+#     toc: true
+#     toc_depth: 3
+#     toc_float:
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     code_folding: hide
+#     number_sections: false
+output:
+   epuRate::BAKER:
+     toc: TRUE
+     number_sections: FALSE
+     code_folding: "hide"
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+# Project Summary
+
+Our research hypothesises is that there may be an autoimmune component to atherosclerosis. Human Leukocyte Antigen molecules can often be used as risk factors / predictors of classical autoimmune diseases. However, It has never been appropriately addressed whether there is an association between HLA molecules and cardiovascular disease / outcomes.
+
+We would like to use the biobank data to specifically test whether cardiovascular disease, or specific cardiovascular outcomes, is associated with HLA types.
+
+## Comments from word document {.unlisted .unnumbered .toc-ignore}
+
+Each gene has multiple alleles.
+
+Allelic data is really required for this study if possible - I anticipate we will need the sensitivity. As such, the imputed data may not be overly useful. We obviously won’t know until we try.
+However, if we do not see anything in the imputed data, I still think we should proceed with data that allows the allelic data to be utilised.
+
+Consequently, it’s down to you whether you think we should go straight for the data that allows us to discriminate HLA alleles from the get go. 
+
+## Questions to address {.unlisted .unnumbered .toc-ignore}
+
+Q1 – Is there a bias in HLA usage in patients who die from Ischaemic Heart Disease vs the general population
+
+<!-- Q2 – Is there a bias in HLA usage in patients who die from AMI vs Chronic Ischaemic Heart Disease vs Stroke -->
+
+<!-- Q3 – Is there a bias in HLA usage in patients who die from AMI and Stroke vs those who are diagnosed with these conditions? -->
+
+<!-- Q4 – Within patients who have a heart attack, is there a bias in HLA usage in those who go on to have a subsequent heart attack within 4 weeks? -->
+
+<!-- Q5 – Within patients who suffer from a heart attack, is there a bias in HLA usage in comparison to other related cardiac disorders? -->
+
+
+# UKBiobank Data Extraction
+
+## Preprocess
+
+<!-- ### Load libraries and functions -->
+
+First, we load libraries and functions we need for the downstream analysis.
+
+* Libraries
+
+```{r message=FALSE, warning=FALSE, results='hide',include=FALSE}
+# library(summarytools)
+# st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           # style        = "rmarkdown", # Always use this option in Rmd documents
+           # footnote     = NA,          # Makes html-rendered results more concise
+           # subtitle.emphasis = FALSE)  # Improves layout with some rmardown themes
+# library(lobstr)
+# library(knitr)
+# opts_chunk$set(results = 'markup',      # Can also be set at the chunk-level
+#                comment = NA,
+#                prompt  = FALSE,
+#                cache   = FALSE)
+# library(ukbtools)
+library(tidyverse)
+library(DT)
+# library(treemap)
+# library(stringr)
+# library(filesstrings)
+# library(lubridate)
+# library(scales)
+library(ggthemes)
+library(tidytext)
+library(cowplot)
+# library(VennDiagram)
+# library(ggrepel)
+library(paletteer)
+# library(colorspace)
+```
+
+* Functions
+
+```{r include=FALSE}
+files <- c("/Users/sruizcarmona/WORK/BIOINFO_PROJECTS/BAKER_UKBIOBANK/ukb_functions.R",
+           "/Users/sruizcarmona/WORK/BIOINFO_PROJECTS/bakergithub_ukbiobank/ukb_data_functions.R",
+           "/home/sruizcarmona/WORKSPACE/WORK/BIOINFO/UKBIOBANK/GIT_UKBIOBANK/ukb_functions.R")
+for (f in files){
+  if (file.exists(f)){
+    print(paste0("Sourcing from ", f))
+    source(f)
+  }
+}
+source("supp_functions_plots.R")
+load("../rda/icd10_definition_WHO.rda")
+```
+
+```{r include=FALSE}
+split_by_length <- function(x, n) {
+  sst <- strsplit(x, '')[[1]]
+  m <- matrix('', nrow=n, ncol=(length(sst)+n-1)%/%n)
+  m[seq_along(sst)] <- sst
+  apply(m, 2, paste, collapse='')
+}
+
+split_variable_name <- function(variable.s, s.length=30){
+  s.var <- str_split(variable.s,"\\\\\\\n")[[1]]
+  new.var <- paste(c(paste(split_by_length(s.var[1],s.length),collapse="\\\n\\"),s.var[2]),collapse="\\\n\\")
+  return(new.var)
+}
+
+labeller_fun <- function(variable,value){
+  return(str_wrap(value, width = 10))
+}
+```
+
+## Summarize UK Biobank
+
+* Selected fields with information:
+
+
+```{r echo=TRUE, warning=FALSE}
+selfields <- read.table('../input/selected_fields.txt',sep='\t',stringsAsFactors = F)
+colnames(selfields) <- c("FIELD_CODE","Description")
+selfields <- selfields %>% distinct(FIELD_CODE,.keep_all = TRUE)
+datatable(selfields)
+```
+
+## Load HLA info
+
+UKB is too big to load at once, so we will load the information as needed.
+So far, we only need the HLA information of each individual.
+
+What information do we have about HLA?
+
+- Imputed values for 11 loci
+- Each entry contains all HLA loci (one line per person)
+- A, B, C, DRB5, DRB4, DRB3, DRB1, DQB1, DQA1, DPB1, DPA1
+- There is one value (separated by commas) per imputed allele and only the best-guess alleles are reported. The quantities P(A1|D) and P(A2|D,A1) from the Q column of the HLA:IMP*2 output are reported for each locus.
+
+For further information on the calculation methodology and the Quality metric see [Resource 182](https://biobank.ctsu.ox.ac.uk/crystal/refer.cgi?id=182). 
+
+
+
+```{r include=FALSE, warning=FALSE}
+# only if you are in the cluster, otherwise, load the pre-saved subset rda in the second line and skip next chunk
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/ukb_data_clean.rda")
+# load("/baker/datasets/ukb55469/phenotype_traits/R-env/preprocessed_rdas/heart_exercise_women.rda")
+# load("../rda/ukb42488_hla_type_information_210817.rda")
+load("../rda/ukb42488_hla_type_information_211029.rda")
+# remove(hla)
+# gc()
+```
+
+```{r}
+datatable(hla_wide %>% sample_n(6) %>% select(-eid),
+          options = list(scrollX=T))
+```
+
+:::infonote
+This tables show how our HLA information data looks like (sample of 6 random individuals), but in total we have around **500.000 individuals (rows)** and allelic information on **11 HLA loci (columns)**.
+
+See plots below for all the loci
+:::
+
+
+```{r fig.width=8}
+ggplot(pdata, aes(x=value, y=n, fill=name)) +
+  # geom_col(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(width = 0.9, preserve = "single")) +
+  scale_x_reordered() +
+  facet_wrap(~ name, scales = "free", nrow=3) +
+  theme_few() +
+  # scale_fill_few("Dark") +
+  # scale_fill_paletteer_d("ggsci::schwifty_rickandmorty") +
+  scale_fill_paletteer_d("ggsci::planetexpress_futurama") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="HLA usage in all the individuals",
+    subtitle="imputed haplotypes, both alleles grouped"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 7),
+        axis.text.y = element_text(size=7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  ) 
+```
+
+### Divided by MHC Class
+
+```{r}
+pdata <- pdata %>%
+  mutate(class = case_when(
+    name %in% c("HLA-A", "HLA-B", "HLA-C") ~ "MHC Class I",
+    TRUE ~ "MHC Class II"
+  ))
+```
+
+
+```{r fig.width=8}
+p1 <- ggplot(pdata %>% filter(class == "MHC Class I"), aes(x=value, y=n, fill=name)) +
+  # geom_col(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(width = 0.9, preserve = "single")) +
+  scale_x_reordered() +
+  facet_wrap(~ name, scales = "free", nrow=3) +
+  theme_few() +
+  # scale_fill_few("Dark") +
+  # scale_fill_paletteer_d("ggsci::schwifty_rickandmorty") +
+  scale_fill_paletteer_d("ggsci::planetexpress_futurama") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="HLA usage",
+    subtitle="MHC Class I"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 7),
+        axis.text.y = element_text(size=7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  ) 
+p2 <- ggplot(pdata %>% filter(class == "MHC Class II"), aes(x=value, y=n, fill=name)) +
+  # geom_col(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(width = 0.9, preserve = "single")) +
+  scale_x_reordered() +
+  facet_wrap(. ~ name, scales = "free", nrow=3) +
+  theme_few() +
+  # scale_fill_few("Dark") +
+  # scale_fill_paletteer_d("ggsci::schwifty_rickandmorty") +
+  scale_fill_paletteer_d("ggsci::light_uchicago") +
+  labs(
+    x="HLA type",
+    y="",
+    title="",
+    subtitle="MHC Class II"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 7),
+        axis.text.y = element_text(size=7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  ) 
+plot_grid(p1,p2, nrow = 1, rel_widths = c(1,2.8))
+```
+```{r include=F}
+# hla_wide %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("2301", .))) %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("2902", .))) %>% 
+#   filter_at(vars(starts_with("B_")), any_vars(grepl("4403", .))) %>% 
+#   filter_at(vars(starts_with("B_")), any_vars(grepl("5201", .))) %>% 
+#   filter_at(vars(starts_with("C_")), any_vars(grepl("1202", .))) %>%
+#   filter_at(vars(starts_with("C_")), any_vars(grepl("1601", .))) %>%
+#   filter_at(vars(starts_with("DRB1_")), any_vars(grepl("701", .))) %>%
+#   # filter_at(vars(starts_with("DRB1_")), any_vars(grepl("1104", .))) %>% 
+#   filter_at(vars(starts_with("DQB1_")), any_vars(grepl("202", .))) %>%
+#   # filter_at(vars(starts_with("DQB1_")), any_vars(grepl("301", .))) %>% 
+#   # filter_at(vars(starts_with("DPB1_")), any_vars(grepl("201", .))) %>%
+#   filter_at(vars(starts_with("DPB1_")), any_vars(grepl("1101", .)))
+
+# hla_wide %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("2301", .))) %>% 
+#   filter_at(vars(starts_with("A_")), any_vars(grepl("201", .))) %>% 
+#   filter_at(vars(starts_with("B_")), any_vars(grepl("4901", .))) %>%
+#   # filter_at(vars(starts_with("B_")), any_vars(grepl("5201", .))) %>%
+#   # filter_at(vars(starts_with("C_")), any_vars(grepl("1202", .))) %>%
+#   filter_at(vars(starts_with("C_")), any_vars(grepl("602", .))) %>%
+#   filter_at(vars(starts_with("DRB1_")), any_vars(grepl("701", .))) %>%
+#   filter_at(vars(starts_with("DRB1_")), any_vars(grepl("1104", .))) %>%
+#   filter_at(vars(starts_with("DQB1_")), any_vars(grepl("202", .))) %>%
+#   filter_at(vars(starts_with("DQB1_")), any_vars(grepl("301", .))) %>%
+#   # filter_at(vars(starts_with("DPB1_")), any_vars(grepl("201", .))) %>%
+#   filter_at(vars(starts_with("DPB1_")), any_vars(grepl("402", .)))
+```
+
+
+---
+
+# Q1 - Ischaemic Heart Disease
+
+:::question
+Is there a bias in HLA usage in patients who die from Ischaemic Heart Disease vs the general population?
+:::
+
+General population definition (possibilities):
+
+a) die, not from IHD, never had IHD
+b) die, not from IHD, had IHD
+c) die, not from IHD, never had any CVD
+d) die, not from IHD, had other CVD
+e) don't die, never IHD
+f) don't die, had IHD
+g) don't die, never had any CVD
+h) don't die, had other CVD
+
+For this first analysis, and to be pragmatic with numbers and definitions, we will assume we are interested in comparison a: 
+
+- Individuals that die from IHD
+
+vs
+
+- Individuals that die (not from IHD) and never had IHD
+
+## Subgroup definition
+
+```{r}
+# # run in cluster
+# dead_inds <- my_ukb_data %>%
+#   filter(!is.na(underlying_primary_cause_of_death_icd10_f40001_0_0) | !is.na(underlying_primary_cause_of_death_icd10_f40001_1_0))
+```
+
+```{r}
+load("../rda/ukb_dead_individuals.rda")
+ihd_icd10 <- c("I20", "I21", "I22", "I23", "I24", "I25")
+```
+
+* Selected ICD10 codes for IHD
+
+```{r, warning=F}
+datatable(
+  ICD %>% 
+    filter(coding_L2 == "Block I20-I25") %>% 
+    select(meaning_L3, meaning_L1, meaning_L2, ) %>% 
+    unique(),
+  options = list(scrollX=T,pageLength=10), rownames = FALSE)
+```
+
+```{r}
+# select dead by IHD
+## https://stackoverflow.com/questions/63399181/str-detect-multiple-columns-using-across
+## mutate(death_ihd = if_else(any(str_detect(c_across(contains("f40001")), paste(c(ihd_icd10,"I259","C800"),collapse = '|'))), 1, 0)) %>% 
+
+########## DONE IN THE CLUSTER, VERY SLOW ON MY MAC. added to the loaded rda above
+# kk <- head(dead_inds)
+# kk <- kk %>% select(contains(c("f40001", "f40002")))
+# kk <- kk %>% 
+#   rowwise() %>%
+#   mutate(death_ihd = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains(c("f40001", "f40002"))))),
+#                              1, 0)) %>% 
+#   select(eid, contains(c("f40001","f40002")), death_ihd)
+# 
+# # get individuals that ever had IHD  
+# had_ihd_eid <- extract_diagnose_icd10_truncated(dead_inds, ihd_icd10) %>% pull(eid)
+# 
+# # find individuals that died from IHD and add info about "ever having IHD", to filter later
+# dead_inds <- dead_inds %>% 
+#   rowwise() %>%
+#   mutate(
+#     death_ihd = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains(c("f40001","f40002"))))),
+#                         1, 0),
+#     death_ihd_prim = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains("f40001")))),
+#                              1, 0),
+#     death_ihd_sec = if_else(any(grepl(paste(c(ihd_icd10),collapse = '|'), across(contains("f40002")))),
+#                             1, 0)) %>% 
+#   ungroup() %>% 
+#   mutate(had_ihd = ifelse(eid %in% had_ihd_eid, 1, 0))
+########################
+
+# dead_inds %>% select(eid, contains(c("f40001","f40002")), contains("ihd"))
+# dead_inds %>% filter(eid == 1002193 | eid == 1078861) %>% select(eid, contains(c("ihd", "icd10", "f40002"))) %>% 
+#   mutate_all(., ~as.character(.)) %>% 
+#   pivot_longer(-eid) %>% 
+#   filter(!is.na(value))
+```
+
+
+
+
+```{r, fig.width=5,fig.height=6}
+
+#   geom_text(position="identity",
+#             aes(label=n),vjust=c(-3.5,1.6)) +
+#   geom_text(position="identity", vjust=c(-1.8,3),
+#             aes(label=paste0("(",perc,"%)"))) +
+#   labs(x="Incident MI", y="") +
+#   theme_bw() +
+#   scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(NA, 25000)) +
+#   scale_fill_paletteer_d("awtools::mpalette") +
+#   theme(legend.position="none",
+#         # axis.text.y = element_blank(),
+#         # axis.ticks.y = element_blank(),
+#         panel.grid.major.x = element_blank())
+# 
+# # plot_grid(p1,p2,nrow=1)
+
+
+dead_inds %>%
+  select(eid, contains("death_ihd")) %>%
+  pivot_longer(-eid) %>% 
+  count(name, value) %>% 
+  group_by(name) %>% 
+  mutate(perc=round(n/sum(n)*100,1),
+         value=ifelse(value == 1, "Yes", "No"),
+         value=factor(value,levels=c("Yes","No"))) %>% 
+  ggplot(aes(x = value, y=n, fill = name)) +
+  theme_few_src() +
+  geom_col(width=0.8, position = position_dodge(width = 0.9)) +
+  scale_fill_paletteer_d("awtools::mpalette", labels = c("All causes of death", "Primary", "Secondary")) +
+  geom_text(position = position_dodge(width = 0.9), cex=3,
+            aes(label = n),vjust=c(-3.5)) +
+  geom_text(position = position_dodge(width = 0.9), cex = 3,
+            vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="UKB Death Information",
+       subtitle="Primary/secondary cause",
+       x="Death from IHD", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(0, 35000)) +
+  theme(legend.position="bottom",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+:::update
+At this point, we will only use IHD as Primary cause of death.
+
+* I will also remove all "Only secondary" individuals
+* and the individuals that did not die from IHD but had an episode of IHD during their life (according to ICD10 diagnoses)
+:::
+
+```{r fig.width=4,fig.height=6}
+# dead_inds %>%
+#   select(eid, contains("ihd"))
+ihd_dead_inds <- dead_inds %>% 
+  mutate(ihd_group = case_when(
+    death_ihd_prim == 1 ~ "ihd_prim",
+    death_ihd_prim == 0 & death_ihd_sec == 1 ~ "ihd_sec",
+    death_ihd == 0 & had_ihd == 1 ~ "had_ihd",
+    TRUE ~ "no_ihd"
+  )) %>% 
+  filter(grepl("ihd_prim|no_ihd", ihd_group)) %>% 
+  mutate(ihd_group = recode_factor(ihd_group, "ihd_prim" = "Died from IHD", "no_ihd" = "Died, never had IHD"))
+
+
+ihd_dead_inds %>%
+  select(eid, contains("ihd_group")) %>%
+  pivot_longer(-eid) %>% 
+  count(name, value) %>% 
+  group_by(name) %>% 
+  mutate(perc=round(n/sum(n)*100,1),
+         # value=ifelse(value == 1, "Yes", "No"),
+         # value=recode_factor(value, "ihd_prim" = "Death from IHD", "no_ihd" = "Never had IHD")
+         ) %>% 
+  ggplot(aes(x = value, y=n, fill = value)) +
+  theme_few_src() +
+  geom_col(width=0.6, position = position_dodge(width = 0.9)) +
+  # scale_fill_paletteer_d("awtools::mpalette")) +
+  # scale_fill_paletteer_d("awtools::spalette", direction = -1) +
+  scale_fill_few("Dark") +
+  geom_text(position = position_dodge(width = 0.9), cex=3,
+            aes(label = n),vjust=c(-3.5)) +
+  geom_text(position = position_dodge(width = 0.9), cex = 3,
+            vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="IHD subgroup definiton",
+       subtitle="Death/diagnose of IHD",
+       x="", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(0, 30000)) +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+:::infonote
+Out of the 26482 individuals, `r ihd_dead_inds %>% count(ihd_group) %>% pull(n) %>% first()` died from IHD and `r ihd_dead_inds %>% count(ihd_group) %>% pull(n) %>% last()` also died, but never had any type of IHD.
+:::
+
+
+### Dataset Summary {.tabset}
+
+:::question
+What differences between the groups can we identify with UK Biobank information? 
+At this moment, **ignoring HLA information**, some descriptive statistics to exemplify what information we have.
+:::
+
+#### Sex
+
+```{r include=FALSE}
+# summary(t2d_adj$genetic_sex_f22001_0_0)
+```
+
+
+```{r echo=TRUE, fig.width=6,fig.height=5}
+f_id <- "f22001"
+pdata <- ihd_dead_inds %>%
+  select(eid, ihd_group, contains(f_id)) %>%
+  pivot_longer(!c(eid,ihd_group),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value, ihd_group) %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(n/sum(n)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(value=factor(value,levels=unique(value)))
+# pdata
+
+p <- ggplot(pdata,aes(x=ihd_group, y=n, fill=value)) +
+  geom_col(width=0.8, position = position_dodge(width = 0.9)) +
+  geom_text(position=position_dodge(width=0.9), vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+            aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width = 0.9), vjust = c(-2.2, -2.2, 4.1, 4.1), col=c(rep("black",2),rep("black",2)),
+            aes(label=paste0("(",perc,"%)")), cex=2.3) +
+  labs(x="", y="N. of individuals",
+       fill="Sex", col="Sex",
+       title="Sex differences in the IHD groups") +
+  theme_few_src() +
+  # facet_wrap(~ihd_group, scales = "free", nrow=1, drop=T) +
+  scale_fill_paletteer_d("rcartocolor::Pastel") +
+  theme(legend.position="right",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+
+p
+```
+
+#### BMI
+
+```{r}
+summary_continuous(indata=ihd_dead_inds, field="_f21001_", type="num", xlab="BMI (kg/m2)", boxcol="white", 
+                   leg_pos=c(0.8,0.6), fillvar="ihd_group", fillname="IHD group", rel_heights = c(5.5,4,3,2.8),
+                   xlim=c(0,80))
+```
+
+#### Year of birth
+
+```{r include=FALSE}
+# summary(t2d_adj$year_of_birth_f34_0_0)
+```
+
+```{r warning = F, fig.width=9,fig.height=5}
+f_id <- "f34_"
+pdata <- ihd_dead_inds %>%
+  select(eid, ihd_group, contains(f_id)) %>%
+  pivot_longer(!c(eid,ihd_group),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value, ihd_group) %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(n/sum(n)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(value=factor(value,levels=unique(value)))
+# pdata
+
+p <- ggplot(pdata,aes(x=as.numeric(as.character(value)), y=n, fill=ihd_group)) +
+  geom_col(width=0.8, position = position_dodge()) +
+  labs(x="Year of birth", y="N. of individuals",
+       fill="Sex", col="Sex",
+       title="Year of birth in each IHD group") +
+  theme_few_src() +
+  scale_x_continuous(breaks = scales::pretty_breaks(5)) +
+  facet_wrap(~ihd_group, scales = "free", nrow=1, drop=T) +
+  scale_fill_few("Dark") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        axis.text.x = element_text(angle=30, hjust=1),
+        )
+p
+```
+
+#### Age at death
+
+```{r}
+summary_continuous(indata=ihd_dead_inds, field="_f40007_", type="num", xlab="Age at death", boxcol="white", 
+                   leg_pos=c(0.85,0.6), fillvar="ihd_group", fillname="IHD group", rel_heights = c(5.5, 4, 3, 2.8),
+                   xlim=c(30,100))
+```
+
+#### Ethnic Background
+
+```{r}
+pdata <- ihd_dead_inds %>%
+  group_by(ihd_group,ethnic_background_f21000_0_0) %>%
+  summarize(tot=sum(n()),.groups = "drop") %>%
+  na.omit()
+```
+
+```{r fig.width=9,fig.height=6}
+pfacet <- pdata %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  arrange(tot) %>%   
+  mutate(short = factor(ethnic_background_f21000_0_0, unique(ethnic_background_f21000_0_0))) %>%
+  ggplot(aes(x=short, y=perc, fill=short)) +
+  geom_bar(stat="identity") +
+  ylim(c(0,100)) +
+  facet_wrap(~ihd_group) +
+  theme_few() +
+  labs(
+    x="Ethnic Background",
+    y="% of individuals",
+    title="Ethnic Background",
+    subtitle="in selected IHD groups"
+  ) +
+  geom_text(aes(label=paste0(perc,"%")),cex=3,
+            hjust=-0.3,
+            ) + 
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1)) +
+  coord_flip()
+
+pfacet
+
+
+# plot_grid(pall, pfacet, nrow=1)
+```
+
+
+:::infonote
+Almost 90% of the individuals have "White British" background, as most of the UK Biobank. Just to be aware, in case we need to correct wen checking HLA and other genetic information later.
+
+There are no significant differences between the different population groups.
+:::
+
+
+## {.unlisted .unnumbered .toc-ignore}
+
+---
+
+## HLA Information
+
+```{r}
+#load("../rda/ukb42488_hla_type_information_211029.rda")
+# fix hla headers so we can track them later
+names(hla_wide) <- c("eid", paste0("HLA-", names(hla_wide)[2:23]))
+
+# fix hla type naming
+hla_wide <- as_tibble(apply(hla_wide, 2, function(x){gsub('^([0-9]{2})([0-9]{2})$', '*\\1:\\2', str_pad(x, width=4, pad="0"))}))
+
+# convert eid to int, same format as ihd_dead_inds
+hla_wide <- hla_wide %>% 
+  mutate(eid = as.integer(eid))
+
+# dim(ihd_dead_inds)
+# dim(hla_wide)
+# dim(inner_join(ihd_dead_inds, hla_wide, by="eid"))
+hla_ihd_q1 <- inner_join(ihd_dead_inds, hla_wide, by="eid")
+```
+
+```{r message = F}
+pdata <- hla_ihd_q1 %>%
+  select(eid, ihd_group, contains("HLA")) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  drop_na() %>% 
+  separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value) %>% 
+  summarize(tot=sum(n()),.groups = "drop") %>%
+  group_by(ihd_group, name) %>% 
+  arrange(ihd_group, name, -tot) %>% 
+  top_n(5) %>% 
+  ungroup() %>% 
+  mutate(value = reorder_within(value, -tot, name)) %>% 
+  na.omit()
+
+# pdata
+# pdata <- pdata %>% 
+#       group_by(.data[[facet]]) %>% arrange(.data[[facet]],-n) %>% top_n(10) %>% ungroup() %>% 
+#       mutate(value=reorder_within(value,-n,.data[[facet]]))
+# 
+# scale_x_reordered() +
+
+pdata <- pdata %>%
+  mutate(class = case_when(
+    name %in% c("HLA-A", "HLA-B", "HLA-C") ~ "MHC Class I",
+    TRUE ~ "MHC Class II"
+  ))
+```
+
+```{r fig.width = 12, fig.height = 5}
+p1 <- ggplot(pdata %>% filter(class == "MHC Class I"), aes(x=value, y=tot, fill=ihd_group)) +
+  geom_bar(stat="identity", width = 0.8) +
+  # ylim(c(0,100)) +
+  scale_x_reordered() +
+  facet_grid(ihd_group ~ name, scales = "free", space="free_x") +
+  theme_few() +
+  scale_fill_few("Dark") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="HLA usage",
+    subtitle="MHC Class I"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 9),
+        strip.text.x = element_text(size = 9,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+
+p2 <- ggplot(pdata %>% filter(class == "MHC Class II"), aes(x=value, y=tot, fill=ihd_group)) +
+  geom_bar(stat="identity", width = 0.8) +
+  # ylim(c(0,100)) +
+  scale_x_reordered() +
+  facet_grid(ihd_group ~ name, scales = "free", space="free_x") +
+  theme_few() +
+  scale_fill_few("Dark") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="",
+    subtitle="MHC Class II"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 9),
+        strip.text.x = element_text(size = 9,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+plot_grid(p1, p2, nrow = 1, rel_widths = c(1,2.5))
+```
+
+
+## Association Models
+
+:::question
+Is there any significant association between the different haplotypes and death from IHD?
+:::
+
+```{r}
+# hla_wide %>% filter(eid==1000013)
+#### TO SLOW FOR LAPTOP, RUN IN CLUSTER AND LOAD
+# hla_info_012 <- hla_wide %>%
+#   # head(10) %>%
+#   pivot_longer(-eid) %>%
+#   drop_na() %>% 
+#   separate(name, into=c("name", NA), sep="_") %>%
+#   mutate(
+#     # name=str_replace(name, "-", "."),
+#          type=paste(name, value, sep="")) %>%
+#   group_by(eid, type) %>%
+#   summarise(n = n(), .groups = "drop") %>%
+#   arrange(type) %>%
+#   pivot_wider(names_from = type, values_from = n, values_fill = list(n = 0))
+load("../rda/cluster_hlainfo012_220518.rda")
+
+hla_ihd_q1_012 <- inner_join(ihd_dead_inds, hla_info_012, by="eid")
+```
+
+
+### Adjusted model {.tabset}
+
+:::update
+Each individual with HLA-A\*101 has a variable called HLA-A\*101 with values 0, 1 or 2 depending on the number of alleles for that particular type. 
+:::
+
+:::update
+I will keep the `All loci (cleaned)` and adjust for sex, bmi, smoking and age, and see how it is affected.
+
+We can add more covariates as we go.
+:::
+
+
+#### All loci
+
+```{r}
+logres_all <- hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked,
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  drop_na()
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+```
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE,ci=T,
+#                       main = "Test all HLA loci", col= "blue", print.auc = T, legacy.axes = T)
+```
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  # mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+#### All loci (cleaned)
+
+For this final model, I cleaned a bit the input data, as the loci with really few presence in all the individuals were adding a lot of noise.
+
+I am removing all the loci with a count fewer than 100, which removes around 150 (50%).
+
+```{r}
+logres_all <- hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  drop_na()
+
+# logres_all
+```
+
+```{r}
+logit_adj <- glm(ihd_group ~ ., family = binomial,
+                  data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit_res <- cbind(logres_all, pred = round(logit_adj$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit_res, plot = TRUE,
+#                       main = "Final model (adjusted BMI, age and sex)",
+#                       col= "blue", print.auc = T, ci = T, legacy.axes = T)
+```
+
+```{r warning=FALSE}
+or <- exp(coef(logit_adj))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit_adj))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  # na.omit() %>% 
+  filter(!is.na(OR)) %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         panel.grid.major.x = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+```
+
+#### Divided by MHC Class {.tabset .tabset-pills}
+
+##### MHC Class I
+
+```{r}
+mhc_class_i <- c("HLA-A", "HLA-B", "HLA-C")
+
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, matches(mhc_class_i)) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### MHC Class II
+
+```{r}
+mhc_class_i <- c("HLA-A", "HLA-B", "HLA-C")
+
+logres_all <- hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked,
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, !matches(mhc_class_i)) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+:::question
+How are these HLA types present on the two groups?
+:::
+
+```{r}
+top_hla <- OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  pull(Pred)
+pdata <- hla_ihd_q1_012 %>%
+  select(eid, ihd_group, one_of(top_hla)) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  # separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value, .drop = F) %>% 
+  summarise(tot=sum(n()), .groups = "drop") %>% 
+  pivot_wider(names_from = value, values_from = tot, values_fill = list(tot = 0)) %>% 
+  pivot_longer(-c(ihd_group, name), names_to = "value", values_to = "tot") %>% 
+  group_by(ihd_group,name) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(name = factor(name, levels = top_hla)) 
+```
+
+
+```{r fig.width = 11, fig.height = 5}
+ggplot(pdata, aes(x=ihd_group, y=perc, fill=factor(value))) +
+  # geom_bar(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(preserve = "single")) +
+  # ylim(c(0,100)) +
+  # scale_x_reordered() +
+  facet_wrap(~name, scales = "fixed", nrow = 2) +
+  theme_few() +
+  # geom_text( vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+  #           aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width=0.9), cex = 2.8, vjust = -2, 
+            aes(label = if_else(value > 0, paste0(as.character(perc), "%"), ""), col = factor(value))) +
+  # scale_fill_few("Dark") +
+  scale_fill_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  scale_color_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  labs(
+    x="IHD group",
+    y="% of individuals",
+    title="HLA usage in the most extreme HLA Odds Ratios",
+    fill = "N. of alleles",
+    color = "N. of alleles"
+  ) +
+  theme(legend.position="bottom",
+        # legend.position=c(0.7,0.8), 
+        legend.title = element_text(size=9), 
+        legend.text = element_text(size=8), 
+        legend.key.size = unit(0.7,"line"),
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 15, hjust = 1, size = 7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+```
+
+#### Divided by HLA types {.tabset .tabset-pills}
+
+##### HLA-A
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-A")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### HLA-B
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-B")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### HLA-DPA1
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-DPA1")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### HLA-DPB1
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-DPB1")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+### Stratified by sex {.tabset}
+
+:::update
+Finally, I will use the cleaned loci, as defined above, and stratify by sex to see whether there is any difference (on the adjusted model)
+
+We can see on the plot above that sex is definitely having some effect, we can try to understand with the following models.
+:::
+
+#### Males
+
+```{r}
+logres_all <- hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  drop_na()
+
+logres_male <- logres_all %>% filter(sex == "Male") %>% select(-sex)
+```
+
+```{r}
+logit_male <- glm(ihd_group ~ ., family = binomial,
+                  data = logres_male)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit_male_res <- cbind(logres_male, pred = round(logit_male$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit_male_res, plot = TRUE, main = "Final model (only males)",
+#                       col= "blue", print.auc = T, ci = T, legacy.axes = T)
+```
+
+```{r warning=FALSE}
+or <- exp(coef(logit_male))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit_male))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_male %>% select(-c(ihd_group,age,bmi,smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  # na.omit() %>% 
+  filter(!is.na(OR)) %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+#### Females
+
+```{r}
+logres_female <- logres_all %>% filter(sex == "Female") %>% select(-sex)
+```
+
+```{r}
+logit_female <- glm(ihd_group ~ ., family = binomial,
+                  data = logres_female)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit_female_res <- cbind(logres_female, pred = round(logit_female$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit_female_res, plot = TRUE, main = "Final model (only females)",
+                      # col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+```{r warning=FALSE}
+or <- exp(coef(logit_female))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit_female))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_female %>% select(-c(ihd_group,age,bmi, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  # na.omit() %>% 
+  filter(!is.na(OR)) %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+:::question
+How are these HLA types present on the Females?
+:::
+
+```{r}
+top_hla <- OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  pull(Pred)
+pdata <- hla_ihd_q1_012 %>%
+  select(eid, ihd_group, one_of(top_hla)) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  # separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value, .drop = F) %>% 
+  summarise(tot=sum(n()), .groups = "drop") %>% 
+  pivot_wider(names_from = value, values_from = tot, values_fill = list(tot = 0)) %>% 
+  pivot_longer(-c(ihd_group, name), names_to = "value", values_to = "tot") %>% 
+  group_by(ihd_group,name) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(name = factor(name, levels = top_hla)) 
+```
+
+
+```{r fig.width = 11, fig.height = 5}
+ggplot(pdata, aes(x=ihd_group, y=perc, fill=factor(value))) +
+  # geom_bar(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(preserve = "single")) +
+  # ylim(c(0,100)) +
+  # scale_x_reordered() +
+  facet_wrap(~name, scales = "fixed", nrow = 2) +
+  theme_few() +
+  # geom_text( vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+  #           aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width=0.9), cex = 2.8, vjust = -2, 
+            aes(label = if_else(value > 0, paste0(as.character(perc), "%"), ""), col = factor(value))) +
+  # scale_fill_few("Dark") +
+  scale_fill_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  scale_color_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  labs(
+    x="IHD group",
+    y="% of individuals",
+    title="HLA usage in the most extreme HLA Odds Ratios",
+    fill = "N. of alleles",
+    color = "N. of alleles"
+  ) +
+  theme(legend.position="bottom",
+        # legend.position=c(0.7,0.8), 
+        legend.title = element_text(size=9), 
+        legend.text = element_text(size=8), 
+        legend.key.size = unit(0.7,"line"),
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 15, hjust = 1, size = 7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+```
+
+### HLA-DRB3 in Females
+
+:::question
+HLA-DRB3 apparently has a very strong effect in Females.
+Is it an artifact or there is something real going on?
+Let's check
+:::
+
+```{r}
+logres_drb3 <- logres_all %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-DRB3"))
+
+logres_drb3 %>% 
+  group_by(ihd_group, sex) %>% 
+  summarize(.groups = "drop",
+            "HLA-DRB3*01:01" = sum(`HLA-DRB3*01:01`),
+            "HLA-DRB3*02:02" = sum(`HLA-DRB3*02:02`),
+            # "HLA-DRB3*02:10" = sum(`HLA-DRB3*02:10`),
+            # "HLA-DRB3*02:24" = sum(`HLA-DRB3*02:24`),
+            "HLA-DRB3*03:01" = sum(`HLA-DRB3*03:01`),
+            "HLA-DRB3*99:01" = sum(`HLA-DRB3*99:01`)) %>% 
+  pivot_longer(cols = -c(ihd_group, sex)) %>% 
+  ggplot(aes(x = name, fill = sex, y = value)) +
+  geom_col(position = position_dodge2(preserve = "single")) +
+  facet_wrap(ihd_group ~ .) +
+  coord_flip() +
+  geom_text(position=position_dodge(width=0.9), cex = 2.8, 
+            aes(label = value)) +
+  scale_fill_few("Light", breaks = c("Male", "Female")) +
+  labs(y="N. of haplotypes", x = "HLA-type", fill = "Sex")
+
+# logres_drb3 %>% 
+#   group_by(ihd_group, sex) %>% 
+#   summarize("HLA-DRB3*01:01" = sum(`HLA-DRB3*01:01` != 0),
+#             "HLA-DRB3*02:02" = sum(`HLA-DRB3*02:02` != 0),
+#             "HLA-DRB3*02:10" = sum(`HLA-DRB3*02:10` != 0),
+#             "HLA-DRB3*02:24" = sum(`HLA-DRB3*02:24` != 0),
+#             "HLA-DRB3*03:01" = sum(`HLA-DRB3*03:01` != 0),
+#             "HLA-DRB3*99:01" = sum(`HLA-DRB3*99:01` != 0))
+```
+
+:::update
+This might suggest that having HLA-DRB3*99:01 haplotype increases your chances of dying with IHD.
+
+99:01 actually [means](https://biobank.ndph.ox.ac.uk/ukb/refer.cgi?id=182) that no allele is present (for HLA-DRB3, -DRB4 and -DRB5, since these loci can have copy number 0): having any type of DRB3 lowers your risk of dying with IHD, especially for females. 
+- Is that a good interpretation?
+
+The rest of loci are also more present in females that die with IHD, so it might be interesting to explore the role of HLA-DRB3 in females.
+:::
+
+## Autoimmune diseases
+
+:::question
+Is there any difference in the results when we remove the individuals with history of Autoimmune disease?
+:::
+
+```{r}
+# autoimmune_codes <- c("M06", "M07", "M08", "M09",
+#                       "M3", "I73.0", "D86",
+#                       "D59.0", "D59.1", "D69.2",
+#                       "G61.0", "G70.0", "D89",
+#                       "E06.3", "E05.0", "M45",
+#                       "K90.0", "K50", "K51", "K52",
+#                       "L40", "K75.4", "K74.3", "L10.0", "L95")
+
+autoimmune_codes <- c("D590", "D591", "D86", "D89", "E05", "E06",
+                      "E10", "E11", "E12", "E13", "E14", "G35", "G36", "G37",
+                      "G610", "G700", "I00", "I01", "I02", "I05", "I06", "I07", "I08", "I09",
+                      "I730", "K50", "K51", "K52", "K743", "K754", "K759", "K900",
+                      "L100", "L120", "L40", "L41", "L93", "L95", "M05", "M06",
+                      "M07", "M08", "M09", "M3", "M45")
+```
+
+```{r warning=FALSE}
+datatable(
+  ICD %>% 
+    filter(grepl(paste(autoimmune_codes, collapse="|^", sep=""), coding_L3) | grepl(paste(gsub("\\.", "", autoimmune_codes), collapse="|^", sep=""), coding_L4)) %>% 
+    select(meaning_L3, meaning_L1, meaning_L2, meaning_L4 ) %>% 
+    unique(),
+  options = list(scrollX=T,pageLength=10), rownames = FALSE)
+```
+
+Let's remove all the individuals with any autoimmune disease from the previous table and check if that changes any of the HLA associations.
+
+```{r}
+# ihd_dead_inds
+# autoimmune_codes
+ai_inds <- extract_diagnose_icd10_truncated(ihd_dead_inds, autoimmune_codes)
+
+ihd_dead_inds_noai <- ihd_dead_inds %>% 
+  filter(!eid %in% ai_inds$eid)
+```
+
+
+```{r fig.width=4,fig.height=6}
+ihd_dead_inds_noai %>%
+  select(eid, contains("ihd_group")) %>%
+  pivot_longer(-eid) %>% 
+  count(name, value) %>% 
+  group_by(name) %>% 
+  mutate(perc=round(n/sum(n)*100,1),
+         # value=ifelse(value == 1, "Yes", "No"),
+         # value=recode_factor(value, "ihd_prim" = "Death from IHD", "no_ihd" = "Never had IHD")
+         ) %>% 
+  ggplot(aes(x = value, y=n, fill = value)) +
+  theme_few_src() +
+  geom_col(width=0.6, position = position_dodge(width = 0.9)) +
+  # scale_fill_paletteer_d("awtools::mpalette")) +
+  # scale_fill_paletteer_d("awtools::spalette", direction = -1) +
+  scale_fill_few("Dark") +
+  geom_text(position = position_dodge(width = 0.9), cex=3,
+            aes(label = n),vjust=c(-3.5)) +
+  geom_text(position = position_dodge(width = 0.9), cex = 3,
+            vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="IHD subgroup definiton",
+       subtitle="Death/diagnose of IHD",
+       x="", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(8), limits = c(0, 30000)) +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+```
+
+:::infonote
+Out of the `r dim(ihd_dead_inds_noai)` individuals (without any autoimmune disease), `r ihd_dead_inds_noai %>% count(ihd_group) %>% pull(n) %>% first()` died from IHD and `r ihd_dead_inds_noai %>% count(ihd_group) %>% pull(n) %>% last()` also died, but never had any type of IHD.
+:::
+
+
+### Dataset Summary {.tabset}
+
+:::question
+What differences between the groups can we identify with UK Biobank information? 
+At this moment, **ignoring HLA information**, some descriptive statistics to exemplify what information we have.
+:::
+
+#### Sex
+
+```{r include=FALSE}
+# summary(t2d_adj$genetic_sex_f22001_0_0)
+```
+
+
+```{r echo=TRUE, fig.width=6,fig.height=5}
+f_id <- "f22001"
+pdata <- ihd_dead_inds_noai %>%
+  select(eid, ihd_group, contains(f_id)) %>%
+  pivot_longer(!c(eid,ihd_group),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value, ihd_group) %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(n/sum(n)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(value=factor(value,levels=unique(value)))
+# pdata
+
+p <- ggplot(pdata,aes(x=ihd_group, y=n, fill=value)) +
+  geom_col(width=0.8, position = position_dodge(width = 0.9)) +
+  geom_text(position=position_dodge(width=0.9), vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+            aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width = 0.9), vjust = c(-2.2, -2.2, 4.1, 4.1), col=c(rep("black",2),rep("black",2)),
+            aes(label=paste0("(",perc,"%)")), cex=2.3) +
+  labs(x="", y="N. of individuals",
+       fill="Sex", col="Sex",
+       title="Sex differences in the IHD groups") +
+  theme_few_src() +
+  # facet_wrap(~ihd_group, scales = "free", nrow=1, drop=T) +
+  scale_fill_paletteer_d("rcartocolor::Pastel") +
+  theme(legend.position="right",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        panel.grid.major.x = element_blank())
+
+p
+```
+
+#### BMI
+
+```{r}
+summary_continuous(indata=ihd_dead_inds_noai, field="_f21001_", type="num", xlab="BMI (kg/m2)", boxcol="white", 
+                   leg_pos=c(0.8,0.6), fillvar="ihd_group", fillname="IHD group", rel_heights = c(5.5,4,3,2.8),
+                   xlim=c(0,80))
+```
+
+#### Year of birth
+
+```{r include=FALSE}
+# summary(t2d_adj$year_of_birth_f34_0_0)
+```
+
+```{r warning = F, fig.width=9,fig.height=5}
+f_id <- "f34_"
+pdata <- ihd_dead_inds_noai %>%
+  select(eid, ihd_group, contains(f_id)) %>%
+  pivot_longer(!c(eid,ihd_group),names_to="names",values_to="value") %>%
+  separate(names,c(NA,"rep"),f_id) %>%
+  mutate(rep=as.numeric(str_remove(rep,"_0_"))+1,
+         # value=if_else(value<0, NA_real_, value)
+         ) %>%
+  filter(!is.na(value)) %>%
+  group_by(eid) %>%
+  filter(row_number() == n()) %>%
+  ungroup() %>%
+  count(value, ihd_group) %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(n/sum(n)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(value=factor(value,levels=unique(value)))
+# pdata
+
+p <- ggplot(pdata,aes(x=as.numeric(as.character(value)), y=n, fill=ihd_group)) +
+  geom_col(width=0.8, position = position_dodge()) +
+  labs(x="Year of birth", y="N. of individuals",
+       fill="Sex", col="Sex",
+       title="Year of birth in each IHD group") +
+  theme_few_src() +
+  scale_x_continuous(breaks = scales::pretty_breaks(5)) +
+  facet_wrap(~ihd_group, scales = "free", nrow=1, drop=T) +
+  scale_fill_few("Dark") +
+  theme(legend.position="none",
+        # axis.text.y = element_blank(),
+        # axis.ticks.y = element_blank(),
+        axis.text.x = element_text(angle=30, hjust=1),
+        )
+p
+```
+
+#### Age at death
+
+```{r}
+summary_continuous(indata=ihd_dead_inds_noai, field="_f40007_", type="num", xlab="Age at death", boxcol="white", 
+                   leg_pos=c(0.85,0.6), fillvar="ihd_group", fillname="IHD group", rel_heights = c(5.5, 4, 3, 2.8),
+                   xlim=c(30,100))
+```
+
+#### Ethnic Background
+
+```{r}
+pdata <- ihd_dead_inds_noai %>%
+  group_by(ihd_group,ethnic_background_f21000_0_0) %>%
+  summarize(tot=sum(n()),.groups = "drop") %>%
+  na.omit()
+```
+
+```{r fig.width=9,fig.height=6}
+pfacet <- pdata %>%
+  group_by(ihd_group) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  arrange(tot) %>%   
+  mutate(short = factor(ethnic_background_f21000_0_0, unique(ethnic_background_f21000_0_0))) %>%
+  ggplot(aes(x=short, y=perc, fill=short)) +
+  geom_bar(stat="identity") +
+  ylim(c(0,100)) +
+  facet_wrap(~ihd_group) +
+  theme_few() +
+  labs(
+    x="Ethnic Background",
+    y="% of individuals",
+    title="Ethnic Background",
+    subtitle="in selected IHD groups"
+  ) +
+  geom_text(aes(label=paste0(perc,"%")),cex=3,
+            hjust=-0.3,
+            ) + 
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1)) +
+  coord_flip()
+
+pfacet
+
+
+# plot_grid(pall, pfacet, nrow=1)
+```
+
+
+:::infonote
+Almost 90% of the individuals have "White British" background, as most of the UK Biobank. Just to be aware, in case we need to correct wen checking HLA and other genetic information later.
+
+There are no significant differences between the different population groups.
+:::
+
+
+## {.unlisted .unnumbered .toc-ignore}
+
+---
+
+## HLA Information
+
+```{r}
+hla_ihd_q1_noai <- inner_join(ihd_dead_inds_noai, hla_wide, by="eid")
+```
+
+```{r message = F}
+pdata <- hla_ihd_q1_noai %>%
+  select(eid, ihd_group, contains("HLA")) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  drop_na() %>% 
+  separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value) %>% 
+  summarize(tot=sum(n()),.groups = "drop") %>%
+  group_by(ihd_group, name) %>% 
+  arrange(ihd_group, name, -tot) %>% 
+  top_n(5) %>% 
+  ungroup() %>% 
+  mutate(value = reorder_within(value, -tot, name)) %>% 
+  na.omit()
+
+# pdata
+# pdata <- pdata %>% 
+#       group_by(.data[[facet]]) %>% arrange(.data[[facet]],-n) %>% top_n(10) %>% ungroup() %>% 
+#       mutate(value=reorder_within(value,-n,.data[[facet]]))
+# 
+# scale_x_reordered() +
+
+pdata <- pdata %>%
+  mutate(class = case_when(
+    name %in% c("HLA-A", "HLA-B", "HLA-C") ~ "MHC Class I",
+    TRUE ~ "MHC Class II"
+  ))
+```
+
+```{r fig.width = 12, fig.height = 5}
+p1 <- ggplot(pdata %>% filter(class == "MHC Class I"), aes(x=value, y=tot, fill=ihd_group)) +
+  geom_bar(stat="identity", width = 0.8) +
+  # ylim(c(0,100)) +
+  scale_x_reordered() +
+  facet_grid(ihd_group ~ name, scales = "free", space="free_x") +
+  theme_few() +
+  scale_fill_few("Dark") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="HLA usage",
+    subtitle="MHC Class I"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 9),
+        strip.text.x = element_text(size = 9,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+
+p2 <- ggplot(pdata %>% filter(class == "MHC Class II"), aes(x=value, y=tot, fill=ihd_group)) +
+  geom_bar(stat="identity", width = 0.8) +
+  # ylim(c(0,100)) +
+  scale_x_reordered() +
+  facet_grid(ihd_group ~ name, scales = "free", space="free_x") +
+  theme_few() +
+  scale_fill_few("Dark") +
+  labs(
+    x="HLA type",
+    y="N. of alelles",
+    title="",
+    subtitle="MHC Class II"
+  ) +
+  theme(legend.position="none",
+        panel.grid.major.x = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 45,hjust = 1, size = 9),
+        strip.text.x = element_text(size = 9,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+plot_grid(p1, p2, nrow = 1, rel_widths = c(1,2.5))
+```
+
+
+## Association Models
+
+:::question
+Is there any significant association between the different haplotypes and death from IHD?
+:::
+
+### Adjusted model {.tabset}
+
+:::update
+Each individual with HLA-A\*101 has a variable called HLA-A\*101 with values 0, 1 or 2 depending on the number of alleles for that particular type. 
+:::
+
+```{r}
+hla_ihd_q1_012 <- inner_join(ihd_dead_inds_noai, hla_info_012, by="eid")
+```
+
+
+#### All loci (cleaned)
+
+```{r}
+logres_all <- hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  drop_na()
+
+# logres_all
+```
+
+```{r}
+logit_adj <- glm(ihd_group ~ ., family = binomial,
+                  data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit_res <- cbind(logres_all, pred = round(logit_adj$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit_res, plot = TRUE,
+#                       main = "Final model (adjusted BMI, age and sex)",
+#                       col= "blue", print.auc = T, ci = T, legacy.axes = T)
+```
+
+```{r warning=FALSE}
+or <- exp(coef(logit_adj))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit_adj))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  # na.omit() %>% 
+  filter(!is.na(OR)) %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         panel.grid.major.x = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+```
+
+#### Divided by MHC Class {.tabset .tabset-pills}
+
+##### MHC Class I
+
+```{r}
+mhc_class_i <- c("HLA-A", "HLA-B", "HLA-C")
+
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, matches(mhc_class_i)) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### MHC Class II
+
+```{r}
+mhc_class_i <- c("HLA-A", "HLA-B", "HLA-C")
+
+logres_all <- hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked,
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, !matches(mhc_class_i)) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+:::question
+How are these HLA types present on the two groups?
+:::
+
+```{r}
+top_hla <- OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  pull(Pred)
+pdata <- hla_ihd_q1_012 %>%
+  select(eid, ihd_group, one_of(top_hla)) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  # separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value, .drop = F) %>% 
+  summarise(tot=sum(n()), .groups = "drop") %>% 
+  pivot_wider(names_from = value, values_from = tot, values_fill = list(tot = 0)) %>% 
+  pivot_longer(-c(ihd_group, name), names_to = "value", values_to = "tot") %>% 
+  group_by(ihd_group,name) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(name = factor(name, levels = top_hla)) 
+```
+
+
+```{r fig.width = 11, fig.height = 5}
+ggplot(pdata, aes(x=ihd_group, y=perc, fill=factor(value))) +
+  # geom_bar(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(preserve = "single")) +
+  # ylim(c(0,100)) +
+  # scale_x_reordered() +
+  facet_wrap(~name, scales = "fixed", nrow = 2) +
+  theme_few() +
+  # geom_text( vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+  #           aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width=0.9), cex = 2.8, vjust = -2, 
+            aes(label = if_else(value > 0, paste0(as.character(perc), "%"), ""), col = factor(value))) +
+  # scale_fill_few("Dark") +
+  scale_fill_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  scale_color_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  labs(
+    x="IHD group",
+    y="% of individuals",
+    title="HLA usage in the most extreme HLA Odds Ratios",
+    fill = "N. of alleles",
+    color = "N. of alleles"
+  ) +
+  theme(legend.position="bottom",
+        # legend.position=c(0.7,0.8), 
+        legend.title = element_text(size=9), 
+        legend.text = element_text(size=8), 
+        legend.key.size = unit(0.7,"line"),
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 15, hjust = 1, size = 7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+```
+
+#### Divided by HLA types {.tabset .tabset-pills}
+
+##### HLA-A
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-A")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### HLA-B
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-B")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### HLA-DPA1
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-DPA1")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+##### HLA-DPB1
+
+```{r}
+logres_all <-  hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-DPB1")) %>% 
+  drop_na()
+  
+# logres_all
+```
+
+```{r}
+# kk <- test_hlaa %>% select(ihd_group, value)
+logit1 <- glm(ihd_group ~ ., family = binomial, data = logres_all)
+# logit1_null <- glm(ihd_group ~ 1, family = binomial, data = logres_all)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit1_res <- cbind(logres_all, pred = round(logit1$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit1_res, plot = TRUE, main = "Final model (all clean loci)",
+#                       col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+
+
+```{r warning=FALSE}
+or <- exp(coef(logit1))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit1))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_all %>% select(-c(ihd_group,age,bmi,sex, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+
+### Stratified by sex {.tabset}
+
+:::update
+Finally, I will use the cleaned loci, as defined above, and stratify by sex to see whether there is any difference (on the adjusted model)
+
+We can see on the plot above that sex is definitely having some effect, we can try to understand with the following models.
+:::
+
+#### Males
+
+```{r}
+logres_all <- hla_ihd_q1_012 %>% 
+  mutate(ever_smoked = coalesce(ever_smoked_f20160_0_0, 
+                                ever_smoked_f20160_1_0, 
+                                ever_smoked_f20160_2_0, 
+                                ever_smoked_f20160_3_0)) %>% 
+  select(ihd_group, smoker = ever_smoked, 
+         age = age_at_recruitment_f21022_0_0, sex = contains("genetic_sex"),
+         contains("body_mass_index_bmi_f21001"),
+         contains(c("HLA")),
+         -contains("_NA")) %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0)) %>% 
+  select(-contains("body_mass_index_bmi_f21001")) %>% 
+  mutate(ihd_group = relevel(ihd_group, ref = "Died, never had IHD")) %>% 
+  select(where(~ any(. != 0))) %>% 
+  select_if(colSums(. != 0, na.rm=T) > 100) %>% 
+  drop_na()
+
+logres_male <- logres_all %>% filter(sex == "Male") %>% select(-sex)
+```
+
+```{r}
+logit_male <- glm(ihd_group ~ ., family = binomial,
+                  data = logres_male)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit_male_res <- cbind(logres_male, pred = round(logit_male$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit_male_res, plot = TRUE, main = "Final model (only males)",
+#                       col= "blue", print.auc = T, ci = T, legacy.axes = T)
+```
+
+```{r warning=FALSE}
+or <- exp(coef(logit_male))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit_male))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_male %>% select(-c(ihd_group,age,bmi,smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  # na.omit() %>% 
+  filter(!is.na(OR)) %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+#### Females
+
+```{r}
+logres_female <- logres_all %>% filter(sex == "Female") %>% select(-sex)
+```
+
+```{r}
+logit_female <- glm(ihd_group ~ ., family = binomial,
+                  data = logres_female)
+```
+
+
+```{r message=FALSE, fig.width=5, fig.height=5}
+logit_female_res <- cbind(logres_female, pred = round(logit_female$fitted.values,2)) %>% relocate(pred, .after = ihd_group)
+# roc_data <- pROC::roc(ihd_group~pred, data = logit_female_res, plot = TRUE, main = "Final model (only females)",
+                      # col= "blue", print.auc = T, ci=T, legacy.axes = T)
+```
+
+```{r warning=FALSE}
+or <- exp(coef(logit_female))
+# data.frame(or) %>% 
+#   arrange(-or)
+ci <- exp(confint.default(logit_female))
+# colSums(logres_all %>% select(-ihd_group)) %>% sort() %>% data.frame()
+# lreg.or <- exp(cbind(OR = coef(glm_out), confint(glm_out)))
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+OR_data <- OR_data %>% filter(Pred != "(Intercept)")
+OR_data <- OR_data %>% mutate(Pred = gsub("`", "", Pred))
+OR_data <- left_join(OR_data, colSums(logres_female %>% select(-c(ihd_group,age,bmi, smoker))) %>% data.frame() %>% rownames_to_column(var="Pred"), by = "Pred")
+colnames(OR_data) <- c(colnames(OR_data)[1:4], "count")
+OR_data <- OR_data %>% 
+  mutate(predlabel = paste0(Pred, " (n = ", count, ")"))
+# OR_data %>% 
+#   arrange(-OR)
+```
+
+
+```{r}
+OR_data %>% 
+  arrange(-OR) %>% 
+  # na.omit() %>% 
+  filter(!is.na(OR)) %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  mutate(O_High = if_else(O_High > 5, 5, O_High)) %>% 
+  ggplot(aes(x = reorder(predlabel, OR),
+            y = OR, ymin = O_Low, ymax = O_High)) +
+   geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+   # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+   # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+   # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+   labs(x="HLA type",
+        y="Odds ratio (95% CI)",
+        title="Top and bottom HLA Odds Ratios") +
+   geom_hline(aes(yintercept = 1),size=0.2) +
+   # labs(col = "Disease-associated") +
+   coord_flip() +
+   theme_few() +
+   scale_color_few() +
+   guides(color = guide_legend(override.aes = list(linetype = 0))) +
+   theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+         legend.position = "none")
+  
+```
+
+:::question
+How are these HLA types present on the Females?
+:::
+
+```{r}
+top_hla <- OR_data %>% 
+  arrange(-OR) %>% 
+  na.omit() %>% 
+  filter(row_number() > max(row_number()) - 10 | row_number() <= 10) %>% 
+  pull(Pred)
+pdata <- hla_ihd_q1_012 %>%
+  select(eid, ihd_group, one_of(top_hla)) %>%
+  pivot_longer(-c(eid, ihd_group)) %>% 
+  # separate(name, into = c("name", NA), sep = "_") %>% 
+  group_by(ihd_group, name, value, .drop = F) %>% 
+  summarise(tot=sum(n()), .groups = "drop") %>% 
+  pivot_wider(names_from = value, values_from = tot, values_fill = list(tot = 0)) %>% 
+  pivot_longer(-c(ihd_group, name), names_to = "value", values_to = "tot") %>% 
+  group_by(ihd_group,name) %>% 
+  mutate(perc=round(tot/sum(tot)*100,1)) %>% 
+  ungroup() %>% 
+  mutate(name = factor(name, levels = top_hla)) 
+```
+
+
+```{r fig.width = 11, fig.height = 5}
+ggplot(pdata, aes(x=ihd_group, y=perc, fill=factor(value))) +
+  # geom_bar(stat="identity", width = 0.8) +
+  geom_col(width=0.8, position = position_dodge2(preserve = "single")) +
+  # ylim(c(0,100)) +
+  # scale_x_reordered() +
+  facet_wrap(~name, scales = "fixed", nrow = 2) +
+  theme_few() +
+  # geom_text( vjust=c(-3.1, -3.1, 1.8, 1.8), col=c(rep("black",2),rep("black",2)),
+  #           aes(label=n), cex=3) +
+  geom_text(position=position_dodge(width=0.9), cex = 2.8, vjust = -2, 
+            aes(label = if_else(value > 0, paste0(as.character(perc), "%"), ""), col = factor(value))) +
+  # scale_fill_few("Dark") +
+  scale_fill_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  scale_color_paletteer_d("awtools::spalette", direction = -1, breaks = rev, na.value = "grey80") +
+  labs(
+    x="IHD group",
+    y="% of individuals",
+    title="HLA usage in the most extreme HLA Odds Ratios",
+    fill = "N. of alleles",
+    color = "N. of alleles"
+  ) +
+  theme(legend.position="bottom",
+        # legend.position=c(0.7,0.8), 
+        legend.title = element_text(size=9), 
+        legend.text = element_text(size=8), 
+        legend.key.size = unit(0.7,"line"),
+        panel.grid.major.y = element_line(colour = "gray",size=0.1),
+        axis.text.x = element_text(angle = 15, hjust = 1, size = 7.5),
+        strip.text.x = element_text(size = 7.5,
+                                    # margin = margin( r = -20, l = -20, b = 2, t = 2)
+                                    # margin = margin(l = -20)
+                                    ),
+  )
+```
+
+### HLA-DRB3 in Females
+
+:::question
+HLA-DRB3 apparently has a very strong effect in Females.
+Is it an artifact or there is something real going on?
+Let's check
+:::
+
+```{r}
+logres_drb3 <- logres_all %>% 
+  select(ihd_group, smoker, age, sex, bmi, starts_with("HLA-DRB3"))
+
+logres_drb3 %>% 
+  group_by(ihd_group, sex) %>% 
+  summarize(.groups = "drop",
+            "HLA-DRB3*01:01" = sum(`HLA-DRB3*01:01`),
+            "HLA-DRB3*02:02" = sum(`HLA-DRB3*02:02`),
+            # "HLA-DRB3*02:10" = sum(`HLA-DRB3*02:10`),
+            # "HLA-DRB3*02:24" = sum(`HLA-DRB3*02:24`),
+            "HLA-DRB3*03:01" = sum(`HLA-DRB3*03:01`),
+            "HLA-DRB3*99:01" = sum(`HLA-DRB3*99:01`)) %>% 
+  pivot_longer(cols = -c(ihd_group, sex)) %>% 
+  ggplot(aes(x = name, fill = sex, y = value)) +
+  geom_col(position = position_dodge2(preserve = "single")) +
+  facet_wrap(ihd_group ~ .) +
+  coord_flip() +
+  geom_text(position=position_dodge(width=0.9), cex = 2.8, 
+            aes(label = value)) +
+  scale_fill_few("Light", breaks = c("Male", "Female")) +
+  labs(y="N. of haplotypes", x = "HLA-type", fill = "Sex")
+
+# logres_drb3 %>% 
+#   group_by(ihd_group, sex) %>% 
+#   summarize("HLA-DRB3*01:01" = sum(`HLA-DRB3*01:01` != 0),
+#             "HLA-DRB3*02:02" = sum(`HLA-DRB3*02:02` != 0),
+#             "HLA-DRB3*02:10" = sum(`HLA-DRB3*02:10` != 0),
+#             "HLA-DRB3*02:24" = sum(`HLA-DRB3*02:24` != 0),
+#             "HLA-DRB3*03:01" = sum(`HLA-DRB3*03:01` != 0),
+#             "HLA-DRB3*99:01" = sum(`HLA-DRB3*99:01` != 0))
+```
+
+:::update
+This might suggest that having HLA-DRB3*99:01 haplotype increases your chances of dying with IHD.
+
+99:01 actually [means](https://biobank.ndph.ox.ac.uk/ukb/refer.cgi?id=182) that no allele is present (for HLA-DRB3, -DRB4 and -DRB5, since these loci can have copy number 0): having any type of DRB3 lowers your risk of dying with IHD, especially for females. 
+- Is that a good interpretation?
+
+The rest of loci are also more present in females that die with IHD, so it might be interesting to explore the role of HLA-DRB3 in females.
+:::
+
+## Population Comparison

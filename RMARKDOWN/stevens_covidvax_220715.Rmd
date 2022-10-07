@@ -1,0 +1,1377 @@
+---
+title: "Covid19 vaccination and VTE in UKB"
+subtitle: "Hannah Stevens, James McFadyen and Karlheinz Peter - *May 2022*"
+author: "[Baker Bioinformatics](https://intranet.baker.edu.au/research-resources/platform-technologies/bioinformatics-program/)"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+mail: "bioinformatics@baker.edu.au"
+# output:
+#   html_notebook:
+#     css: "www/css/my.css"
+#     toc: true
+#     toc_depth: 3
+#     toc_float:
+#       collapsed: false
+#       smooth_scroll: true
+#     theme: cosmo
+#     df_print: paged
+#     highlight: tango
+#     code_folding: hide
+#     number_sections: false
+output:
+   epuRate::BAKER:
+     # cssextra: "www/css/my.css"
+     toc: TRUE
+     number_sections: FALSE
+     code_folding: "hide"
+---
+
+```{=html}
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+```
+
+------------------------------------------------------------------------
+
+# Project Summary
+
+**Determining the impact of vaccination against COVID-19 on COVID-19-associated venous thromboembolism**
+
+Venous thrombosis rates in COVID-19 were initially reported to be markedly elevated (30-40% of intensive care patients). Over the last 12 months, anecdotally, these rates of venous thrombosis appear to have reduced despite high numbers of COVID-19 infections. Whether this is due to COVID-19 vaccination remains unknown.
+
+## Comments from word document {.unlisted .unnumbered .toc-ignore}
+
+![](../data/proj_summary.png)
+
+### Study period
+
+January 2020 - September 2021
+
+-   Vaccinated cohort:
+    -   1st Jan 2021 until 30th November 2021, with follow-up for COVID-19 VTE until 30th March 2022
+-   Unvaccinated and historical cohort:
+    -   1st Feb 2020 - 31st December 2020
+    -   Confirmed unvaccinated individuals (at any point)
+
+### Definitions
+
+1.  Vaccinated person is defined as anyone who has received at least 1 dose of COVID-19 vaccination (any type)
+2.  Unvaccinated historical cohort -- evaluated in 2020 when COVID-19 vaccinations were not available to the general public outside of a clinical trial.
+3.  COVID-19 infection defined by positive covid19 test occurring more than 14 days after COVID-19 vaccination  
+
+    a.  Hospital inpatient when infection diagnosed, defined by: i. the Requesting Organization Type associated with the test was either 'Hospital Inpatient' or 'Hospital A and E', or; i. the record possessed an 'Acute Trust' flag, meaning that the test came from a hospital delivering emergency care,or i. the record possessed a 'Hospital Acquired Infection' flag.
+    b.  Outpatient infection  
+    
+4.  COVID-19 VTE defined by ICD-10 codes for VTE (i.e. I260, I269, I801, I802, and I822) within 3 months of COVID-19 infection
+
+# UKBiobank Data Extraction
+
+## Preprocess
+
+<!-- ### Load libraries and functions -->
+
+First, we load libraries and functions we need for the downstream analysis.
+
+-   Libraries
+
+```{r message=FALSE, warning=FALSE, results='hide',include=FALSE}
+library(tidyverse)
+library(DT)
+library(ggthemes)
+library(cowplot)
+library(paletteer)
+library(data.table)
+library(ggtext)
+library(flextable)
+library(officer)
+###########
+# library(tidytext)
+# library(VennDiagram)
+# library(ggrepel)
+# library(colorspace)
+# library(summarytools)
+# st_options(plain.ascii = FALSE,        # Always use this option in Rmd documents
+           # style        = "rmarkdown", # Always use this option in Rmd documents
+           # footnote     = NA,          # Makes html-rendered results more concise
+           # subtitle.emphasis = FALSE)  # Improves layout with some rmardown themes
+# library(lobstr)
+# library(knitr)
+# opts_chunk$set(results = 'markup',      # Can also be set at the chunk-level
+#                comment = NA,
+#                prompt  = FALSE,
+#                cache   = FALSE)
+# library(treemap)
+# library(stringr)
+# library(filesstrings)
+# library(lubridate)
+# library(scales)
+# library(ukbtools)
+```
+
+-   Functions
+
+```{r include=FALSE}
+files <- c("/Users/sruizcarmona/WORK/BIOINFO_PROJECTS/BAKER_UKBIOBANK/ukb_functions.R",
+           "/Users/sruizcarmona/WORK/BIOINFO_PROJECTS/bakergithub_ukbiobank/ukb_data_functions.R",
+           "/home/sruizcarmona/WORKSPACE/WORK/BIOINFO/UKBIOBANK/GIT_UKBIOBANK/ukb_functions.R")
+for (f in files){
+  if (file.exists(f)){
+    print(paste0("Sourcing from ", f))
+    source(f)
+  }
+}
+# extra custom functions and ICD10 definition
+source("supp_functions_plots.R")
+load("../rda/icd10_definition_WHO.rda")
+```
+
+```{r include=FALSE}
+split_by_length <- function(x, n) {
+  sst <- strsplit(x, '')[[1]]
+  m <- matrix('', nrow=n, ncol=(length(sst)+n-1)%/%n)
+  m[seq_along(sst)] <- sst
+  apply(m, 2, paste, collapse='')
+}
+
+split_variable_name <- function(variable.s, s.length=30){
+  s.var <- str_split(variable.s,"\\\\\\\n")[[1]]
+  new.var <- paste(c(paste(split_by_length(s.var[1],s.length),collapse="\\\n\\"),s.var[2]),collapse="\\\n\\")
+  return(new.var)
+}
+
+labeller_fun <- function(variable,value){
+  return(str_wrap(value, width = 10))
+}
+```
+
+## Load data
+
+UKB is too big to load at once and be able to work with it, so we will load the information as needed. First of all, we will only select individuals that have been COVID19 positive at any time, and a subset of columns so we can work easily.
+
+```{r}
+### RUN IN CLUSTER
+# load("/baker/datasets/ukb55469/R_workspace/220520_ukb_data_clean.rda")
+# ukb_covid <- ukb_data_clean %>% 
+#   filter(!is.na(records_of_covid19_test_results_f40100_0_0))
+# save(ukb_covid, file="/baker/datasets/ukb55469/R_workspace/preprocessed_rdas/ukb42488_covid_220525.rda")
+```
+
+## Extract fields
+
+-   Selected fields with information:
+
+```{r echo=TRUE, warning=FALSE}
+selfields <- read.table('../input/selected_fields.txt',sep='\t',stringsAsFactors = F)
+colnames(selfields) <- c("FIELD_CODE","Description")
+selfields <- selfields %>% distinct(FIELD_CODE,.keep_all = TRUE)
+datatable(selfields)
+```
+
+```{r}
+# create/load the rda with fields and individuals
+## in bash in the cluster
+# Rscript select_fields.R
+load('../rda/stevens_my_ukb_data_selfields.rda')
+
+# from rodrigo, fields of interet
+#Update age info
+ukb_covid$age <- ukb_covid$age_when_attended_assessment_centre_f21003_0_0 + 2020 -
+  as.numeric(format(as.Date(ukb_covid$date_of_attending_assessment_centre_f53_0_0, format="%Y-%m-%d"),"%Y"))
+ukb_covid$sex <- ukb_covid$genetic_sex_f22001_0_0
+```
+
+# Covid-19 Info
+
+```{r message=FALSE, warning=FALSE}
+# ########################
+# # get covid info (run once in cluster and then load)
+# ########################
+# # get blood type from covid data
+# library(data.table)
+# library(tidyverse)
+# blood_type <- read.table("/baker/datasets/ukb55469/Tables_coding_info/Covid19/Testing/covid19_misc_220524.txt", header=TRUE)
+# 
+# #ICD10 covid19:
+# #     U071: COVID-19, virus identified
+# #     U072: COVID-19, virus not identified
+# #             -Clinically-epidemiologically diagnosed COVID-19
+# #             -Probable COVID-19
+# #             -Suspected COVID-19
+# icd10_covid <- c('U071','U072')
+# icd10_codes_vte <- c("I260","I269","I801","I802","I808","I822")
+# 
+# #Reported in public Health
+# location <- '/baker/datasets/ukb55469/Tables_coding_info/Covid19/Testing/'
+# results_date <- '220524'
+# cv19 <- fread(paste0(location, "/covid19_result_", results_date, ".txt"), header=TRUE)
+# cv19_en <- fread(paste0(location, "/covid19_result_england_", results_date, ".txt"), header=TRUE)
+# cv19_wal <- fread(paste0(location, "/covid19_result_wales_", results_date, ".txt"), header=TRUE)
+# cv19_sct <- fread(paste0(location, "/covid19_result_scotland_", results_date, ".txt"), header=TRUE)
+# cv19 <- rbind(cv19, cv19_en, cv19_wal, cv19_sct, fill=T) %>% unique()
+# cv19$from <-'PHE'
+# names(cv19)[names(cv19) == 'specdate'] <- 'date'
+# 
+# #Reported at NHS Digital (HES)
+# hesin_date <- "220315"
+# hesin_location <- '/baker/datasets/ukb55469/Tables_coding_info/Hes/'
+# hesin <- fread(paste0(hesin_location, "/hesin_", hesin_date, ".txt"), header=TRUE)
+# hes_diag <- fread(paste0(hesin_location, "/hesin_diag_", hesin_date, ".txt"), header=TRUE)
+# cv19_hes <- hes_diag %>%
+#   filter(diag_icd10 %in% icd10_covid)
+# cv19_hes <- left_join(cv19_hes, hesin, by = c("eid"="eid","ins_index"="ins_index"))
+# cv19_hes$from <- 'HESIN'
+# cv19_hes$result <- 1
+# cv19_hes <- cv19_hes %>% 
+#   mutate(acute = 1) %>% 
+#   select(eid, result, date = epistart, acute, diag_icd10, from)
+# 
+# #Death from NHS Digital and NHS Central Register (NHSCR)
+# death_date <- "220315"
+# death_location <- '/baker/datasets/ukb55469/Tables_coding_info/Death_register/'
+# death <- fread(paste0(death_location, "/death_", death_date, ".txt"), header=TRUE)
+# death_cause <- fread(paste0(death_location, "/death_cause_", death_date, ".txt"), header=TRUE)
+# cv19_death <- death_cause %>% 
+#   filter(cause_icd10 %in% icd10_covid)
+# cv19_death <- left_join(cv19_death, death, by = c("eid"="eid"))
+# cv19_death$from <- 'DEATH'
+# cv19_death$result <- 1
+# names(cv19_death)[names(cv19_death) == 'date_of_death'] <- 'date'
+# cv19_death <- cv19_death %>% 
+#   mutate(acute = 1) %>% 
+#   select(eid, result, date, acute, diag_icd10 = cause_icd10, from)
+# 
+# #join all fields
+# cv19 <- rbind(cv19, cv19_hes, cv19_death, fill = T) %>% unique()
+# 
+# ## order by date
+# cv19 <- cv19 %>%
+#   mutate(date2 = as.numeric(format(as.POSIXct(as.character(date),
+#                                               format="%d/%m/%Y"),
+#                                    format='%Y%m%d'))) %>%
+#   arrange(eid, result, date2)
+# 
+# # get hesin and death info for vte (for later)
+# hes_vte <- hes_diag %>%
+#   filter(diag_icd10 %in% icd10_codes_vte) %>% 
+#   left_join(hesin, by = c("eid"="eid","ins_index"="ins_index"))
+# 
+# death_vte <- death_cause %>%
+#   filter(cause_icd10 %in% icd10_codes_vte) %>% 
+#   left_join(death, by = c("eid"="eid","ins_index"="ins_index"))
+#
+# # save everything on the cluster and load locally
+# save(cv19, blood_type, hesin, hes_diag, death, death_cause, hes_vte, death_vte,
+#      file = "/sysgen/workspace/users/bioinformatics/2205_STEVENS_COVIDVAX_UKB/rda/covid_hesin_death_data.rda")
+# #########################
+load("../rda/covid_hesin_death_data.rda")
+
+# we don't need the rest of hesin information at this moment and it's very big
+rm(hesin, hes_diag, death, death_cause)
+invisible(gc())
+```
+
+```{r}
+# ### RUN IN CLUSTER
+# tpp <- fread("/baker/datasets/ukb55469/Tables_coding_info/Covid19/Gp/220609_covid19_tpp_gp_clinical.txt", header=TRUE, stringsAsFactors = FALSE)
+# #take only codes from 2020
+# tpp <- tpp %>%
+#   mutate(event_dt = as.Date(event_dt, format="%d/%m/%Y")) %>%
+#   filter(year(event_dt) > 2019)
+# #covid-related tpp codes
+# tpp_codes <- list('covid-pos' = 'Y2a3b', 'az-vax1' = 'Y2a10', 'az-vax2' = 'Y2a39', 'moderna-vax1' = 'Y2b9c',
+#                   'covid19' = 'Y2d55',
+#                   'nova-vax1' = 'Y2eb5', 'nova-vax2' = 'Y2eb6', 'pfizer-vax1' = 'Y2a0f', 'pfizer-vax2' = 'Y2a3a')
+# tpp_covid <- tpp %>%
+#   filter(code %in% tpp_codes)
+# tpp_covid$value <- apply(tpp, 1, function(x) names(tpp_codes)[tpp_codes == x['code']])
+# 
+# save(tpp_covid, file="../rda/stevens_tpp_covid.rda")
+load("../rda/stevens_tpp_covid.rda")
+```
+
+```{r}
+# merge covid info from gp to the main dataset
+cv19 <- rbind(cv19 %>% mutate(date = as.Date(date, format="%d/%m/%Y")),
+              tpp_covid %>% 
+                filter(grepl("covid", value)) %>% 
+                rename(date = event_dt) %>% 
+                mutate(result = 1, acute = 0, origin = "tpp"),
+              fill = T)
+cv19 <- cv19 %>% 
+  filter(eid %in% ukb_covid$eid)
+```
+
+
+::: infonote
+There are \~170.000 individuals with COVID19 test results.
+
+How many of those results are positive? How many are considered "acute"? How many of those are vaccinated?
+
+We will try to answer these and more questions on the sections below.
+:::
+
+## Summary {.tabset}
+
+### Positive
+
+```{r}
+pdata <- cv19 %>%
+  filter(result == 1) %>% 
+  select(eid, date2, result, acute, from)
+```
+
+```{r}
+p1 <- cv19 %>%
+  count(result) %>%
+  mutate(perc = round(n/sum(n)*100,1),
+         result = fct_relevel(c("Neg", "Pos"), levels = c("Pos"))) %>% 
+  ggplot(aes(result, n, fill = result)) +
+  geom_col() +
+  scale_fill_few("Dark") +
+  geom_text(cex=3, aes(label = n),vjust=c(-3.5)) +
+  geom_text(cex = 3, vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="Covid-19 in UKB",
+       subtitle="All results",
+       x="Covid-19 Results", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(4), limits = c(0, 450000)) +
+  theme_few_src() +
+  theme(legend.position = "none",
+        panel.grid.major.x = element_blank())
+
+p2 <- cv19 %>%
+  group_by(eid) %>%
+  arrange(-result, .by_group = T) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  count(result) %>%
+  mutate(perc = round(n/sum(n)*100,1),
+         result = fct_relevel(c("Neg", "Pos"), levels = c("Pos"))) %>% 
+  ggplot(aes(result, n, fill = result)) +
+  geom_col() +
+  scale_fill_few("Dark") +
+  geom_text(cex=3, aes(label = n),vjust=c(-3.5)) +
+  geom_text(cex = 3, vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="Covid-19 in UKB",
+       subtitle="Inds. with at least one pos. res.",
+       x="Covid-19 Results", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(4), limits = c(0, 160000)) +
+  theme_few_src() +
+  theme(legend.position = "none",
+        panel.grid.major.x = element_blank())
+
+plot_grid (p1, p2, nrow=1)
+```
+
+### Acute cases
+
+::: update
+Severity is not captured by testing results in UKB, see dictionary excel file. The "acute" column is set to 1 if the requesting organization provides emergency care, but it is unrelated to the Covid-19 severity.
+
+To assess severity, I will use the same definition as published <a href="https://oem.bmj.com/content/78/5/307" style="color: #185ea6; text-decoration: underline;">before</a>:  
+
+- Positive test result in a hospital setting, as an inpatient, or death with a primary cause reported as Covid-19.
+:::
+
+
+```{r fig.width=3, fig.height=6}
+cv19 %>% 
+  mutate(severe = case_when(
+    from == "HESIN" ~ 1,
+    from == "DEATH" ~ 1, 
+    TRUE ~ 0
+  )) %>% 
+  group_by(result) %>% 
+  count(severe) %>% 
+  ungroup() %>% 
+  mutate(k = factor(paste0(result,severe) %>% recode("00"="Neg", "10" = "No", "11"="Yes"),
+                    levels = c("Yes", "No", "Neg")),
+         result = fct_relevel(c("Neg", "Pos", "Pos"), levels = c("Pos"))) %>% 
+  filter(result == "Pos") %>% 
+  mutate(perc = round(n/sum(n)*100,1)) %>% 
+  ggplot(aes(k, n, fill = k)) +
+  geom_col(width=0.6, position = position_dodge(width = 0.9)) +
+  scale_fill_paletteer_d("awtools::mpalette") +
+  geom_text(position = position_dodge(width = 0.9),
+            cex=3, aes(label = n),vjust=c(-3.5)) +
+  geom_text(position = position_dodge(width = 0.9),
+            cex = 3, vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="Covid-19 in UKB",
+       subtitle="Assessing severity",
+       x="Severe Positive Case", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(4), limits = c(0, 60000)) +
+  theme_few_src() +
+  theme(legend.position = "none",
+        panel.grid.major.x = element_blank())
+
+```
+
+### Vaccinated
+
+:::question
+Let's dig into vaccination data:
+
+-   Can we know how many people were fully vaccinated? Or at least one dose?
+-   What about the dates of vaccination?
+:::
+
+```{r}
+# table(ukb_covid$received_first_covid19_vaccination_f27983_0_0)
+# table(ukb_covid$received_first_covid19_vaccination_f27983_1_0)
+# table(ukb_covid$received_second_covid19_vaccination_f27985_0_0)
+# table(ukb_covid$date_of_first_covid19_vaccination_f27984_0_0)
+# sum(!is.na(ukb_covid$date_of_first_covid19_vaccination_f27984_0_0))
+
+vax_data <- ukb_covid %>%
+  select(eid, contains("covid19_v")) %>% 
+  mutate(vax1 = as.integer(coalesce(received_first_covid19_vaccination_f27983_0_0,received_first_covid19_vaccination_f27983_1_0)),
+         vax2 = as.integer(coalesce(received_second_covid19_vaccination_f27985_0_0, received_second_covid19_vaccination_f27985_1_0)),
+         vax1_date = coalesce(date_of_first_covid19_vaccination_f27984_0_0, date_of_first_covid19_vaccination_f27984_1_0),
+         vax2_date = coalesce(date_of_second_covid19_vaccination_f27986_0_0, date_of_second_covid19_vaccination_f27986_1_0)) %>% 
+  filter(!is.na(vax1)) %>% 
+  select(eid, contains("vax")) %>% 
+  mutate(vax2 = ifelse(is.na(vax2), 0, vax2)) %>% 
+  mutate(vax1 = ifelse(!is.na(vax1_date), 1, 0),
+         vax2 = ifelse(!is.na(vax2_date), 1, 0)) %>% 
+  mutate(vax_status = case_when(
+    vax1 == 0 ~ "Unvaxxed",
+    vax1 == 1 & vax2 != 1 ~ "One dose",
+    TRUE ~ "Two doses"
+  )) %>% 
+  mutate(vax1_date = if_else(year(vax1_date) < 2019, NA_Date_, vax1_date),
+         vax2_date = if_else(year(vax2_date) < 2019, NA_Date_, vax2_date)) %>% 
+  mutate(vax1_date = if_else(vax1 == 0, as.Date("01/01/2022", format="%d/%m/%Y"), vax1_date))
+```
+
+
+```{r warning=FALSE}
+# # add tpp vax data
+# vax_data <- rbind(vax_data, 
+#                   tpp_covid %>% 
+#                     filter(!grepl("covid", value)) %>% 
+#                     mutate(vax = ifelse(grepl("vax1", value), "vax1_date", "vax2_date")) %>% 
+#                     group_by(eid, vax) %>% 
+#                     arrange(desc(event_dt), .by_group = T) %>% 
+#                     filter(row_number() == 1) %>% 
+#                     ungroup() %>% 
+#                     select(eid, event_dt, vax) %>% 
+#                     pivot_wider(id_cols = eid, names_from = vax, values_from = event_dt) %>% 
+#                     mutate(vax1 = ifelse(is.na(vax1_date), 0, 1),
+#                            vax2 = ifelse(is.na(vax2_date), 0, 1),
+#                            vax_status = "TBC")) %>% 
+#   group_by(eid, vax1, vax2) %>% 
+#   arrange(vax1_date, .by_group = T) %>% 
+#   filter(row_number() == 1) %>% 
+#   ungroup() %>% 
+#   # fix
+#   group_by(eid) %>% 
+#   arrange(vax_status, .by_group = T) %>% 
+#   mutate(vax1 = sum(vax1),
+#          vax2 = sum(vax2),
+#          vax1_date = max(vax1_date, na.rm = T),
+#          vax2_date = max(vax2_date, na.rm = T)) %>% 
+#   ungroup() %>% 
+#   mutate(vax_status = case_when(
+#     vax1 == 0 ~ "Unvaxxed",
+#     vax1 == 1 & vax2 != 1 ~ "One dose",
+#     TRUE ~ "Two doses"
+#   )) %>% 
+#   group_by(eid, vax1, vax2) %>% 
+#   arrange(vax1_date, .by_group = T) %>% 
+#   filter(row_number() == 1) %>% 
+#   ungroup() %>% 
+#   # remove unvaxxed errors
+#   group_by(eid) %>%
+#   arrange(vax_status, .by_group = T) %>%
+#   filter(row_number() == 1) %>%
+#   ungroup()
+# 
+# #68634 only vax_data
+# #69668 full
+#   #69634 auto unique
+# #69063 manual unique
+# vax_data %>% 
+#   mutate(k = difftime(vax2_date, vax1_date, unit="days")) %>% 
+#   filter(is.finite(k)) %>% 
+#   arrange(k)
+```
+
+
+```{r}
+# if only second dose, asign it to one
+# vax_data %>% 
+#   filter(eid == 1272882) %>% 
+#   mutate(vax1 = if_else(is.na(year(vax1_date)) & !is.na(year(vax2_date)), 1, 0),
+#          vax2 = if_else(is.na(year(vax1_date)) & !is.na(year(vax2_date)), 0, 1),
+#          vax1_date = if_else(is.na(year(vax1_date)) & !is.na(year(vax2_date)), vax2_date, vax1_date))
+#   filter(vax_status == "Unvaxxed")
+```
+
+
+```{r}
+# k <- tpp_covid %>% 
+#         filter(!grepl("covid", value)) %>% 
+#         mutate(vax = ifelse(grepl("vax1", value), "vax1_date", "vax2_date")) %>% 
+#         group_by(eid, vax) %>% 
+#         arrange(desc(event_dt), .by_group = T) %>% 
+#         filter(row_number() == 1) %>% 
+#         ungroup() %>% 
+#         select(eid, event_dt, vax) %>% 
+#         pivot_wider(id_cols = eid, names_from = vax, values_from = event_dt) %>% 
+#         mutate(vax1 = ifelse(is.na(vax1_date), 0, 1),
+#                vax2 = ifelse(is.na(vax2_date), 0, 1)) %>% 
+#         mutate(vax_status = case_when(
+#           vax1 == 0 ~ "Unvaxxed",
+#           vax1 == 1 & vax2 != 1 ~ "One dose",
+#           TRUE ~ "Two doses"
+#         )) %>% 
+#   filter(vax_status == "Unvaxxed")
+# 
+# vd %>% filter(eid == 1160206)
+# 
+# ttt <- NULL
+# for (myeid in k$eid) {
+#   ttt <- rbind(ttt, tpp_covid %>% 
+#                  filter(!grepl("covid", value)) %>% 
+#                  mutate(code_type = "tpp") %>% 
+#                  filter(eid == myeid), fill = T) 
+#   ttt <- rbind(ttt, vd %>%
+#                  mutate(code_type = "vax") %>% 
+#                  filter(eid == myeid), fill = T)
+#   ttt <- rbind(ttt, vax_data %>%
+#                  mutate(code_type = "final") %>% 
+#                  filter(eid == myeid), fill = T)
+# }
+# ttt
+```
+
+
+:::infonote
+There are `r dim(vax_data)[1]` individuals in our data set with vaccination information, 40% of those with two doses.
+:::
+
+```{r fig.width=8, fig.height=4}
+p1 <- vax_data %>% 
+  count(vax_status) %>% 
+  mutate(perc = round(n/sum(n)*100,1)) %>% 
+  ggplot(aes(vax_status, n, fill = vax_status)) +
+  geom_col(width=0.6, position = position_dodge(width = 0.9)) +
+  scale_fill_paletteer_d("ggsci::default_jama") +
+  geom_text(position = position_dodge(width = 0.9),
+            cex=3, aes(label = n),vjust=c(-3.5)) +
+  geom_text(position = position_dodge(width = 0.9),
+            cex = 3, vjust=c(-1.8),
+            aes(label = paste0("(",perc,"%)"))) +
+  labs(title="Covid-19 in UKB",
+       subtitle="Vaccination information",
+       x="Vaccination Status", y="N. of Individuals", fill="") +
+  scale_y_continuous(breaks = scales::pretty_breaks(4), limits = c(0, 50000)) +
+  theme_few_src() +
+  theme(legend.position = "none",
+        panel.grid.major.x = element_blank())
+
+p2 <- vax_data %>% 
+  filter(vax1 !=0, year(vax1_date) > 2010) %>% 
+  filter(year(vax2_date)> 2010) %>% 
+  mutate(year = as.numeric(paste0(year(vax1_date), str_pad(month(vax1_date), width=2, pad = "0" )))) %>%
+  ggplot() +
+  geom_histogram(aes(vax1_date, fill = "First"),bins=50, alpha=0.8) +
+  geom_histogram(aes(vax2_date, fill = "Second"),bins=50, alpha=0.7) +
+  scale_fill_paletteer_d("ggsci::default_jama") +
+  labs(title="",
+       subtitle="Vaccination Date",
+       x="Vaccination Date", y="N. of Individuals", fill="Dose") +
+  theme_few_src() +
+  theme(legend.position = c(0.2,0.8))
+
+plot_grid(p1, p2, nrow = 1, rel_widths = c(2,3))
+```
+
+
+:::update
+As we can see on the plots, we have two clearly defined periods where people were being vaccinated with the first dose and the second, in concordance with the overall UK vaccination approach.
+
+In details, we have:
+
+- `r sum(!is.na(vax_data$vax1_date))` people with the first dose
+- `r sum(!is.na(vax_data$vax2_date))` people with the second dose
+- An average of `r as.numeric(round(difftime(mean(vax_data$vax2_date, na.rm=T),mean(vax_data$vax1_date, na.rm=T), units="days"),2))` days between the first and the second dose
+:::
+
+:::infonote
+The 2120 Unvaccinated people that are confirmed during Vaccination period (2021), have been removed
+:::
+
+### Positive and Vaxxed
+
+::: question
+Finally, we need to integrate all positive cases (severe or not) and their vaccination status.
+
+-   How many people got Covid-19 after being vaccinated?
+:::
+
+
+```{r}
+cv19 <- cv19 %>%
+  rename(date_dbl = date2) %>%
+  # mutate(date = as.Date(date, format="%d/%m/%Y")) %>% 
+  mutate(severe = case_when(
+    from == "HESIN" ~ 1,
+    from == "DEATH" ~ 1, 
+    TRUE ~ 0
+  ))
+```
+
+```{r echo = F}
+# get_vax_date<- function(myeid, f) {
+#   vax_data %>% 
+#     filter(eid == myeid) %>% 
+#     mutate(k = as.numeric(format(as.POSIXct(as.character(get(f)),
+#                                             format="%Y-%m-%d"),
+#                                  format='%Y%m%d'))) %>% 
+#     pull(get(f))
+# }
+```
+
+
+```{r}
+cv19 <- cv19 %>% 
+  select(-c(spectype, laboratory, origin, acute, hosaq, reqorg, pattype, perstype, factype, site, date_dbl)) %>% 
+  left_join(vax_data %>% filter(vax_status != "Unvaxxed") %>% select(eid, contains("date")), by = "eid") %>% 
+  mutate(after_vax1 = as.numeric(difftime(date, vax1_date, units="days")),
+         after_vax2 = as.numeric(difftime(date, vax2_date, units="days")))
+```
+
+
+```{r message=FALSE, warning=FALSE}
+ggplot(cv19 %>% filter(result == 1)) +
+  annotate(xmin = 14, xmax = Inf, 
+           ymin = -Inf, ymax = Inf, 
+           geom = "rect", alpha = 0.2) +
+  geom_histogram(aes(x = after_vax1, fill = "First"), binwidth = 7, alpha = 0.8) +
+  geom_histogram(aes(x = after_vax2, fill = "Second"), binwidth = 7, alpha = 0.7) +
+  scale_x_continuous(limits=c(-400,400)) +
+  geom_vline(xintercept = 14, size = 1.4) +
+  scale_fill_paletteer_d("ggsci::default_jama") +
+  annotate("text", x=24, y=700, hjust = 0,
+           label="Covid-19 infection > 14 days after Vaccination", size=2.6, fontface = 2) +
+  annotate("segment", x = 14, xend = 120, y = 670, yend = 670,
+           colour = "black", size = 1.2, arrow = grid::arrow(length=unit(.2,"cm"))) +
+  theme_few_src() +
+  labs(x = "Days between Covid-19 and Vaccination", fill = "Dose",
+       y = "N. of individuals",
+       title = "Vaccination date vs Covid-19 infection")
+```
+
+```{r}
+# cv19 %>%
+#   filter(result == 1) %>%
+#   filter(after_vax1 > 14 & after_vax2 < 14)
+# vdata <- cv19 %>% 
+#   filter(result == 1) %>% 
+#   filter(after_vax1 > 14) %>% 
+#   group_by(eid) %>% 
+#   filter(row_number() == 1) %>% 
+#   ungroup()
+# 
+# sum(vdata$after_vax1 > 14)
+# sum(vdata$after_vax2 > 14, na.rm = T)
+```
+
+
+:::update
+There are around **6000** individuals with a positive Covid-19 result at least 14 days after being vaccinated with the first dose and around **2000** after being vaccinated with the second dose.
+
+- Around 200 of those got Covid-19 between the first and the second dose: shall we keep them or remove them?
+:::
+
+### Control cohort
+
+:::infonote
+The control cohort is defined as the individuals that got Covid-19 during 2020.
+
+A couple of considerations:
+
+- If there are no severe events, I have selected the earliest positive result
+- If there are severe events:
+  - If there is only one, I have selected the date of a severe event over other positive results
+  - If there are more than one severe events, I have selected the earliest one
+:::
+
+
+```{r}
+pdata <- cv19 %>%
+  filter(result == 1) %>%
+  filter(date < "2021-01-01" & date > "2020-02-01") %>%
+  arrange(eid, -severe, desc(from), date) %>% 
+  group_by(eid) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+# pdata
+
+# cv19 %>% 
+#   # filter(result == 1) %>% 
+#   filter(year(vax1_date) == 2022) %>% 
+#   group_by(eid) %>% 
+#   filter(row_number() == 1) %>% 
+#   ungroup()
+```
+
+
+```{r, fig.width=6}
+ggplot(pdata) +
+  # annotate(xmin = 14, xmax = Inf, 
+  #          ymin = -Inf, ymax = Inf, 
+  #          geom = "rect", alpha = 0.4) +
+  geom_histogram(aes(x = date), binwidth = 7, alpha = 0.8) +
+  # geom_histogram(aes(x = after_vax2, fill = "Second"), binwidth = 7, alpha = 0.7) +
+  # scale_x_continuous(limits=c(-400,400)) +
+  # geom_vline(xintercept = 14, size = 1.4) +
+  scale_fill_paletteer_d("ggsci::default_jama") +
+  scale_x_date(breaks = c(seq(from = as.Date("2020-02-01"), to = as.Date("2020-12-31"), by = "2 months")),
+               date_labels = "%b %Y") +
+  # annotate("text", x=24, y=550, hjust = 0,
+  #          label="Covid-19 infection > 14 days after Vaccination", size=2.6, fontface = 2) +
+  # annotate("segment", x = 14, xend = 120, y = 520, yend = 520,
+  #          colour = "black", size = 1.2, arrow = grid::arrow(length=unit(.2,"cm"))) +
+  theme_few_src() +
+  labs(x = "Date of Covid-19 infection", fill = "Dose",
+       y = "N. of individuals",
+       title = "Covid-19 cases before Vaccination")
+```
+
+```{r}
+# assign cohort
+cv19 <- cv19 %>% 
+  mutate(cohort = case_when(
+    result == 0 ~ "neg",
+    date < "2021-01-01" & date > "2020-02-01" ~ "control",
+    date > "2021-01-01" & after_vax1 >= 14 & (is.na(after_vax2) | after_vax2 < 14) ~ "vax1", 
+    date > "2021-01-01" & after_vax2 >= 14 ~ "vax2",
+    after_vax1 < 14 ~ "control",
+    TRUE ~ "unknown"
+  ))
+cv19
+```
+
+
+:::update
+12.000 individuals have at least one positive result between Feb and Dec 2020.
+
+We will use those as the control group (Unvaccinated historical cohort).
+
+Please, note that 20% of them got vaccinated at a later date, so we will have to decide to keep them or remove them.
+
+- Maybe remove only the ones with a VTE case after being vaccinated? Since it will be quite complex to correct for that.
+:::
+
+# VTE Analysis
+
+:::infonote
+Finally, I will include information about VTE, following the same approach as Rodrigo did previously.
+
+<!-- - Self-reported [codes](https://biobank.ctsu.ox.ac.uk/crystal/field.cgi?id=20002) (1068, 1093 and 1094) -->
+- ICD10 [codes](https://biobank.ctsu.ox.ac.uk/crystal/field.cgi?id=41270) (I260, I269, I801, I802, I808, and I822)
+- Results from GP and ICD10 for both diagnose and death
+- **All of them, within 3 months after Covid-19 infection**
+
+What about individuals with more than one VTE episode?
+
+- Currently, I am using the most recent one
+- Shall we remove the individuals with VTE in the past?
+:::
+
+```{r}
+# ### RUN IN CLUSTER
+# vte_after <- fread("/baker/datasets/ukb55469/Tables_coding_info/Covid19/Gp/220609_covid19_tpp_gp_clinical.txt", header=TRUE, stringsAsFactors = FALSE)
+# #take only codes from 2020
+# vte_after <- vte_after %>% 
+#   mutate(event_dt = as.Date(event_dt, format="%d/%m/%Y")) %>% 
+#   filter(year(event_dt) > 2019)
+# #code type 1
+# tpp_codes <- c('Y9837','Y1058')
+# #code type 0
+# CTV3_codes <- c('XE0XS','Xa0l8','XaDyB','XaDyD','XaQIV',
+#                 'XaOYV','X202y','X202z','XE0WI','SP122',
+#                 'X205e','X205l','X205n','Xa9Bs','XaZ43',
+#                 'Xacvd','Xacve','G801.','G8010','G8011',
+#                 'G8012','G8013','G8014','G8015','G8016',
+#                 'G8017','G8018','G8019','G801A','G801B',
+#                 'G801z','G80y.','G80y0','G80y1','G80y2',
+#                 'G80y3','G80y4','G80y5','G80y6','G80y7',
+#                 'G80y8','Gyu80','XE0VY','Xa07G')
+# 
+# vte_after <- vte_after %>% 
+#   filter(code %in% tpp_codes | code %in% CTV3_codes)
+# save(vte_after, file="../rda/stevens_vte_gp.rda")
+load("../rda/stevens_vte_gp.rda")
+```
+
+```{r}
+self_reported_codes_vte <- c("1068","1093","1094")
+icd10_codes_vte <- c("I260","I269","I801","I802","I808","I822")
+vte_sr <- extract_self_reported_nc(my_data=ukb_covid, codes=self_reported_codes_vte)
+vte_icd10 <- extract_diagnose_icd10(my_data=ukb_covid, codes=icd10_codes_vte)
+vte_sr_or_icd10 <- union(vte_icd10, vte_sr)
+vte_icd10_dates <- get_date_icd10(ukb_covid, icd10_codes_vte)
+# vte_icd10_dates %>% 
+#   arrange(desc(date_diag))
+```
+
+```{r}
+cv19_vte <- cv19 %>% 
+  filter(result == 1) %>% 
+  # slice_head(n = 210) %>%
+  # slice_tail(n=10) %>% 
+  left_join(vte_icd10_dates, by = "eid") %>% 
+  left_join(hes_vte %>% 
+              select(eid, hes_icd10 = diag_icd10, hes_date = epistart) %>% 
+              mutate(hes_date = as.Date(hes_date, format="%d/%m/%Y")),
+            by = "eid") %>% 
+  left_join(death_vte %>% 
+              select(eid, death_icd10 = cause_icd10, death_date = date_of_death) %>% 
+              mutate(death_date = as.Date(death_date, format="%d/%m/%Y")),
+            by = "eid") %>% 
+  left_join(vte_after %>% select(-code_type, -value, gp_code = code), by = "eid") %>% 
+  # filter(eid == 1049009) %>%
+  mutate(icd10_date = if_else(hes_date > date_diag,
+                            hes_date,
+                            date_diag)) %>% 
+  mutate(vte_date = if_else(date_diag > event_dt,
+                            date_diag,
+                            event_dt)) %>% 
+  mutate(vte_date = coalesce(vte_date, icd10_date, death_date, date_diag, hes_date, event_dt)) %>% 
+  # group_by(eid, date) %>% 
+  # arrange(desc(vte_date), .by_group = T) %>% 
+  # filter(row_number() == 1) %>% 
+  # ungroup() %>% 
+  mutate(vte_after_covid = as.numeric(difftime(vte_date, date, units = "days"))) %>% 
+  # filter(vte_after_covid > 0) %>% 
+  mutate(cohort = case_when(
+    date < "2021-01-01" & date > "2020-02-01" ~ "control",
+    date > "2021-01-01" & after_vax1 >= 14 & (is.na(after_vax2) | after_vax2 < 14) ~ "vax1", 
+    date > "2021-01-01" & after_vax2 >= 14 ~ "vax2",
+    after_vax1 < 14 ~ "control",
+    TRUE ~ "unknown"
+  )) 
+
+# cv19_vte %>% filter(eid == 1021983)
+# cv19_vte_any %>% filter(eid == 1021983)
+```
+
+
+```{r}
+# cv19_vte %>%
+#   filter(eid == 1049009) %>% 
+#   # filter(date < "2021-01-01" & date > "2020-02-01") %>%
+#   arrange(eid, -severe, desc(from), date) %>%
+#   group_by(eid)
+#   # filter(row_number() == 1)
+```
+
+
+```{r, message = F, warning = F}
+cv19_vte %>% 
+  # filter(eid == 1021983) %>% 
+  filter(!is.na(vte_date)) %>% 
+  group_by(eid) %>% 
+  arrange(desc(vte_date), .by_group = T) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  ggplot() +
+  geom_histogram(aes(x=vte_date), binwidth = 28) +
+  # scale_x_continuous(limits=c(-400,400)) +
+  # geom_vline(xintercept = 14, size = 1.4) +
+  scale_fill_paletteer_d("ggsci::default_jama") +
+  # annotate("text", x=24, y=550, hjust = 0,
+  #          label="Covid-19 infection > 14 days after Vaccination", size=2.6, fontface = 2) +
+  # annotate("segment", x = 14, xend = 120, y = 520, yend = 520,
+  #          colour = "black", size = 1.2, arrow = grid::arrow(length=unit(.2,"cm"))) +
+  theme_few_src() +
+  labs(x = "Date of VTE", fill = "Dose",
+       y = "N. of individuals",
+       title = "VTE Diagnose",
+       subtitle = "Individuals with VTE diagnose per month")
+```
+
+```{r}
+# zoom on 2020 et al
+cv19_vte %>% 
+  # filter(eid == 1021983) %>% 
+  filter(!is.na(vte_date)) %>% 
+  group_by(eid) %>% 
+  arrange(desc(vte_date), .by_group = T) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>%
+  filter(year(date_diag) > 2019) %>% 
+  ggplot() +
+  geom_histogram(aes(x=date_diag), binwidth = 7) +
+  # scale_x_continuous(limits=c(-400,400)) +
+  # geom_vline(xintercept = 14, size = 1.4) +
+  scale_fill_paletteer_d("ggsci::default_jama") +
+  scale_x_date(breaks = c(seq(from = as.Date("2020-01-01"), to = as.Date("2021-11-30"), by = "3 months")),
+               date_labels = "%b %Y") +
+  # annotate("text", x=24, y=550, hjust = 0,
+  #          label="Covid-19 infection > 14 days after Vaccination", size=2.6, fontface = 2) +
+  # annotate("segment", x = 14, xend = 120, y = 520, yend = 520,
+  #          colour = "black", size = 1.2, arrow = grid::arrow(length=unit(.2,"cm"))) +
+  theme_few_src() +
+  labs(x = "Date of VTE", fill = "Dose",
+       y = "N. of individuals",
+       title = "VTE Diagnose (zoom on 2020/2021)",
+       subtitle = "Individuals with VTE diagnose per week")
+```
+
+:::update
+Quite easy to see that there is a peak in the cases after Covid-19 appeared!
+However, the diagnose data stops <a href="https://biobank.ctsu.ox.ac.uk/crystal/field.cgi?id=41280" style="color: #185ea6; text-decoration: underline;">after September 2021</a>, so it will be hard to find VTE cases after the second dose of the vaccine.
+
+But, how many of those **happened within 3 months** of a Covid-19 infection?
+:::
+
+
+```{r}
+cv19_vte_unique <- cv19_vte %>%
+  filter(!is.na(vte_date)) %>% 
+  filter(vte_after_covid >= 0 & vte_after_covid <= 90) %>%
+  group_by(eid) %>% 
+  arrange(desc(severe), desc(vte_date), desc(date), .by_group = T) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+
+# cv19_vte_unique %>% filter(cohort == "unknown")
+```
+
+
+```{r}
+numsum <- cv19_vte_unique %>%
+  count(cohort) %>%
+  mutate(total = sum(n))
+```
+
+
+```{r, warning = F}
+mycols <- paletteer_d("ggsci::default_jama", n=4)
+
+cv19_vte %>%
+  filter(!is.na(vte_date)) %>% 
+  filter(vte_after_covid >= 0 ) %>% 
+  group_by(eid) %>% 
+  arrange(desc(severe), desc(vte_date), desc(date), .by_group = T) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  ggplot() +
+  annotate(xmin = -5, xmax = 93,
+           ymin = -Inf, ymax = Inf,
+           geom = "rect", alpha = 0.2) +
+  geom_histogram(aes(x=vte_after_covid, fill = "a"), binwidth = 10) +
+  geom_histogram(data = cv19_vte_unique %>% filter(vte_after_covid >= 0 & cohort == "control"),
+                 aes(x=vte_after_covid, fill = "b"), alpha = 0.8, binwidth = 10) +
+  geom_histogram(data = cv19_vte_unique %>% filter(vte_after_covid >= 0 & cohort == "vax1"),
+                 aes(x=vte_after_covid, fill = "c"), alpha = 0.7, binwidth = 10) +
+  geom_histogram(data = cv19_vte_unique %>% filter(vte_after_covid >= 0 & cohort == "vax2"),
+                 aes(x=vte_after_covid, fill = "d"), alpha = 0.6, binwidth = 10) +
+  scale_fill_paletteer_d("ggsci::default_jama", labels = c("Total", "Control", "First vax", "Second vax")) +
+  scale_x_continuous(limits=c(-5,500)) +
+  # annotate("text", x=100, y=100, hjust = 0,
+  #          label="487 total individuals had VTE < 3 months after Covid-19\n265 in the Control group\n23 in the First vax group\n199 unknown",
+  #          size=2.6, fontface = 2) +
+  geom_richtext(data = tibble(label=glue::glue("<span style='font-size:11pt; color:{mycols[1]}'>**{numsum$total[1]} total individuals had VTE < 3 months after Covid-19**</span><br>
+                                      <span style='color:{mycols[2]}'>**{numsum$n[numsum$cohort == 'control']} in the Control group**</span><br>
+                                      <span style='color:{mycols[3]}'>**{numsum$n[numsum$cohort == 'vax1']} in the First vax group**</span><br>
+                                      <span style='color:{mycols[4]}'>**{numsum$n[numsum$cohort == 'vax2']} in the Second vax group**</span><br>
+                                      <span style='color:gray70'>{numsum$n[numsum$cohort == 'unknown']} unknown</span>"),
+                              x = 100, y = 150),
+                aes(x=x,y=y,label=label),
+                size = 3.5,
+                fill = NA, label.color = NA,
+                hjust = 0, vjust = 0.5, angle = 0,
+                label.padding = grid::unit(rep(0, 4), "pt"),
+                inherit.aes = FALSE) +
+  theme_few_src() +
+  labs(x = "Days between Covid-19 and VTE", fill = "Cohort",
+       y = "N. of individuals",
+       title = "VTE after Covid-19",
+       subtitle = "Individuals with VTE after Covid-19 for each cohort") +
+  theme(legend.position = "none")
+```
+
+```{r}
+# cv19_vte_unique %>% 
+#   filter(severe == 1 & vte_after_covid > 0) %>% 
+#   count(cohort)
+```
+
+```{r, warning=F}
+### VTE AFTER SEVERE COVID
+# numsum <- cv19_vte_unique %>%
+#   filter(vte_after_covid > 0 & vte_after_covid < 90 & severe == 1) %>%
+#   count(cohort) %>%
+#   mutate(total = sum(n))
+# 
+# ggplot(cv19_vte_unique %>% filter(vte_after_covid > 0 & severe == 1)) +
+#   annotate(xmin = -5, xmax = 90,
+#            ymin = -Inf, ymax = Inf,
+#            geom = "rect", alpha = 0.2) +
+#   geom_histogram(aes(x=vte_after_covid, fill = "a"), binwidth = 7) +
+#   geom_histogram(data = cv19_vte_unique %>% filter(vte_after_covid > 0 & cohort == "control" & severe == 1),
+#                  aes(x=vte_after_covid, fill = "b"), alpha = 0.8, binwidth = 7) +
+#   # geom_histogram(data = cv19_vte_unique %>% filter(vte_after_covid > 0 & cohort == "vax1" & severe == 1),
+#   #                aes(x=vte_after_covid, fill = "c"), alpha = 0.7, binwidth = 7) +
+#   # geom_histogram(data = cv19_vte_unique %>% filter(vte_after_covid > 0 & cohort == "vax2" & severe == 1),
+#                  # aes(x=vte_after_covid, fill = "d"), alpha = 0.6, binwidth = 7) +
+#   scale_fill_paletteer_d("ggsci::default_jama") +
+#   scale_x_continuous(limits=c(-5,500)) +
+#   # annotate("text", x=100, y=100, hjust = 0,
+#   #          label="487 total individuals had VTE < 3 months after Covid-19\n265 in the Control group\n23 in the First vax group\n199 unknown",
+#   #          size=2.6, fontface = 2) +
+#   geom_richtext(data = tibble(label=glue::glue("<span style='font-size:11pt; color:{mycols[1]}'>**{numsum$total[1]} total individuals had VTE < 3 months after severe Covid-19**</span><br>
+#                                       <span style='color:{mycols[2]}'>**{numsum$n[numsum$cohort == 'control']} in the Control group**</span><br>
+#                                       <span style='color:{mycols[3]}'>**0 in the First vax group**</span><br>
+#                                       <span style='color:{mycols[4]}'>**0 in the Second vax group**</span><br>
+#                                       <span style='color:gray70'>{numsum$n[numsum$cohort == 'unknown']} unknown</span>"),
+#                               x = 100, y = 10),
+#                 aes(x=x,y=y,label=label),
+#                 size = 3.5,
+#                 fill = NA, label.color = NA,
+#                 hjust = 0, vjust = 0.5, angle = 0,
+#                 label.padding = grid::unit(rep(0, 4), "pt"),
+#                 inherit.aes = FALSE) +
+#   theme_few_src() +
+#   labs(x = "Days between Covid-19 and VTE", fill = "Cohort",
+#        y = "N. of individuals",
+#        title = "VTE after severe Covid-19",
+#        subtitle = "Individuals with VTE after severe Covid-19 for each cohort") +
+#   theme(legend.position = "none")
+```
+
+## OR Analysis
+
+```{r}
+# cv19_vte
+
+cv19_vte_or <- cv19_vte %>%
+  mutate(vte = ifelse(!is.na(vte_date) & (vte_after_covid >= 0 & vte_after_covid <= 90), 1, 0)) %>% 
+  group_by(eid) %>% 
+  arrange(desc(vte), desc(severe), desc(vte_date), desc(date), .by_group = T) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  filter(cohort != "unknown") %>% 
+  left_join(ukb_covid %>% 
+              select(eid, age, contains("bmi"), sex) %>% 
+              mutate(sex = ifelse(sex == 0, "female", "male")),
+            by="eid") %>% 
+  mutate(bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0,
+                        body_mass_index_bmi_f23104_0_0,
+                        body_mass_index_bmi_f23104_1_0,
+                        body_mass_index_bmi_f23104_2_0,
+                        body_mass_index_bmi_f23104_3_0)) %>% 
+  select(-starts_with("body_mass_index"))
+
+logit <- glm(vte ~ cohort + age + sex + bmi, data = cv19_vte_or, family = "binomial")
+# summary(logit)
+or <- exp(coef(logit))
+ci <- exp(confint.default(logit))
+# or
+# ci
+lreg.or <- cbind(or, ci)
+lreg.or <- round(lreg.or, digits=4)
+OR_data <- as.data.table(lreg.or)
+OR_data$V <- rownames(lreg.or)
+colnames(OR_data) <- c("OR", "O_Low", "O_High", "Pred")
+
+OR_data %>%
+   arrange(-OR) %>%
+   na.omit() %>%
+   filter(Pred %in% c("cohortvax1", "cohortvax2")) %>%
+   # mutate(O_High = if_else(O_High > 5, 5, O_High)) %>%
+   ggplot(aes(x = reorder(Pred,OR),
+             y = OR, ymin = O_Low, ymax = O_High)) +
+    geom_pointrange(aes(col = OR > 1), position=position_dodge(width=0.30)) +
+    # scale_size(range=c(2,12),breaks = c("0","10","100"),labels=c("0","10","100")) +
+    # geom_linerange(aes(col = or > 1), position=position_dodge(width=0.30)) +
+    # geom_point(aes(shape = or > 1), position=position_dodge(width=0.30)) +
+    labs(x="Cohort type",
+         y="Odds ratio (95% CI)",
+         title="Cohort Odds Ratios (vs control group)") +
+    geom_hline(aes(yintercept = 1),size=0.2) +
+    # labs(col = "Disease-associated") +
+    coord_flip() +
+    theme_few() +
+    scale_color_few() +
+    guides(color = guide_legend(override.aes = list(linetype = 0))) +
+    theme(panel.grid.major.y = element_line(color="grey90",size=0.1),
+          legend.position = "none")
+```
+
+# Demographics summary
+
+```{r}
+# fsum <- cv19_vte_unique %>% 
+#   left_join(ukb_covid, by="eid")
+
+# cv19_vte_unique
+# cv19_vte
+```
+
+```{r}
+# initiate final_sum with first cell
+
+cv19_pos_unique <- cv19 %>% 
+  filter(result == 1) %>% 
+  group_by(eid) %>% 
+  arrange(-severe) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+
+fsum <- cv19_pos_unique %>%
+  left_join(ukb_covid, by="eid")
+
+# add summary info
+fsum <- fsum %>% 
+  filter(cohort %in% c("control", "vax1", "vax2")) %>% 
+  mutate(ethnic = coalesce(ethnic_background_f21000_0_0,
+                           ethnic_background_f21000_1_0,
+                           ethnic_background_f21000_2_0),
+         bmi = coalesce(body_mass_index_bmi_f21001_0_0,
+                        body_mass_index_bmi_f21001_1_0,
+                        body_mass_index_bmi_f21001_2_0,
+                        body_mass_index_bmi_f21001_3_0,
+                        body_mass_index_bmi_f23104_0_0,
+                        body_mass_index_bmi_f23104_1_0,
+                        body_mass_index_bmi_f23104_2_0,
+                        body_mass_index_bmi_f23104_3_0)) %>% 
+  mutate(ethnic = case_when(
+    str_detect(ethnic, "^1") ~ "Caucasian",
+    str_detect(ethnic, "^2") ~ "Mixed",
+    str_detect(ethnic, "^3") | str_detect(ethnic, "^5") ~ "Asian",
+    str_detect(ethnic, "^4") ~ "Black",
+    TRUE ~ "Other"
+  ))
+
+# cv19 %>% filter(cohort == "vax1") %>% select(-code_type, -code, -value, - severe, -from)
+```
+
+
+```{r}
+# get full numbers with covid information
+k <- cv19 %>% 
+  group_by(eid) %>% 
+  filter(row_number() == 1) %>%   
+  ungroup()
+
+unvaxxed_totals <- sum(k$cohort %in% c("control", "neg"))
+vax1_totals <- sum(vax_data$vax_status == "One dose")
+vax2_totals <- sum(vax_data$vax_status == "Two doses")
+
+```
+
+```{r}
+# init table
+final_sum <- setNames(data.frame(matrix(c("Total N. of individuals",
+                                          unvaxxed_totals,
+                                          unvaxxed_totals,
+                                          vax1_totals,
+                                          vax2_totals), nrow=1)),
+                      c("var","All", paste0(c("Control", "Vax 1", "Vax 2")))) %>%
+  mutate_all(., ~as.character(.)) %>% 
+  select(var, Control, `Vax 1`, `Vax 2`)
+
+final_sum <- rbind(final_sum,
+                   setNames(data.frame(matrix(c("N. of individuals with Covid-19 infection",
+                                          as.numeric(dim(fsum)[1]),
+                                          table(fsum$cohort)), nrow=1)),
+                      c("var","All", paste0(c("Control", "Vax 1", "Vax 2")))) %>%
+  mutate_all(., ~as.character(.)) %>% 
+  select(var, Control, `Vax 1`, `Vax 2`))
+
+final_sum <- final_sum %>% 
+  rbind(c("Age in Jan 2020 (mean \u00b1 SD)",
+          fsum %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      mean=mean(age, na.rm = T),
+                      sd = sd(age, na.rm = T),
+                      s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>% 
+            pull(s)),
+        c("Sex (% of female)", 
+          fsum %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(round(sum(sex == "0")/length(sex) * 100,1)," %")) %>% 
+            pull(s)),
+        c("Ethnicity (% of caucasian)",
+          fsum %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(round(sum(ethnic == "Caucasian")/length(ethnic) * 100,1)," %")) %>% 
+            pull(s)),
+        c("BMI, in kg/m2 (mean ± SD)",
+          fsum %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      mean=mean(bmi, na.rm = T),
+                      sd = sd(bmi, na.rm = T),
+                      s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>% 
+            pull(s)),
+        c("Ever smoked (%)",
+          fsum %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(round(sum(smoking_status_f20116_0_0 %in% c(1,2)) / 
+                                         length(smoking_status_f20116_0_0) * 100,1)," %")) %>% 
+            pull(s)),
+        c("Covid-19 Details", rep("", 3)),
+        c("Days between vaccination and infection (mean \u00b1 SD)", "-",
+          fsum %>% 
+            filter(cohort == "vax1")%>% 
+            summarise(.groups = "drop",
+                      mean=mean(after_vax1, na.rm = T),
+                      sd = sd(after_vax1, na.rm = T),
+                      s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>% 
+            pull(s),
+          fsum %>% 
+            filter(cohort == "vax2")%>% 
+            summarise(.groups = "drop",
+                      mean=mean(after_vax2, na.rm = T),
+                      sd = sd(after_vax2, na.rm = T),
+                      s = paste0(round(mean,1)," \u00b1 ",round(sd,1))) %>% 
+            pull(s)),
+        c("Severe Covid-19 infection (N., %)",
+          fsum %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(sum(severe == 1), " (",
+                                 round(sum(severe == 1) / length(severe) * 100,1)," %)"),) %>% 
+            pull(s)),
+        c("Death by Covid-19 infection (N., %)",
+          fsum %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(sum(from == "DEATH", na.rm = T), " (",
+                                 round(sum(from == "DEATH", na.rm = T) / length(from) * 100,1)," %)")) %>% 
+            pull(s)),
+        c("VTE", rep("", 3)),
+        c("Developed VTE within 3 months of Covid-19 (N., %)",
+          cv19_vte_unique %>% 
+            filter(cohort %in% c("control", "vax1", "vax2")) %>% 
+            filter(vte_after_covid >= 0 & vte_after_covid <= 90) %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(n(), " (",
+                                 round(n() / sum(fsum$cohort == as.character(cur_group())) * 100,1),
+                                 " %)")) %>% 
+            pull(s)),
+        c("VTE after severe Covid-19 infection (N., %)",
+          cv19_vte_unique %>% 
+            filter(cohort %in% c("control", "vax1", "vax2")) %>% 
+            filter(vte_after_covid >= 0 & vte_after_covid <= 90) %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(sum(severe == 1, na.rm = T), " (",
+                                 round(sum(severe == "1", na.rm = T) / length(severe) * 100,1)," %)")) %>% 
+            pull(s)),
+        c("VTE diagnosed as an inpatient (N., %)",
+          cv19_vte_unique %>% 
+            filter(cohort %in% c("control", "vax1", "vax2")) %>% 
+            filter(vte_after_covid >= 0 & vte_after_covid <= 90) %>% 
+            group_by(cohort) %>% 
+            summarise(.groups = "drop",
+                      s = paste0(sum(is.na(gp_code), na.rm = T), " (",
+                                 round(sum(is.na(gp_code), na.rm = T) / length(gp_code) * 100,1)," %)")) %>% 
+            pull(s)),
+        c("Odds Ratio for VTE (OR vs control, 95% CI)",
+          "-",
+          OR_data %>%
+            filter(Pred %in% c("cohortvax1", "cohortvax2")) %>% 
+            summarise(s = paste0(round(OR, 2), " (",
+                                 round(O_Low, 2), "-",
+                                 round(O_High, 2), ")")) %>%
+            pull(s)))
+# final_sum
+
+# cv19_vte_unique %>% 
+#   filter(cohort != "unknown") %>% 
+#   mutate(inpatient = case_when)
+#   filter(!is.na(gp_code)) %>% 
+#   filter(is.na(icd10_date) | (!is.na(icd10_date) & event_dt != icd10_date) ) %>% 
+#   select(-c(code_type, code, value, result, cohort, hes_date, death_date), -contains("vax"))
+```
+
+```{r}
+mytab <- flextable(final_sum %>% select(var, Control, `Vax 1`, `Vax 2`)) %>% 
+  width(j=1, width = 12) %>%
+  width(j=2, width = 2) %>% 
+  width(j = c(3:4), width = 4) %>% 
+  add_header_row(
+    top = TRUE,                # New header goes on top of existing header row
+    values = c("",     # Header values for each column below
+               "Unvaccinated", # This will be the top-level header for this and two next columns
+               "Vaccinated",
+               "")) %>%
+  set_header_labels(         # Rename the columns in original header row
+    var = "",
+    Control = "",
+    `Vax 1` = "First dose",
+    `Vax 2` = "Second dose") %>% 
+  merge_at(i = 1:2, j = 2, part = "header") %>% 
+  merge_at(i = 1:2, j = 1, part = "header") %>% 
+  merge_at(i = 1, j = 3:4, part = "header")
+```
+
+
+
+
+
+```{r}
+border_style = officer::fp_border(color="black", width=1)
+mytab <- mytab %>%
+  # Remove all existing borders
+  border_remove() %>%
+  # add horizontal lines via a pre-determined theme setting
+  theme_booktabs() %>%
+  vline(part = "all", j = c(1,2), border = border_style)
+# hline(part = "header", i = 1, j = 1, border = officer::fp_border(color="white"))
+ 
+# alignment
+mytab <- mytab %>%
+  flextable::align(align = "center", j = c(2:4), part = "all")
+
+# font style
+mytab <- mytab %>%
+  fontsize(i = 1, size = 12, part = "header") %>%   # adjust font size of header
+  bold(i = c(1,2), bold = TRUE, part = "header") %>%     # adjust bold face of header
+  fontsize(part="body", size = 10) %>%
+  # fontsize(i = c(14,20,24,28,33,42), size = 11, part = "body") %>%
+  bold(i = c(1, 8, 12), bold = TRUE, part = "body") %>%
+  # font(fontname = "HelveticaNeueLTCom-Md", part = "all")
+  font(fontname = "roboto", part = "all")
+ 
+mytab <- mytab %>% 
+  padding(i = c(9, 10, 11, 13, 14, 15, 16), padding.left = 10, part = "body")
+  
+mytab
+```
+
+```{r}
+# sect_properties <- officer::prop_section(
+#   page_size = officer::page_size(orient = "portrait"),
+#   # height = 8.3, height = 11.7),
+#   type = "continuous",
+#   page_margins = officer::page_mar()
+# )
+# save_as_docx(mytab, path = "final_summary_table.docx", pr_section = sect_properties)
+```
+
