@@ -1,0 +1,963 @@
+pains_l15.smi
+<regId="anil_di_alk_F(14)">
+0 molecules converted
+<regId="hzone_anil(14)">
+0 molecules converted
+<regId="het_5_pyrazole_OH(14)">
+0 molecules converted
+<regId="het_thio_666_A(13)">
+0 molecules converted
+<regId="styrene_A(13)">
+0 molecules converted
+<regId="ene_rhod_C(13)">
+0 molecules converted
+<regId="dhp_amino_CN_A(13)">
+0 molecules converted
+<regId="cyano_imine_C(12)">
+0 molecules converted
+<regId="thio_urea_A(12)">
+0 molecules converted
+<regId="thiophene_amino_B(12)">
+0 molecules converted
+<regId="keto_keto_beta_B(12)">
+0 molecules converted
+<regId="keto_phenone_A(11)">
+0 molecules converted
+<regId="cyano_pyridone_C(11)">
+0 molecules converted
+<regId="thiaz_ene_C(11)">
+0 molecules converted
+<regId="hzone_thiophene_A(11)">
+0 molecules converted
+<regId="ene_quin_methide(10)">
+0 molecules converted
+<regId="het_thio_676_A(10)">
+0 molecules converted
+<regId="ene_five_het_G(10)">
+0 molecules converted
+<regId="acyl_het_A(9)">
+0 molecules converted
+<regId="anil_di_alk_G(9)">
+0 molecules converted
+<regId="dhp_keto_A(9)">
+0 molecules converted
+<regId="thio_urea_B(9)">
+0 molecules converted
+<regId="anil_alk_bim(9)">
+0 molecules converted
+<regId="imine_imine_A(9)">
+0 molecules converted
+<regId="thio_urea_C(9)">
+0 molecules converted
+<regId="imine_one_fives_B(9)">
+0 molecules converted
+<regId="dhp_amino_CN_B(9)">
+0 molecules converted
+<regId="anil_OC_no_alk_A(8)">
+0 molecules converted
+<regId="het_thio_66_one(8)">
+0 molecules converted
+<regId="styrene_B(8)">
+0 molecules converted
+<regId="het_thio_5_A(8)">
+0 molecules converted
+<regId="anil_di_alk_ene_A(8)">
+0 molecules converted
+<regId="ene_rhod_D(8)">
+0 molecules converted
+<regId="ene_rhod_E(8)">
+0 molecules converted
+<regId="anil_OH_alk_A(8)">
+0 molecules converted
+<regId="pyrrole_C(8)">
+0 molecules converted
+<regId="thio_urea_D(8)">
+0 molecules converted
+<regId="thiaz_ene_D(8)">
+0 molecules converted
+<regId="ene_rhod_F(8)">
+0 molecules converted
+<regId="thiaz_ene_E(8)">
+0 molecules converted
+<regId="het_65_B(7)">
+0 molecules converted
+<regId="keto_keto_beta_C(7)">
+0 molecules converted
+<regId="het_66_A(7)">
+0 molecules converted
+<regId="thio_urea_E(7)">
+0 molecules converted
+<regId="thiophene_amino_C(7)">
+0 molecules converted
+<regId="hzone_phenone(7)">
+0 molecules converted
+<regId="ene_rhod_G(7)">
+0 molecules converted
+<regId="ene_cyano_B(7)">
+0 molecules converted
+<regId="dhp_amino_CN_C(7)">
+0 molecules converted
+<regId="het_5_A(7)">
+0 molecules converted
+<regId="ene_five_het_H(6)">
+0 molecules converted
+<regId="thio_amide_A(6)">
+0 molecules converted
+<regId="ene_cyano_C(6)">
+0 molecules converted
+<regId="hzone_furan_A(6)">
+0 molecules converted
+<regId="anil_di_alk_H(6)">
+0 molecules converted
+<regId="het_65_C(6)">
+0 molecules converted
+<regId="thio_urea_F(6)">
+0 molecules converted
+<regId="ene_five_het_I(6)">
+0 molecules converted
+<regId="keto_keto_gamma(5)">
+0 molecules converted
+<regId="quinone_B(5)">
+0 molecules converted
+<regId="het_6_pyridone_OH(5)">
+0 molecules converted
+<regId="hzone_naphth_A(5)">
+0 molecules converted
+<regId="thio_ester_A(5)">
+0 molecules converted
+<regId="ene_misc_A(5)">
+0 molecules converted
+<regId="cyano_pyridone_D(5)">
+0 molecules converted
+<regId="het_65_Db(5)">
+0 molecules converted
+<regId="het_666_A(5)">
+0 molecules converted
+<regId="diazox_sulfon_B(5)">
+0 molecules converted
+<regId="anil_NH_alk_A(5)">
+0 molecules converted
+<regId="sulfonamide_C(5)">
+0 molecules converted
+<regId="het_thio_N_55(5)">
+0 molecules converted
+<regId="keto_keto_beta_D(5)">
+0 molecules converted
+<regId="ene_rhod_H(5)">
+0 molecules converted
+<regId="imine_ene_A(5)">
+0 molecules converted
+<regId="het_thio_656a(5)">
+0 molecules converted
+<regId="pyrrole_D(5)">
+0 molecules converted
+<regId="pyrrole_E(5)">
+0 molecules converted
+<regId="thio_urea_G(5)">
+0 molecules converted
+<regId="anisol_A(5)">
+0 molecules converted
+<regId="pyrrole_F(5)">
+0 molecules converted
+<regId="dhp_amino_CN_D(5)">
+0 molecules converted
+<regId="thiazole_amine_A(4)">
+0 molecules converted
+<regId="het_6_imidate_A(4)">
+0 molecules converted
+<regId="anil_OC_no_alk_B(4)">
+0 molecules converted
+<regId="styrene_C(4)">
+0 molecules converted
+<regId="azulene(4)">
+0 molecules converted
+<regId="furan_acid_A(4)">
+0 molecules converted
+<regId="cyano_pyridone_E(4)">
+0 molecules converted
+<regId="anil_alk_thio(4)">
+0 molecules converted
+<regId="anil_di_alk_I(4)">
+0 molecules converted
+<regId="het_thio_6_furan(4)">
+0 molecules converted
+<regId="anil_di_alk_ene_B(4)">
+0 molecules converted
+<regId="imine_one_B(4)">
+0 molecules converted
+<regId="anil_OC_alk_A(4)">
+0 molecules converted
+<regId="ene_five_het_J(4)">
+0 molecules converted
+<regId="pyrrole_G(4)">
+0 molecules converted
+<regId="ene_five_het_K(4)">
+0 molecules converted
+<regId="cyano_ene_amine_B(4)">
+0 molecules converted
+<regId="thio_ester_B(4)">
+0 molecules converted
+<regId="ene_five_het_L(4)">
+0 molecules converted
+<regId="hzone_thiophene_B(4)">
+0 molecules converted
+<regId="dhp_amino_CN_E(4)">
+0 molecules converted
+<regId="het_5_B(4)">
+0 molecules converted
+<regId="imine_imine_B(3)">
+0 molecules converted
+<regId="thiazole_amine_B(3)">
+0 molecules converted
+<regId="imine_ene_one_A(3)">
+0 molecules converted
+<regId="diazox_A(3)">
+0 molecules converted
+<regId="ene_one_A(3)">
+0 molecules converted
+<regId="anil_OC_no_alk_C(3)">
+0 molecules converted
+<regId="thiazol_SC_A(3)">
+0 molecules converted
+<regId="het_666_B(3)">
+0 molecules converted
+<regId="furan_A(3)">
+0 molecules converted
+<regId="colchicine_A(3)">
+0 molecules converted
+<regId="thiophene_C(3)">
+0 molecules converted
+<regId="anil_OC_alk_B(3)">
+0 molecules converted
+<regId="het_thio_66_A(3)">
+0 molecules converted
+<regId="rhod_sat_B(3)">
+0 molecules converted
+<regId="ene_rhod_I(3)">
+0 molecules converted
+<regId="keto_thiophene(3)">
+0 molecules converted
+<regId="imine_imine_C(3)">
+0 molecules converted
+<regId="het_65_pyridone_A(3)">
+0 molecules converted
+<regId="thiazole_amine_C(3)">
+0 molecules converted
+<regId="het_thio_pyr_A(3)">
+0 molecules converted
+<regId="melamine_A(3)">
+0 molecules converted
+<regId="anil_NH_alk_B(3)">
+0 molecules converted
+<regId="rhod_sat_C(3)">
+0 molecules converted
+<regId="thiophene_amino_D(3)">
+0 molecules converted
+<regId="anil_OC_alk_C(3)">
+0 molecules converted
+<regId="het_thio_65_A(3)">
+0 molecules converted
+<regId="het_thio_656b(3)">
+0 molecules converted
+<regId="thiazole_amine_D(3)">
+0 molecules converted
+<regId="thio_urea_H(3)">
+0 molecules converted
+<regId="cyano_pyridone_F(3)">
+0 molecules converted
+<regId="rhod_sat_D(3)">
+0 molecules converted
+<regId="ene_rhod_J(3)">
+0 molecules converted
+<regId="imine_phenol_A(3)">
+0 molecules converted
+<regId="thio_carbonate_B(3)">
+0 molecules converted
+<regId="het_thio_N_5A(3)">
+0 molecules converted
+<regId="het_thio_N_65A(3)">
+0 molecules converted
+<regId="anil_di_alk_J(3)">
+0 molecules converted
+<regId="pyrrole_H(3)">
+0 molecules converted
+<regId="ene_cyano_D(3)">
+0 molecules converted
+<regId="cyano_cyano_B(3)">
+0 molecules converted
+<regId="ene_five_het_M(3)">
+0 molecules converted
+<regId="cyano_ene_amine_C(3)">
+0 molecules converted
+<regId="thio_urea_I(3)">
+0 molecules converted
+<regId="dhp_amino_CN_F(3)">
+0 molecules converted
+<regId="anthranil_acid_B(3)">
+0 molecules converted
+<regId="diazox_B(3)">
+0 molecules converted
+<regId="thio_aldehyd_A(3)">
+0 molecules converted
+<regId="thio_amide_B(2)">
+0 molecules converted
+<regId="imidazole_B(2)">
+0 molecules converted
+<regId="thiazole_amine_E(2)">
+0 molecules converted
+<regId="thiazole_amine_F(2)">
+0 molecules converted
+<regId="thio_ester_C(2)">
+0 molecules converted
+<regId="ene_one_B(2)">
+0 molecules converted
+<regId="quinone_C(2)">
+0 molecules converted
+<regId="keto_naphthol_A(2)">
+0 molecules converted
+<regId="thio_amide_C(2)">
+0 molecules converted
+<regId="phthalimide_misc(2)">
+0 molecules converted
+<regId="sulfonamide_D(2)">
+0 molecules converted
+<regId="anil_NH_alk_C(2)">
+0 molecules converted
+<regId="het_65_E(2)">
+0 molecules converted
+<regId="hzide_naphth(2)">
+0 molecules converted
+<regId="anisol_B(2)">
+0 molecules converted
+<regId="thio_carbam_ene(2)">
+0 molecules converted
+<regId="thio_amide_D(2)">
+0 molecules converted
+<regId="het_65_Da(2)">
+0 molecules converted
+<regId="thiophene_D(2)">
+0 molecules converted
+<regId="het_thio_6_ene(2)">
+0 molecules converted
+<regId="cyano_keto_A(2)">
+0 molecules converted
+<regId="anthranil_acid_C(2)">
+0 molecules converted
+<regId="naphth_amino_C(2)">
+0 molecules converted
+<regId="naphth_amino_D(2)">
+0 molecules converted
+<regId="thiazole_amine_G(2)">
+0 molecules converted
+<regId="het_66_B(2)">
+0 molecules converted
+<regId="coumarin_A(2)">
+0 molecules converted
+<regId="anthranil_acid_D(2)">
+0 molecules converted
+<regId="het_66_C(2)">
+0 molecules converted
+<regId="thiophene_amino_E(2)">
+0 molecules converted
+<regId="het_6666_A(2)">
+0 molecules converted
+<regId="sulfonamide_E(2)">
+0 molecules converted
+<regId="anil_di_alk_K(2)">
+0 molecules converted
+<regId="het_5_C(2)">
+0 molecules converted
+<regId="ene_six_het_B(2)">
+0 molecules converted
+<regId="steroid_A(2)">
+0 molecules converted
+<regId="het_565_A(2)">
+0 molecules converted
+<regId="thio_imine_ium(2)">
+0 molecules converted
+<regId="anthranil_acid_E(2)">
+0 molecules converted
+<regId="hzone_furan_B(2)">
+0 molecules converted
+<regId="thiophene_E(2)">
+0 molecules converted
+<regId="ene_misc_B(2)">
+0 molecules converted
+<regId="het_thio_5_B(2)">
+0 molecules converted
+<regId="thiophene_amino_F(2)">
+0 molecules converted
+<regId="anil_OC_alk_D(2)">
+0 molecules converted
+<regId="tert_butyl_A(2)">
+0 molecules converted
+<regId="thio_urea_J(2)">
+0 molecules converted
+<regId="het_thio_65_B(2)">
+0 molecules converted
+<regId="coumarin_B(2)">
+0 molecules converted
+<regId="thio_urea_K(2)">
+0 molecules converted
+<regId="thiophene_amino_G(2)">
+0 molecules converted
+<regId="anil_NH_alk_D(2)">
+0 molecules converted
+<regId="het_thio_5_C(2)">
+0 molecules converted
+<regId="thio_keto_het(2)">
+0 molecules converted
+<regId="het_thio_N_5B(2)">
+0 molecules converted
+<regId="quinone_D(2)">
+0 molecules converted
+<regId="anil_di_alk_furan_B(2)">
+0 molecules converted
+<regId="ene_six_het_C(2)">
+0 molecules converted
+<regId="het_55_A(2)">
+0 molecules converted
+<regId="het_thio_65_C(2)">
+0 molecules converted
+<regId="hydroquin_A(2)">
+0 molecules converted
+<regId="anthranil_acid_F(2)">
+0 molecules converted
+<regId="pyrrole_I(2)">
+0 molecules converted
+<regId="thiophene_amino_H(2)">
+0 molecules converted
+<regId="imine_one_fives_C(2)">
+0 molecules converted
+<regId="keto_phenone_zone_A(2)">
+0 molecules converted
+<regId="dyes7A(2)">
+0 molecules converted
+<regId="het_pyridiniums_B(2)">
+0 molecules converted
+<regId="het_5_D(2)">
+0 molecules converted
+<regId="thiazole_amine_H(1)">
+0 molecules converted
+<regId="thiazole_amine_I(1)">
+0 molecules converted
+<regId="het_thio_N_5C(1)">
+0 molecules converted
+<regId="sulfonamide_F(1)">
+0 molecules converted
+<regId="thiazole_amine_J(1)">
+0 molecules converted
+<regId="het_65_F(1)">
+0 molecules converted
+<regId="keto_keto_beta_E(1)">
+0 molecules converted
+<regId="ene_five_one_B(1)">
+0 molecules converted
+<regId="keto_keto_beta_zone(1)">
+0 molecules converted
+<regId="thio_urea_L(1)">
+0 molecules converted
+<regId="het_thio_urea_ene(1)">
+0 molecules converted
+<regId="cyano_amino_het_A(1)">
+0 molecules converted
+<regId="tetrazole_hzide(1)">
+0 molecules converted
+<regId="imine_naphthol_A(1)">
+0 molecules converted
+<regId="misc_anisole_A(1)">
+0 molecules converted
+<regId="het_thio_665(1)">
+0 molecules converted
+<regId="anil_di_alk_L(1)">
+0 molecules converted
+<regId="colchicine_B(1)">
+0 molecules converted
+<regId="misc_aminoacid_A(1)">
+0 molecules converted
+<regId="imidazole_amino_A(1)">
+0 molecules converted
+<regId="phenol_sulfite_A(1)">
+0 molecules converted
+<regId="het_66_D(1)">
+0 molecules converted
+<regId="misc_anisole_B(1)">
+0 molecules converted
+<regId="tetrazole_A(1)">
+0 molecules converted
+<regId="het_65_G(1)">
+0 molecules converted
+<regId="misc_trityl_A(1)">
+0 molecules converted
+<regId="misc_pyridine_OC(1)">
+0 molecules converted
+<regId="het_6_hydropyridone(1)">
+0 molecules converted
+<regId="misc_stilbene(1)">
+0 molecules converted
+<regId="misc_imidazole(1)">
+0 molecules converted
+<regId="anil_NH_no_alk_A(1)">
+0 molecules converted
+<regId="het_6_imidate_B(1)">
+0 molecules converted
+<regId="anil_alk_B(1)">
+0 molecules converted
+<regId="styrene_anil_A(1)">
+0 molecules converted
+<regId="misc_aminal_acid(1)">
+0 molecules converted
+<regId="anil_no_alk_D(1)">
+0 molecules converted
+<regId="anil_alk_C(1)">
+0 molecules converted
+<regId="misc_anisole_C(1)">
+0 molecules converted
+<regId="het_465_misc(1)">
+0 molecules converted
+<regId="anthranil_acid_G(1)">
+0 molecules converted
+<regId="anil_di_alk_M(1)">
+0 molecules converted
+<regId="anthranil_acid_H(1)">
+0 molecules converted
+<regId="thio_urea_M(1)">
+0 molecules converted
+<regId="thiazole_amine_K(1)">
+0 molecules converted
+<regId="het_thio_5_imine_A(1)">
+0 molecules converted
+<regId="thio_amide_E(1)">
+0 molecules converted
+<regId="het_thio_676_B(1)">
+0 molecules converted
+<regId="sulfonamide_G(1)">
+0 molecules converted
+<regId="thio_thiomorph_Z(1)">
+0 molecules converted
+<regId="naphth_ene_one_A(1)">
+0 molecules converted
+<regId="naphth_ene_one_B(1)">
+0 molecules converted
+<regId="amino_acridine_A(1)">
+0 molecules converted
+<regId="keto_phenone_B(1)">
+0 molecules converted
+<regId="hzone_acid_A(1)">
+0 molecules converted
+<regId="sulfonamide_H(1)">
+0 molecules converted
+<regId="het_565_indole(1)">
+0 molecules converted
+<regId="pyrrole_J(1)">
+0 molecules converted
+<regId="pyrazole_amino_B(1)">
+0 molecules converted
+<regId="pyrrole_K(1)">
+0 molecules converted
+<regId="anthranil_acid_I(1)">
+0 molecules converted
+<regId="thio_amide_F(1)">
+0 molecules converted
+<regId="ene_one_C(1)">
+0 molecules converted
+<regId="het_65_H(1)">
+0 molecules converted
+<regId="cyano_imine_D(1)">
+0 molecules converted
+<regId="cyano_misc_A(1)">
+0 molecules converted
+<regId="ene_misc_C(1)">
+0 molecules converted
+<regId="het_66_E(1)">
+0 molecules converted
+<regId="keto_keto_beta_F(1)">
+0 molecules converted
+<regId="misc_naphthimidazole(1)">
+0 molecules converted
+<regId="naphth_ene_one_C(1)">
+0 molecules converted
+<regId="keto_phenone_C(1)">
+0 molecules converted
+<regId="coumarin_C(1)">
+0 molecules converted
+<regId="thio_est_cyano_A(1)">
+0 molecules converted
+<regId="het_65_imidazole(1)">
+0 molecules converted
+<regId="anthranil_acid_J(1)">
+0 molecules converted
+<regId="colchicine_het(1)">
+0 molecules converted
+<regId="ene_misc_D(1)">
+0 molecules converted
+<regId="indole_3yl_alk_B(1)">
+0 molecules converted
+<regId="anil_OH_no_alk_A(1)">
+0 molecules converted
+<regId="thiazole_amine_L(1)">
+0 molecules converted
+<regId="pyrazole_amino_A(1)">
+0 molecules converted
+<regId="het_thio_N_5D(1)">
+0 molecules converted
+<regId="anil_alk_indane(1)">
+0 molecules converted
+<regId="anil_di_alk_N(1)">
+0 molecules converted
+<regId="het_666_C(1)">
+0 molecules converted
+<regId="ene_one_D(1)">
+0 molecules converted
+<regId="anil_di_alk_indol(1)">
+0 molecules converted
+<regId="anil_no_alk_indol_A(1)">
+0 molecules converted
+<regId="dhp_amino_CN_G(1)">
+0 molecules converted
+<regId="anil_di_alk_dhp(1)">
+0 molecules converted
+<regId="anthranil_amide_A(1)">
+0 molecules converted
+<regId="hzone_anthran_Z(1)">
+0 molecules converted
+<regId="ene_one_amide_A(1)">
+0 molecules converted
+<regId="het_76_A(1)">
+0 molecules converted
+<regId="thio_urea_N(1)">
+0 molecules converted
+<regId="anil_di_alk_coum(1)">
+0 molecules converted
+<regId="ene_one_amide_B(1)">
+0 molecules converted
+<regId="het_thio_656c(1)">
+0 molecules converted
+<regId="het_5_ene(1)">
+0 molecules converted
+<regId="thio_imide_A(1)">
+0 molecules converted
+<regId="dhp_amidine_A(1)">
+0 molecules converted
+<regId="thio_urea_O(1)">
+0 molecules converted
+<regId="anil_di_alk_O(1)">
+0 molecules converted
+<regId="thio_urea_P(1)">
+0 molecules converted
+<regId="het_pyraz_misc(1)">
+0 molecules converted
+<regId="diazox_C(1)">
+0 molecules converted
+<regId="diazox_D(1)">
+0 molecules converted
+<regId="misc_cyclopropane(1)">
+0 molecules converted
+<regId="imine_ene_one_B(1)">
+0 molecules converted
+<regId="coumarin_D(1)">
+0 molecules converted
+<regId="misc_furan_A(1)">
+0 molecules converted
+<regId="rhod_sat_E(1)">
+0 molecules converted
+<regId="rhod_sat_imine_A(1)">
+0 molecules converted
+<regId="rhod_sat_F(1)">
+0 molecules converted
+<regId="het_thio_5_imine_B(1)">
+0 molecules converted
+<regId="het_thio_5_imine_C(1)">
+0 molecules converted
+<regId="ene_five_het_N(1)">
+0 molecules converted
+<regId="thio_carbam_A(1)">
+0 molecules converted
+<regId="misc_anilide_A(1)">
+0 molecules converted
+<regId="misc_anilide_B(1)">
+0 molecules converted
+<regId="mannich_B(1)">
+0 molecules converted
+<regId="mannich_catechol_A(1)">
+0 molecules converted
+<regId="anil_alk_D(1)">
+0 molecules converted
+<regId="het_65_I(1)">
+0 molecules converted
+<regId="misc_urea_A(1)">
+0 molecules converted
+<regId="imidazole_C(1)">
+0 molecules converted
+<regId="styrene_imidazole_A(1)">
+0 molecules converted
+<regId="thiazole_amine_M(1)">
+0 molecules converted
+<regId="misc_pyrrole_thiaz(1)">
+0 molecules converted
+<regId="pyrrole_L(1)">
+0 molecules converted
+<regId="het_thio_65_D(1)">
+0 molecules converted
+<regId="ene_misc_E(1)">
+0 molecules converted
+<regId="thio_cyano_A(1)">
+0 molecules converted
+<regId="cyano_amino_het_B(1)">
+0 molecules converted
+<regId="cyano_pyridone_G(1)">
+0 molecules converted
+<regId="het_65_J(1)">
+0 molecules converted
+<regId="ene_one_yne_A(1)">
+0 molecules converted
+<regId="anil_OH_no_alk_B(1)">
+0 molecules converted
+<regId="hzone_acyl_misc_A(1)">
+0 molecules converted
+<regId="thiophene_F(1)">
+0 molecules converted
+<regId="anil_OC_alk_E(1)">
+0 molecules converted
+<regId="anil_OC_alk_F(1)">
+0 molecules converted
+<regId="het_65_K(1)">
+0 molecules converted
+<regId="het_65_L(1)">
+0 molecules converted
+<regId="coumarin_E(1)">
+0 molecules converted
+<regId="coumarin_F(1)">
+0 molecules converted
+<regId="coumarin_G(1)">
+0 molecules converted
+<regId="coumarin_H(1)">
+0 molecules converted
+<regId="het_thio_67_A(1)">
+0 molecules converted
+<regId="sulfonamide_I(1)">
+0 molecules converted
+<regId="het_65_mannich(1)">
+0 molecules converted
+<regId="anil_alk_A(1)">
+0 molecules converted
+<regId="het_5_inium(1)">
+0 molecules converted
+<regId="anil_di_alk_P(1)">
+0 molecules converted
+<regId="thio_urea_Q(1)">
+0 molecules converted
+<regId="thio_pyridine_A(1)">
+0 molecules converted
+<regId="melamine_B(1)">
+0 molecules converted
+<regId="misc_phthal_thio_N(1)">
+0 molecules converted
+<regId="hzone_acyl_misc_B(1)">
+0 molecules converted
+<regId="tert_butyl_B(1)">
+0 molecules converted
+<regId="diazox_E(1)">
+0 molecules converted
+<regId="anil_NH_no_alk_B(1)">
+0 molecules converted
+<regId="anil_no_alk_A(1)">
+0 molecules converted
+<regId="anil_no_alk_B(1)">
+0 molecules converted
+<regId="thio_ene_amine_A(1)">
+0 molecules converted
+<regId="het_55_B(1)">
+0 molecules converted
+<regId="cyanamide_A(1)">
+0 molecules converted
+<regId="ene_one_one_A(1)">
+0 molecules converted
+<regId="ene_six_het_D(1)">
+0 molecules converted
+<regId="ene_cyano_E(1)">
+0 molecules converted
+<regId="ene_cyano_F(1)">
+0 molecules converted
+<regId="hzone_furan_C(1)">
+0 molecules converted
+<regId="anil_no_alk_C(1)">
+0 molecules converted
+<regId="hzone_acid_D(1)">
+0 molecules converted
+<regId="hzone_furan_E(1)">
+0 molecules converted
+<regId="het_6_pyridone_NH2(1)">
+0 molecules converted
+<regId="imine_one_fives_D(1)">
+0 molecules converted
+<regId="pyrrole_M(1)">
+0 molecules converted
+<regId="pyrrole_N(1)">
+0 molecules converted
+<regId="pyrrole_O(1)">
+0 molecules converted
+<regId="ene_cyano_G(1)">
+0 molecules converted
+<regId="sulfonamide_J(1)">
+0 molecules converted
+<regId="misc_pyrrole_benz(1)">
+0 molecules converted
+<regId="thio_urea_R(1)">
+0 molecules converted
+<regId="ene_one_one_B(1)">
+0 molecules converted
+<regId="dhp_amino_CN_H(1)">
+0 molecules converted
+<regId="het_66_anisole(1)">
+0 molecules converted
+<regId="thiazole_amine_N(1)">
+0 molecules converted
+<regId="het_pyridiniums_C(1)">
+0 molecules converted
+<regId="het_5_E(1)">
+0 molecules converted
+pains_l150.smi
+<regId="thiaz_ene_A(128)">
+0 molecules converted
+<regId="pyrrole_A(118)">
+0 molecules converted
+<regId="catechol_A(92)">
+0 molecules converted
+<regId="ene_five_het_B(90)">
+0 molecules converted
+<regId="imine_one_fives(89)">
+0 molecules converted
+<regId="ene_five_het_C(85)">
+0 molecules converted
+<regId="hzone_pipzn(79)">
+0 molecules converted
+<regId="keto_keto_beta_A(68)">
+0 molecules converted
+<regId="hzone_pyrrol(64)">
+0 molecules converted
+<regId="ene_one_ene_A(57)">
+0 molecules converted
+<regId="cyano_ene_amine_A(56)">
+0 molecules converted
+<regId="ene_five_one_A(55)">
+0 molecules converted
+<regId="cyano_pyridone_A(54)">
+0 molecules converted
+<regId="anil_alk_ene(51)">
+0 molecules converted
+<regId="amino_acridine_A(46)">
+0 molecules converted
+<regId="ene_five_het_D(46)">
+0 molecules converted
+<regId="thiophene_amino_Aa(45)">
+0 molecules converted
+<regId="ene_five_het_E(44)">
+0 molecules converted
+<regId="sulfonamide_A(43)">
+0 molecules converted
+<regId="thio_ketone(43)">
+0 molecules converted
+<regId="sulfonamide_B(41)">
+0 molecules converted
+<regId="anil_no_alk(40)">
+0 molecules converted
+<regId="thiophene_amino_Ab(40)">
+0 molecules converted
+<regId="het_pyridiniums_A(39)">
+0 molecules converted
+<regId="anthranil_one_A(38)">
+0 molecules converted
+<regId="cyano_imine_A(37)">
+0 molecules converted
+<regId="diazox_sulfon_A(36)">
+0 molecules converted
+<regId="hzone_anil_di_alk(35)">
+0 molecules converted
+<regId="rhod_sat_A(33)">
+0 molecules converted
+<regId="hzone_enamin(30)">
+0 molecules converted
+<regId="pyrrole_B(29)">
+0 molecules converted
+<regId="thiophene_hydroxy(28)">
+0 molecules converted
+<regId="cyano_pyridone_B(27)">
+0 molecules converted
+<regId="imine_one_sixes(27)">
+0 molecules converted
+<regId="dyes5A(27)">
+0 molecules converted
+<regId="naphth_amino_A(25)">
+0 molecules converted
+<regId="naphth_amino_B(25)">
+0 molecules converted
+<regId="ene_one_ester(24)">
+0 molecules converted
+<regId="thio_dibenzo(23)">
+0 molecules converted
+<regId="cyano_cyano_A(23)">
+0 molecules converted
+<regId="hzone_acyl_naphthol(22)">
+0 molecules converted
+<regId="het_65_A(21)">
+0 molecules converted
+<regId="imidazole_A(19)">
+0 molecules converted
+<regId="ene_cyano_A(19)">
+0 molecules converted
+<regId="anthranil_acid_A(19)">
+0 molecules converted
+<regId="dyes3A(19)">
+0 molecules converted
+<regId="dhp_bis_amino_CN(19)">
+0 molecules converted
+<regId="het_6_tetrazine(18)">
+0 molecules converted
+<regId="ene_one_hal(17)">
+0 molecules converted
+<regId="cyano_imine_B(17)">
+0 molecules converted
+<regId="thiaz_ene_B(17)">
+0 molecules converted
+<regId="ene_rhod_B(16)">
+0 molecules converted
+<regId="thio_carbonate_A(15)">
+0 molecules converted
+<regId="anil_di_alk_furan_A(15)">
+0 molecules converted
+<regId="ene_five_het_F(15)">
+0 molecules converted
+pains_m150.smi
+<regId="ene_six_het_A(483)">
+0 molecules converted
+<regId="hzone_phenol_A(479)">
+0 molecules converted
+<regId="anil_di_alk_A(478)">
+0 molecules converted
+<regId="indol_3yl_alk(461)">
+0 molecules converted
+<regId="quinone_A(370)">
+0 molecules converted
+<regId="azo_A(324)">
+0 molecules converted
+<regId="imine_one_A(321)">
+0 molecules converted
+<regId="mannich_A(296)">
+0 molecules converted
+<regId="anil_di_alk_B(251)">
+0 molecules converted
+<regId="anil_di_alk_C(246)">
+0 molecules converted
+<regId="ene_rhod_A(235)">
+0 molecules converted
+<regId="hzone_phenol_B(215)">
+0 molecules converted
+<regId="ene_five_het_A(201)">
+0 molecules converted
+<regId="anil_di_alk_D(198)">
+0 molecules converted
+<regId="imine_one_isatin(189)">
+0 molecules converted
+<regId="anil_di_alk_E(186)">
+0 molecules converted
