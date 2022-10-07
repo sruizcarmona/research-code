@@ -1,0 +1,1 @@
+for file in *_weight_1 *_weight_00_1 *_weight_02_1 *_weight_02_1_flex *_weight_05_1 *_weight_00_1_cfm *_weight_02_1_cfm *_weight_05_1_cfm *_weight_02_1_cfms *_weight_05_1_cfms *_weight_02_1_cfm2s *weight_02_1_cf20 *_weight_02_1_cf50 *_weight_02_1_cf100 *_weight_cfln; do printf "%1.2f\n" `head -1 $file/*_auc.txt | grep .`; done

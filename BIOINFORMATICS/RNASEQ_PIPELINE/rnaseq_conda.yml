@@ -1,0 +1,48 @@
+name: jennyooi
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+  - salilab
+dependencies:
+  - r-base=3.5.1
+  - r-readxl
+  - r-broom
+  - r-purrr
+  - r-ggplot2
+  - r-haven
+  - r-httr
+  - r-gplots
+  - r-rvest
+  - bioconductor-edger
+  - r-dbplyr
+  - r-jsonlite
+  - r-stringr
+  - r-cowplot
+  - r-tidyr
+  - bioconductor-deseq2
+  - r-rcolorbrewer
+  - r-modelr
+  - r-dplyr
+  - r-magrittr
+  - r-reprex
+  - r-readr
+  - r-scales
+  - r-lubridate
+  - r-pheatmap
+  - r-rlang
+  - r-tidyverse
+  - r-tibble
+  - r-xml2
+  - r-forcats
+  - r-hms
+  - r-pillar
+  - r-msigdbr
+  - bioconductor-biomart
+  - r-calibrate
+  - r-fmsb
+  - bioconductor-org.mm.eg.db
+  - bioconductor-fgsea
+  - r-devtools
+prefix: /Users/sruizcarmona/miniconda3/envs/rnaseq-351
+

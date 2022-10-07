@@ -1,0 +1,237 @@
+#svl
+#set title 'get_ligands'
+
+// This script returns SD Files of ligands in the PDB that bind
+// in the same site as a specified ligand
+
+// Input:
+//	1) a PDB code + a 3-letter ligand code (defines the ligand)
+//	2) a list of PDB IDs to search for ligands
+
+// Execution mode:
+// moebatch -load get_ligands.svl -exec "get_ligands[PDB_ref,LIG,[PDB1,PDB2,...]]"
+//
+// EXAMPLE: get_ligands ['1YET','GDM',['1uyl','1uym','1uy6']]
+
+function pro_Align;
+function pro_ReadMDA;
+
+// aligns based on sequence and returns identity ratio
+local function identity [c1, c2]
+   local proalign_seq = [
+       enable_structural:0,
+       sec_struct:'none',
+       mda:'blosum62',
+       gapstart:7,
+       gapextend:1
+   ];
+    pro_Align [[c1,c2], proalign_seq];
+    local rp = cAlignmentPositions [c1, c2];
+    local rn = rName cResidues [c1, c2];
+    local x= eqE apt get [ rn, apt indexof [[join rp], rp]];
+    return (add x) / (length cat cResidues c1);
+endfunction
+
+global function get_ligands[ref,lig,list]
+
+// Clear everything first
+	oDestroy Chains[];
+// set some vars
+	const D_CUTOFF = 6.0;
+	local tmpdir = 'tmp_pdb';
+	local pdb_options = [
+	    directory   : tmpdir,
+//	    server_base : 'ftp://ftp.wwpdb.org/pub/pdb/',
+	    readPDB     : 0,
+	    uncompress  : 1,
+	    overwrite   : 0,
+	    confirm     : 0,
+	    showPanel   : 0
+	];
+         local proalign_opt = [
+            enable_structural:1,
+            sec_struct:'actual',
+            mda:'blosum62',
+            gapstart:7,
+            gapextend:1
+        ];
+
+	fmkdir tmpdir;
+//SRC FILE CHECK
+// IF NAME IS FILE, OPEN FILE
+// ELSE DOWNLOAD FROM PDB
+	if length findmatch ['*.*',ref] then //file found, get file instead of pdb
+		write ['FILE found: Reference file {} opened\n',ref];
+		local file = token ref;
+		local ref_chains = ReadPDB file;
+	else  
+// set proper case:
+// read reference PDB file
+		write ['FILE not found as input: Reference PDB file {} for download\n',ref];
+		ref = tolower ref;
+		lig = token toupper lig;
+		local status = second untag rcsb_download [ref,pdb_options];
+		if status == 'failed' then
+			write ['ATTENTION: Reference PDB file {} could not be downloaded - Must STOP\n',ref];
+			exit[];
+	        endif
+		file = token swrite ['{}/{}.ent', tmpdir,ref];
+		ref_chains = ReadPDB file;
+	endif
+//SRC END
+	local lkey = first (Residues [] | rName Residues [] == lig);
+	local aLig = cat rAtoms lkey;
+	local aAll = cat cAtoms ref_chains;
+// define active site:
+	local prox = prox_open [D_CUTOFF, aPos aAll, 0];
+	local ridx = second prox_find [prox, aPos aLig, D_CUTOFF];	// Indices of atoms within cutoff distance
+	prox_close prox;
+	local isite = cat uniq ridx;			// unique indices of atoms in site
+	local rsite = uniq aResidue aAll[isite];	// unique residues in site
+//	local csite = uniq rChain rsite;		// unique chains in site
+//SRC divide all residues in amino, het, wat
+	local rsite_prot=rsite | rType rsite == 'amino';
+	local rsite_none=rsite | rType rsite == 'none';
+	local rsite_wat=rsite_none | (rName rsite_none == 'WAT' or rName rsite_none == 'HOH');
+	local rsite_het=rsite_none | (rName rsite_none <> 'WAT' and rName rsite_none <> 'HOH');
+	local csite_prot = uniq rChain rsite_prot;
+	local csite_het = uniq rChain rsite_het;
+	local csite_wat = uniq rChain rsite_wat;
+	local csite_all = [csite_prot,csite_het,csite_wat];
+	rSetSelected [rsite, one rsite];
+//SRC END
+	if (length csite_prot <> 1) then
+		write ['WARNING - The binding site should include only one chain, not {} - WARNING\n',length csite_prot];
+		local max = 0;
+		local ctmp, cc;
+		for cc in csite_prot loop
+			local ii = add eqE [rChain rsite, cc];
+			if (ii > max) then 
+				ctmp = cc;
+				max = ii;
+			endif
+			write ['Chain {} has {} residues in the binding site\n',cName cc, ii];
+		endloop;
+		csite_prot = ctmp;
+		write ['Chain {} has the largest number of residues in the active site and will be used\n',cName csite_prot];
+//		exit[];
+        endif
+// store ligand, site and protein in MDB
+	local mdbkey = db_Open ['concurring_ligands.mdb', 'create'];
+	db_EnsureField [mdbkey,'Ligand','molecule'];
+	db_EnsureField [mdbkey,'Site','molecule'];
+	db_EnsureField [mdbkey,'All_Chains','molecule'];
+	db_EnsureField [mdbkey,'Prot_Chain','molecule'];
+	db_EnsureField [mdbkey,'Hetero','molecule'];
+	db_EnsureField [mdbkey,'Waters','molecule'];
+	db_EnsureField [mdbkey,'Ligand_ID','char'];
+	db_EnsureField [mdbkey,'Chain_ID','char'];
+	db_EnsureField [mdbkey,'PDB_ID','char'];
+        local data = [	tag['Ligand',[mol_Extract lkey]],
+			tag['Site',[mol_Extract rsite]],
+			tag['All_Chains',[mol_Extract csite_all]],
+			tag['Prot_Chain',[mol_Extract csite_prot]],
+			tag['Hetero',[mol_Extract csite_het]],
+			tag['Waters',[mol_Extract csite_wat]],
+			tag['Ligand_ID',[swrite [ '{c:}', rName lkey]]],
+			tag['Chain_ID',[swrite [ '{c:}',cName csite_prot]]],
+			tag['PDB_ID',[swrite [ '{c:}', ref]]]
+	];
+        data  = cat data;
+        db_Write [mdbkey, 0, data];
+// keep only the protein chain
+//	oDestroy Chains [] | Chains[] == 
+//delete empty chains
+	oDestroy (Chains [] | app length cResidues Chains[] == 0);
+// Read each protein and save 
+	local code;
+	for code in list loop
+		write ['Looping in list: downloading from PDB code {}\n',code];
+		code = tolower code;
+		status = second untag rcsb_download [code,pdb_options];
+		if status == 'failed' then
+			write ['WARNING: PDB file {} could not be downloaded - skipping\n',code];
+	        endif
+		file = token swrite ['{}/{}.ent', tmpdir,code]; // THIS is a comment
+		local chains = ReadPDB file;
+// Delete HOH and empty chains;
+//SRC commented, we want waters
+//oDestroy (cat cResidues chains | cat rName cResidues chains == 'HOH');
+		local m = app length cResidues chains == 0;
+		oDestroy (chains | m);
+		chains = chains | not m;
+// only chains of type amino should be aligned
+		local m1 = app add (rIsAmino cResidues chains);
+		local m2 = app length cResidues chains;
+		local amino_chains = chains | (m1 == m2);
+
+// Find het groups with more than 6 atoms (discards most solvents)
+		local het = cat cResidues chains | not (cat rIsAmino cResidues chains or cat rIsNucleic cResidues chains);
+		het = het | app length rAtoms het > 6;
+		local ahet = cat rAtoms het;
+
+		local n = 0;
+		local c;
+		for c in amino_chains loop
+// check wether the chain is highly homologous (>20% identity)
+// miriam changed to 0.20 in brd to check 
+			local iden = identity [csite_prot, c];
+			if (iden > 0.20) then
+				n = n + 1;
+				pro_Align [[csite_prot,c], proalign_opt];
+// find Het groups overlapping with the reference ligand
+				prox = prox_open [1.5, aPos ahet, 0];
+				ridx = second prox_find [prox, aPos aLig, 1.5];
+				prox_close prox;
+				isite = cat uniq ridx;
+				aSetSelected [ahet[isite],one length isite];
+				local newlig = uniq aResidue ahet[isite];
+
+				if (length newlig < 1) then
+					write [' Chain {} - %Identity= {} - No ligand found.\n',cName c, iden*100];
+				else
+					write [' Chain {} - %Identity= {} - {} ligand found.\n',cName c, iden*100, length newlig];
+// store ligand, site and protein in MDB
+//SRC divide water, hetero and protein
+						local code_aAll= cat cAtoms c;
+						local code_aAllChains= cat cAtoms chains;
+						local code_prox = prox_open [D_CUTOFF, aPos code_aAllChains, 0];
+						local code_ridx = second prox_find [code_prox, aPos cat rAtoms newlig, D_CUTOFF];	// Indices of atoms within cutoff distance
+						prox_close code_prox;
+						local code_isite = cat uniq code_ridx;			// unique indices of atoms in site
+						local code_rsite = uniq aResidue code_aAllChains[code_isite];
+						local code_rsite_prot=code_rsite | rType code_rsite == 'amino';
+
+						local code_rsite_none=code_rsite | rType code_rsite == 'none';
+						local code_rsite_wat=code_rsite_none | (rName code_rsite_none == 'WAT' or rName code_rsite_none == 'HOH');
+						local code_rsite_het=code_rsite_none | (rName code_rsite_none <> 'WAT' and rName code_rsite_none <> 'HOH');
+						local code_csite_prot = uniq rChain code_rsite_prot;
+						local code_csite_het = uniq rChain code_rsite_het;
+						local code_csite_wat = uniq rChain code_rsite_wat;
+						local code_csite_all = [code_csite_prot,code_csite_het,code_csite_wat];
+					        data = [	tag['Ligand',[mol_Extract newlig]],
+								tag['Site',[mol_Extract rsite]],
+								tag['All_Chains',[mol_Extract code_csite_all]],
+								tag['Prot_Chain',[mol_Extract code_csite_prot]],
+								tag['Hetero',[mol_Extract code_csite_het]],
+								tag['Waters',[mol_Extract code_csite_wat]],
+								tag['Ligand_ID',[swrite [ '{c:}', rName newlig]]],
+								tag['Chain_ID',[swrite [ '{c:}',cName code_csite_prot]]],
+								tag['PDB_ID',[swrite [ '{c:}', code]]]
+						];
+//SRC end
+
+     						data  = cat data;
+        					db_Write [mdbkey, 0, data];
+						break; //SRC only first chain matching
+				endif
+			endif;
+		endloop;
+		if (n < 1) then
+			write ['WARNING: PDB file {} does not contain any chain homologous to the reference system - skipping\n',code];
+		endif
+		oDestroy chains;
+        endloop
+endfunction
+
+

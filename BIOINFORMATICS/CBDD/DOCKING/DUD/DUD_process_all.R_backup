@@ -1,0 +1,95 @@
+###This script will take all the needed data from rDock output SD file and will include it in an R variable.
+#Afterwards, it should do the corresponding enrichment plots
+
+
+
+##common features to load
+library(ROCR);
+library(xtable);
+##load ligands and decoys
+lig <- unique(read.table("../ligands/ligands.txt")[,1]);
+dec <- unique(read.table("../decoys/ligands.txt")[,1]);
+dudsys <- strsplit(Sys.getenv("PWD"),"/")[[1]][6]	
+#folder <- commandArgs
+
+##RDOCK plots
+	rdockRes <- read.table("rdock/results/dataforR_uq.txt",header=T);
+        colnames(rdockRes)[1]="LigandName";
+
+	rdockRes$IsActive <- as.numeric(rdockRes$LigandName %in% lig);
+	
+	predINTERuq <- prediction(rdockRes$INTER*-1, rdockRes$IsActive)
+        perfINTERuq <- performance(predINTERuq, 'tpr','fpr')
+
+###GLIDE plots
+	glideRes <- read.table("glide/results/dataforR_uq.txt");
+        colnames(glideRes)[1]="LigandName";
+	colnames(glideRes)[2]="Scores";
+        glideRes$IsActive <- as.numeric(glideRes$LigandName %in% lig);
+
+        predSCORESglide <- prediction(glideRes$Scores*-1, glideRes$IsActive)
+        perfSCORESglide <- performance(predSCORESglide, 'tpr','fpr')
+
+##COMMON PLOTS
+	pdf(paste(dudsys,"_glide_vs_rdock.pdf",sep=""))
+	plot(perfINTERuq,col="blue",main=paste(dudsys,"-- Glide vs rDock"))
+	abline(0,1,col="grey")
+	plot(perfSCORESglide,col="green",add=TRUE)
+	legend(0, 1, c("Glide", "rDock"), col = c("green","blue"), lty = c(1, 1))
+	dev.off()
+
+##SEMI LOGARITMIC
+
+	glideLigs <- glideRes$LigandName
+	rdockLigs <- rdockRes[with(rdockRes, order(INTER, LigandName)),]$LigandName
+
+
+
+	#plot Glide semilog scale Enrichment	
+	y <- NULL
+	for (a in seq(1:length(glideLigs))){
+	y <- c(y,sum(lig %in% glideLigs[1:a]))
+	}
+	pdf(paste(dudsys,"_semilog_enr.pdf",sep=""))
+	plot(seq(1:length(glideLigs))/length(glideLigs),y/y[length(y)],type="l",xlab="False Positive Rate", ylab="True Positive Rate",xaxt="n", log="x", col="green",main=paste(dudsys,"-- Enrichment Comparison"))
+	
+	#add rDock Enrichment!
+	y <- NULL
+        for (a in seq(1:length(rdockLigs))){
+        y <- c(y,sum(lig %in% rdockLigs[1:a]))
+        }
+	points(seq(1:length(rdockLigs))/length(rdockLigs),y/y[length(y)],type="l",col="blue")
+	axis(1, c(0,0.001,0.01,0.1,1))
+	x<-seq(0,1,0.001)
+	points(x,x,col="gray",type="l")
+	legend("topleft", c("Glide", "rDock"), col = c("green","blue"), lty = c(1, 1),inset=0.05)
+	dev.off()
+
+
+###CALCULATION OF STATISTICS
+	##RDOCK
+	comp_rdock <- seq(0,1,1/length(perfINTERuq@y.values[[1]]))
+        comp_rdock <- comp_rdock[c(2:length(comp_rdock))]
+	auc_rdock <- performance(predINTERuq, "auc")
+        auc.area_rdock <- slot(auc_rdock, "y.values")
+        auc.area_rdock <- auc.area_rdock[[1]]
+	EF_rdock <- perfINTERuq@y.values[[1]]/comp_rdock
+
+	##GLIDE
+	comp_glide <- seq(0,1,1/length(perfSCORESglide@y.values[[1]]))
+        comp_glide <- comp_glide[c(2:length(comp_glide))]
+	auc_glide <- performance(predSCORESglide,"auc")
+        auc.area_glide <- slot(auc_glide, "y.values")
+        auc.area_glide <- auc.area_glide[[1]]
+        EF_glide <- perfSCORESglide@y.values[[1]]/comp_glide
+
+	#make the matrix and export it in a latex table!
+        row_data <- matrix(c(dudsys, round(auc.area_rdock,2), round(max(EF_rdock),2), round(EF_rdock[length(comp_rdock)/100],2),round(EF_rdock[length(comp_rdock)/5],2),dudsys, round(auc.area_glide,2), round(max(EF_glide),2), round(EF_glide[length(comp_glide)/100],2),round(EF_glide[length(comp_glide)/5],2)),ncol=5,byrow=TRUE)
+        rownames(row_data) <- c("rdock","glide")
+        colnames(row_data) <- c("protein","AUC", "EFmax","EF1","EF20")
+	stats_tab <- as.data.frame(row_data)
+	stats_latex <- xtable(stats_tab)
+	print(stats_latex, type="latex", file="stats.tex")
+
+
+
