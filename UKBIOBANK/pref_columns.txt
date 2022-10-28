@@ -1,0 +1,682 @@
+41270	Diagnoses - ICD10
+41280	Date of first in-patient diagnosis - ICD10
+41271	Diagnoses - ICD9
+41281	Date of first in-patient diagnosis - ICD9
+41202	Diagnoses - main ICD10
+41262	Date of first in-patient diagnosis - main ICD10
+41203	Diagnoses - main ICD9
+41263	Date of first in-patient diagnosis - main ICD9
+41204	Diagnoses - secondary ICD10
+41205	Diagnoses - secondary ICD9
+41201	External causes - ICD10
+
+20011	Interpolated Age of participant when operation took place
+20010	Interpolated Year when operation took place
+20014	Method of recording t  ime when operation occurred
+136	Number of operations, self-reported
+20004	Operation code
+92	Operation year/age first occurred
+3079	Pace-maker
+41272	Operative procedures - OPCS4
+41282	Date of first opera        tive procedure - OPCS4
+41273	Operative procedures - OPCS3
+41283	Date of         first operative procedure - OPCS3
+41200	Operative procedures - main OP CS4
+41260	Date of first operative procedure - main OPCS4
+41210	Operativ       e procedures - secondary OPCS4
+41256	Operative procedures - main OPCS3
+41257	Date of first operative procedure - main OPCS3
+41258	Operative pr       ocedures - secondary OPCS3
+
+
+20001	Cancer code, self-reported
+84	Cancer year/age first occurred
+20007	Interpolated Age of participant when cancer first diagnosed
+20009	Interpolated Age of participant when non-cancer illness first diagnosed
+20006	Interpolated Year when cancer first diagnosed
+20008	Interpolated Year when non-cancer illness first diagnosed
+20012	Method of recording time when cancer first diagnosed
+20013	Method of recording time when non-cancer illness first diagnosed
+20002	Non-cancer illness code, self-reported
+87	Non-cancer illness year/age first occurred
+134	Number of self-reported cancers
+135	Number of self-reported non-cancer illnesses
+3140	Pregnant
+
+42006	Date of stroke
+42007	Source of stroke report
+42008	Date of ischaemic stroke
+42009	Source of ischaemic stroke report
+42010	Date of intracerebral haemorrhage
+42011	Source of intracerebral haemorrhage report
+42012	Date of subarachnoid haemorrhage
+42013	Source of subarachnoid haemorrhage report
+
+42026	Date of end stage renal disease report
+42027	Source of end stage renal disease report
+
+42000	Date of myocardial infarction
+42001	Source of myocardial infarction report
+42002	Date of STEMI
+42003	Source of STEMI report
+42004	Date of NSTEMI
+42005	Source of NSTEMI report
+
+31	Sex
+22001	Genetic sex
+21001	BMI
+21002	Weight
+21003	Age when attended assessment centre
+53	Date of attending assessment centre
+3160	weight, manual entry
+21000	ethnic background
+21022	age at recruitment
+2744	birth weight of first child
+2734	number of live births
+41267	number of previous pregnancies
+2764	age at last live birth
+
+41262	Date of first in-patient diagnosis
+
+
+22426	Average heart rate
+22427	Body surface area
+22425	Cardiac index
+22424	Cardiac output
+22420	LV ejection fraction
+22421	LV end diastolic volume
+22422	LV end systolic volume
+22423	LV stroke volume
+
+12292	Carotid ultrasound measurement completed
+12291	Carotid ultrasound measuring method
+22672	Maximum carotid IMT (intima-medial thickness) at 120 degrees
+22675	Maximum carotid IMT (intima-medial thickness) at 150 degrees
+22678	Maximum carotid IMT (intima-medial thickness) at 210 degrees
+22681	Maximum carotid IMT (intima-medial thickness) at 240 degrees
+22671	Mean carotid IMT (intima-medial thickness) at 120 degrees
+22674	Mean carotid IMT (intima-medial thickness) at 150 degrees
+22677	Mean carotid IMT (intima-medial thickness) at 210 degrees
+22680	Mean carotid IMT (intima-medial thickness) at 240 degrees
+22670	Minimum carotid IMT (intima-medial thickness) at 120 degrees
+22673	Minimum carotid IMT (intima-medial thickness) at 150 degrees
+22676	Minimum carotid IMT (intima-medial thickness) at 210 degrees
+22679	Minimum carotid IMT (intima-medial thickness) at 240 degrees
+22682	Quality control indicator for IMT at 120 degrees
+22683	Quality control indicator for IMT at 150 degrees
+22684	Quality control indicator for IMT at 210 degrees
+22685	Quality control indicator for IMT at 240 degrees
+
+23098	Weight
+23104	Body mass index (BMI)
+23113	Leg fat-free mass (right)
+23118	Leg predicted mass (left)
+23114	Leg predicted mass (right)
+23123	Arm fat percentage (left)
+23119	Arm fat percentage (right)
+23124	Arm fat mass (left)
+23120	Arm fat mass (right)
+23121	Arm fat-free mass (right)
+23125	Arm fat-free mass (left)
+23126	Arm predicted mass (left)
+23122	Arm predicted mass (right)
+23127	Trunk fat percentage
+23128	Trunk fat mass
+23129	Trunk fat-free mass
+23130	Trunk predicted mass
+23105	Basal metabolic rate
+23099	Body fat percentage
+23100	Whole body fat mass
+23101	Whole body fat-free mass
+23102	Whole body water mass
+23115	Leg fat percentage (left)
+23111	Leg fat percentage (right)
+23116	Leg fat mass (left)
+23112	Leg fat mass (right)
+23117	Leg fat-free mass (left)
+43	Impedance device ID
+23106	Impedance of whole body
+23110	Impedance of arm (left)
+23109	Impedance of arm (right)
+23108	Impedance of leg (left)
+23107	Impedance of leg (right)
+6218	Impedance of whole body, manual entry
+6222	Impedance of arm, manual entry (left)
+6221	Impedance of arm, manual entry (right)
+6220	Impedance of leg, manual entry (left)
+6219	Impedance of leg, manual entry (right)
+
+1160	Sleep duration
+1170	Getting up in morning
+1180	Morning/evening person (chronotype)
+1190	Nap during day
+1200	Sleeplessness / insomnia
+1210	Snoring
+1220	Daytime dozing / sleeping (narcolepsy)
+
+1289	Cooked vegetable intake
+1299	Salad / raw vegetable intake
+1309	Fresh fruit intake
+1319	Dried fruit intake
+1329	Oily fish intake
+1339	Non-oily fish intake
+1349	Processed meat intake
+1359	Poultry intake
+1369	Beef intake
+1379	Lamb/mutton intake
+1389	Pork intake
+3680	Age when last ate meat
+6144	Never eat eggs, dairy, wheat, sugar
+10855	Never eat eggs, dairy, wheat, sugar (pilot)
+1408	Cheese intake
+1418	Milk type used
+1428	Spread type
+2654	Non-butter spread type details
+10767	Spread type (pilot)
+1438	Bread intake
+1448	Bread type
+10776	Bread type/intake (pilot)
+1458	Cereal intake
+1468	Cereal type
+1478	Salt added to food
+1488	Tea intake
+1498	Coffee intake
+1508	Coffee type
+1518	Hot drink temperature
+1528	Water intake
+1538	Major dietary changes in the last 5 years
+1548	Variation in diet
+10912	Variation in diet (pilot)
+
+34	year of birth
+48	Waist circumference
+49	Hip circumference
+50	Standing height
+46	Hand grip strength (left)
+47	Hand grip strength (right)
+93	Systolic blood pressure, manual reading
+94	Diastolic blood pressure, manual reading
+95	Pulse rate (during blood-pressure measurement)
+102	Pulse rate, automated reading
+120	Birth weight known
+190	Reason lost to follow-up
+191	Date lost to follow-up
+1787	Maternal smoking around birth
+2178	Overall health rating
+2188	Long-standing illness, disability or infirmity
+2306	Weight change compared with 1 year ago
+2415	Had major operations
+20107	Illnesses of father
+20110	Illnesses of mother
+20111	Illnesses of siblings
+3079	Pace-maker
+3140	Pregnant
+3581	Age at menopause (last menstrual period)
+3591	Ever had hysterectomy (womb removed)
+4079	Diastolic blood pressure, automated reading
+4080	Systolic blood pressure, automated reading
+4081	Method of measuring blood pressure
+6152	Blood clot, DVT, bronchitis, emphysema, asthma, rhinitis, eczema, allergy diagnosed by doctor
+
+6153	Medication for cholesterol, blood pressure, diabetes, or take exogenous hormones
+6177	Medication for cholesterol, blood pressure or diabetes
+6179	Mineral and other dietary supplements
+6154	Medication for pain relief, constipation, heartburn
+6155	Vitamin and mineral supplements
+10132	Type of progestan-only oral contraceptive used (pilot)
+2492	Taking other prescription medications
+2784	Ever taken oral contraceptive pill
+2794	Age started oral contraceptive pill
+2804	Age when last used oral contraceptive pill
+2814	Ever used hormone-replacement therapy (HRT)
+10723	Vitamin supplements (pilot)
+
+137	Number of treatments/medications taken
+20076	Treatment/medication READ-code
+20003	Treatment/medication code
+6671	Number of antibiotics taken in last 3 months
+20199	Antibiotic codes for last 3 months
+
+41231	Hospital episode type
+41235	Spells in hospital
+41247	Patient classification on admission (recoded)
+
+3829	Number of stillbirths
+3849	Number of pregnancy terminations
+2774	Ever had stillbirth, spontaneous miscarriage or termination
+3839	Number of spontaneous miscarriages
+3872	Age of primiparous women at birth of child
+3882	Age at bilateral oophorectomy (both ovaries removed)
+41276	Number of weeks of gestation
+41284	Baby birth weight
+41286	Mother age on date of delivery
+41288	Date of birth of baby
+42000	Date of myocardial infarction
+42002	Date of STEMI
+42004	Date of NSTEMI
+42006	Date of stroke
+42008	Date of ischaemic stroke
+42010	Date of intracerebral haemorrhage
+42012	Date of subarachnoid haemorrhage
+41226	Sex of baby
+41227	Status of baby at birth
+
+20051	Reason for skipping arterial stiffness
+4136	Arterial pulse-wave stiffness device ID
+4186	Stiffness method
+4194	Pulse rate
+4195	Pulse wave reflection index
+4196	Pulse wave peak to peak time
+4198	Position of the pulse wave peak
+4199	Position of pulse wave notch
+4200	Position of the shoulder on the pulse waveform
+4204	Absence of notch position in the pulse waveform
+4205	Pulse wave pressure versus time response curve
+4207	Pulse wave velocity (manual entry)
+5983	ECG, heart rate
+5984	ECG, load
+5985	Bicycle speed
+5986	ECG, phase time
+5987	ECG, trend phase name
+5988	ECG, stage name
+5991	ECG, phase name
+5992	ECG, phase duration
+5993	ECG, number of stages in a phase
+6014	Doctor restricts physical activity due to heart condition
+6015	Chest pain felt during physical activity
+6016	Chest pain felt outside physical activity
+6025	Fitness test results, including ECG data
+6032	Maximum workload during fitness test
+6033	Maximum heart rate during fitness test
+6034	Target heart rate achieved
+6039	Duration of fitness test
+21021	Pulse wave Arterial Stiffness index
+22032	IPAQ activity group
+22033	Summed days activity
+22034	Summed minutes activity
+22035	Above moderate/vigorous recommendation
+22036	Above moderate/vigorous/walking recommendation
+22037	MET minutes per week for walking
+22038	MET minutes per week for moderate activity
+22039	MET minutes per week for vigorous activity
+22040	Summed MET minutes per week for all activity
+22506	Tobacco smoking
+22507	Age of stopping smoking
+22508	Amount of tobacco currently smoked
+22670	Minimum carotid IMT (intima-medial thickness) at 120 degrees
+22671	Mean carotid IMT (intima-medial thickness) at 120 degrees
+22672	Maximum carotid IMT (intima-medial thickness) at 120 degrees
+22673	Minimum carotid IMT (intima-medial thickness) at 150 degrees
+22674	Mean carotid IMT (intima-medial thickness) at 150 degrees
+22675	Maximum carotid IMT (intima-medial thickness) at 150 degrees
+22676	Minimum carotid IMT (intima-medial thickness) at 210 degrees
+22677	Mean carotid IMT (intima-medial thickness) at 210 degrees
+22678	Maximum carotid IMT (intima-medial thickness) at 210 degrees
+22679	Minimum carotid IMT (intima-medial thickness) at 240 degrees
+22680	Mean carotid IMT (intima-medial thickness) at 240 degrees
+22681	Maximum carotid IMT (intima-medial thickness) at 240 degrees
+22682	Quality control indicator for IMT at 120 degrees
+22683	Quality control indicator for IMT at 150 degrees
+22684	Quality control indicator for IMT at 210 degrees
+22685	Quality control indicator for IMT at 240 degrees
+12653	ECG automated diagnoses
+20205	ECG datasets
+20222	Carotid artery ultrasound image (left)
+20223	Carotid artery ultrasound image (right)
+20226	Carotid artery ultrasound report
+20241	Raw carotid device data
+
+806	Job involves mainly walking or standing
+816	Job involves heavy manual or physical work
+864	Number of days/week walked 10+ minutes
+874	Duration of walks
+884	Number of days/week of moderate physical activity 10+ minutes
+894	Duration of moderate activity
+904	Number of days/week of vigorous physical activity 10+ minutes
+914	Duration of vigorous activity
+924	Usual walking pace
+943	Frequency of stair climbing in last 4 weeks
+971	Frequency of walking for pleasure in last 4 weeks
+981	Duration walking for pleasure
+991	Frequency of strenuous sports in last 4 weeks
+1001	Duration of strenuous sports
+1011	Frequency of light DIY in last 4 weeks
+1021	Duration of light DIY
+1070	Time spent watching television (TV)
+1080	Time spent using computer
+1090	Time spent driving
+2624	Frequency of heavy DIY in last 4 weeks
+2634	Duration of heavy DIY
+3637	Frequency of other exercises in last 4 weeks
+3647	Duration of other exercises
+6162	Types of transport used (excluding work)
+6164	Types of physical activity in last 4 weeks
+104900	Time spent doing vigorous physical activity
+104910	Time spent doing moderate physical activity
+104920	Time spent doing light physical activity
+10953	Duration of walks (pilot)
+10962	Duration of moderate physical activity (pilot)
+10971	Duration of vigorous physical activity (pilot)
+
+90001	Acceleration data - cwa format
+90004	Acceleration intensity time-series
+90002	Data problem indicator
+90003	Start of requested wear period
+90010	Start time of wear
+90011	End time of wear
+90012	Overall acceleration average
+90013	Standard deviation of acceleration
+90015	Data quality, good wear time
+90016	Data quality, good calibration
+90017	Data quality, calibrated on own data
+90018	Daylight savings crossover
+90019	Monday average acceleration
+90020	Tuesday average acceleration
+90021	Wednesday average acceleration
+90022	Thursday average acceleration
+90023	Friday average acceleration
+90024	Saturday average acceleration
+90025	Sunday average acceleration
+90026	First weekday of wear
+90027	Average acceleration 00:00 - 00:59
+90028	Average acceleration 01:00 - 01:59
+90029	Average acceleration 02:00 - 02:59
+90030	Average acceleration 03:00 - 03:59
+90031	Average acceleration 04:00 - 04:59
+90032	Average acceleration 05:00 - 05:59
+90033	Average acceleration 06:00 - 06:59
+90034	Average acceleration 07:00 - 07:59
+90035	Average acceleration 08:00 - 08:59
+90036	Average acceleration 09:00 - 09:59
+90037	Average acceleration 10:00 - 10:59
+90038	Average acceleration 11:00 - 11:59
+90039	Average acceleration 12:00 - 12:59
+90040	Average acceleration 13:00 - 13:59
+90041	Average acceleration 14:00 - 14:59
+90042	Average acceleration 15:00 - 15:59
+90043	Average acceleration 16:00 - 16:59
+90044	Average acceleration 17:00 - 17:59
+90045	Average acceleration 18:00 - 18:59
+90046	Average acceleration 19:00 - 19:59
+90047	Average acceleration 20:00 - 20:59
+90048	Average acceleration 21:00 - 21:59
+90049	Average acceleration 22:00 - 22:59
+90050	Average acceleration 23:00 - 23:59
+90051	Wear duration overall
+90052	Non wear duration overall
+90053	Wear duration during Monday
+90054	Wear duration during Tuesday
+90055	Wear duration during Wednesday
+90056	Wear duration during Thursday
+90057	Wear duration during Friday
+90058	Wear duration during Saturday
+90059	Wear duration during Sunday
+90060	Wear duration during 00:00 - 00:59
+90061	Wear duration during 01:00 - 01:59
+90062	Wear duration during 02:00 - 02:59
+90063	Wear duration during 03:00 - 03:59
+90064	Wear duration during 04:00 - 04:59
+90065	Wear duration during 05:00 - 05:59
+90066	Wear duration during 06:00 - 06:59
+90067	Wear duration during 07:00 - 07:59
+90068	Wear duration during 08:00 - 08:59
+90069	Wear duration during 09:00 - 09:59
+90070	Wear duration during 10:00 - 10:59
+90071	Wear duration during 11:00 - 11:59
+90072	Wear duration during 12:00 - 12:59
+90073	Wear duration during 13:00 - 13:59
+90074	Wear duration during 14:00 - 14:59
+90075	Wear duration during 15:00 - 15:59
+90076	Wear duration during 16:00 - 16:59
+90077	Wear duration during 17:00 - 17:59
+90078	Wear duration during 18:00 - 18:59
+90079	Wear duration during 19:00 - 19:59
+90080	Wear duration during 20:00 - 20:59
+90081	Wear duration during 21:00 - 21:59
+90082	Wear duration during 22:00 - 22:59
+90083	Wear duration during 23:00 - 23:59
+90084	Unique hours of wear in a 24 hour cycle (scattered over multiple days)
+90085	Unique minutes of wear in a 24 hour cycle (scattered over multiple days)
+90086	Non wear episodes over 1 hour duration
+90087	No-wear time bias adjusted average acceleration
+90088	No-wear time bias adjusted acceleration standard deviation
+90089	No-wear time bias adjusted acceleration median
+90090	No-wear time bias adjusted acceleration minimum
+90091	No-wear time bias adjusted acceleration maximum
+90092	Fraction acceleration <= 1 milli-gravities
+90093	Fraction acceleration <= 2 milli-gravities
+90094	Fraction acceleration <= 3 milli-gravities
+90095	Fraction acceleration <= 4 milli-gravities
+90096	Fraction acceleration <= 5 milli-gravities
+90097	Fraction acceleration <= 6 milli-gravities
+90098	Fraction acceleration <= 7 milli-gravities
+90099	Fraction acceleration <= 8 milli-gravities
+90100	Fraction acceleration <= 9 milli-gravities
+90101	Fraction acceleration <= 10 milli-gravities
+90102	Fraction acceleration <= 11 milli-gravities
+90103	Fraction acceleration <= 12 milli-gravities
+90104	Fraction acceleration <= 13 milli-gravities
+90105	Fraction acceleration <= 14 milli-gravities
+90106	Fraction acceleration <= 15 milli-gravities
+90107	Fraction acceleration <= 16 milli-gravities
+90108	Fraction acceleration <= 17 milli-gravities
+90109	Fraction acceleration <= 18 milli-gravities
+90110	Fraction acceleration <= 19 milli-gravities
+90111	Fraction acceleration <= 20 milli-gravities
+90112	Fraction acceleration <= 25 milli-gravities
+90113	Fraction acceleration <= 30 milli-gravities
+90114	Fraction acceleration <= 35 milli-gravities
+90115	Fraction acceleration <= 40 milli-gravities
+90116	Fraction acceleration <= 45 milli-gravities
+90117	Fraction acceleration <= 50 milli-gravities
+90118	Fraction acceleration <= 55 milli-gravities
+90119	Fraction acceleration <= 60 milli-gravities
+90120	Fraction acceleration <= 65 milli-gravities
+90121	Fraction acceleration <= 70 milli-gravities
+90122	Fraction acceleration <= 75 milli-gravities
+90123	Fraction acceleration <= 80 milli-gravities
+90124	Fraction acceleration <= 85 milli-gravities
+90125	Fraction acceleration <= 90 milli-gravities
+90126	Fraction acceleration <= 95 milli-gravities
+90127	Fraction acceleration <= 100 milli-gravities
+90128	Fraction acceleration <= 125 milli-gravities
+90129	Fraction acceleration <= 150 milli-gravities
+90130	Fraction acceleration <= 175 milli-gravities
+90131	Fraction acceleration <= 200 milli-gravities
+90132	Fraction acceleration <= 225 milli-gravities
+90133	Fraction acceleration <= 250 milli-gravities
+90134	Fraction acceleration <= 275 milli-gravities
+90135	Fraction acceleration <= 300 milli-gravities
+90136	Fraction acceleration <= 325 milli-gravities
+90137	Fraction acceleration <= 350 milli-gravities
+90138	Fraction acceleration <= 375 milli-gravities
+90139	Fraction acceleration <= 400 milli-gravities
+90140	Fraction acceleration <= 425 milli-gravities
+90141	Fraction acceleration <= 450 milli-gravities
+90142	Fraction acceleration <= 475 milli-gravities
+90143	Fraction acceleration <= 500 milli-gravities
+90144	Fraction acceleration <= 600 milli-gravities
+90145	Fraction acceleration <= 700 milli-gravities
+90146	Fraction acceleration <= 800 milli-gravities
+90147	Fraction acceleration <= 900 milli-gravities
+90148	Fraction acceleration <= 1000 milli-gravities
+90149	Fraction acceleration <= 1100 milli-gravities
+90150	Fraction acceleration <= 1200 milli-gravities
+90151	Fraction acceleration <= 1300 milli-gravities
+90152	Fraction acceleration <= 1400 milli-gravities
+90153	Fraction acceleration <= 1500 milli-gravities
+90154	Fraction acceleration <= 1600 milli-gravities
+90155	Fraction acceleration <= 1700 milli-gravities
+90156	Fraction acceleration <= 1800 milli-gravities
+90157	Fraction acceleration <= 1900 milli-gravities
+90158	Fraction acceleration <= 2000 milli-gravities
+90159	Error tolerance before calibration
+90160	Error tolerance after calibration
+90161	Calibration coefficients - x offset
+90162	Calibration coefficients - y offset
+90163	Calibration coefficients - z offset
+90164	Calibration coefficients - x slope
+90165	Calibration coefficients - y slope
+90166	Calibration coefficients - z slope
+90167	Calibration coefficients - x temp
+90168	Calibration coefficients - y temp
+90169	Calibration coefficients - z temp
+90170	Calibration coefficients - mean temperature
+90171	Calibration - number of static points
+90172	Calibration - minimum x stationary value
+90173	Calibration - maximum x stationary value
+90174	Calibration - minimum y stationary value
+90175	Calibration - maximum y stationary value
+90176	Calibration - minimum z stationary value
+90177	Calibration - maximum z stationary value
+90179	Device ID
+90180	Interrupted recording periods
+90181	Duration of interrupted recording periods
+90182	Data recording errors
+90183	Readings exceeding +/-8 gravities before calibration
+90184	Maximum readings exceeding +/-8 gravities before calibration in a 5 second epoch
+90185	Readings exceeding +/-8 gravities after calibration
+90186	Maximum readings exceeding +/-8 gravities after calibration in a 5 second epoch
+90187	Total data readings
+90188	Sample rate average
+90189	Sample rate standard deviation
+90190	Sample rate minimum
+90191	Sample rate maximum
+90192	Temperature average
+90193	Temperature standard deviation
+90194	Temperature minimum
+90195	Temperature maximum
+
+1239	Current tobacco smoking
+1249	Past tobacco smoking
+1259	Smoking/smokers in household
+1269	Exposure to tobacco smoke at home
+1279	Exposure to tobacco smoke outside home
+2644	Light smokers, at least 100 smokes in lifetime
+2867	Age started smoking in former smokers
+2877	Type of tobacco previously smoked
+2887	Number of cigarettes previously smoked daily
+2897	Age stopped smoking
+2907	Ever stopped smoking for 6+ months
+2926	Number of unsuccessful stop-smoking attempts
+2936	Likelihood of resuming smoking
+3436	Age started smoking in current smokers
+3446	Type of tobacco currently smoked
+3456	Number of cigarettes currently smoked daily (current cigarette smokers)
+3466	Time from waking to first cigarette
+3476	Difficulty not smoking for 1 day
+3486	Ever tried to stop smoking
+3496	Wants to stop smoking
+3506	Smoking compared to 10 years previous
+20401	Ever addicted to any substance or behaviour
+20403	Amount of alcohol drunk on a typical drinking day
+20404	Ever physically dependent on alcohol
+20405	Ever had known person concerned about, or recommend reduction of, alcohol consumption
+20406	Ever addicted to alcohol
+20416	Frequency of consuming six or more units of alcohol
+20160	Ever smoked
+20161	Pack years of smoking
+20162	Pack years adult smoking as proportion of life span exposed to smoking
+20116	Smoking status
+20117	Alcohol drinker status
+1558	Alcohol intake frequency.
+3731	Former alcohol drinker
+4407	Average monthly red wine intake
+4418	Average monthly champagne plus white wine intake
+4429	Average monthly beer plus cider intake
+4440	Average monthly spirits intake
+4451	Average monthly fortified wine intake
+4462	Average monthly intake of other alcoholic drinks
+1568	Average weekly red wine intake
+1578	Average weekly champagne plus white wine intake
+1588	Average weekly beer plus cider intake
+1598	Average weekly spirits intake
+1608	Average weekly fortified wine intake
+5364	Average weekly intake of other alcoholic drinks
+1618	Alcohol usually taken with meals
+1628	Alcohol intake versus 10 years previously
+
+84	Cancer year/age first occurred
+87	Non-cancer illness year/age first occurred
+134	Number of self-reported cancers
+135	Number of self-reported non-cancer illnesses
+136	Number of operations, self-reported
+2443	Diabetes diagnosed by doctor
+2453	Cancer diagnosed by doctor
+2473	Other serious medical condition/disability diagnosed by doctor
+2966	Age high blood pressure diagnosed
+2976	Age diabetes diagnosed
+2986	Started insulin within one year diagnosis of diabetes
+3005	Fracture resulting from simple fall
+3627	Age angina diagnosed
+3894	Age heart attack diagnosed
+3992	Age emphysema/chronic bronchitis diagnosed
+4012	Age deep-vein thrombosis (DVT, blood clot in leg) diagnosed
+4022	Age pulmonary embolism (blood clot in lung) diagnosed
+4056	Age stroke diagnosed
+4041	Gestational diabetes only
+10844	Gestational diabetes only (pilot)
+
+40002	Contributory (secondary) causes of death: ICD10
+40023	Records in death dataset
+40018	Death record format
+40020	Death record origin
+40000	Date of death
+40007	Age at death
+40001	Underlying (primary) cause of death: ICD10
+41202	Diagnoses - main ICD10
+41204	Diagnoses - secondary ICD10
+
+131286	Date I10 first reported (essential (primary) hypertension)
+131298	Date I21 first reported (acute myocardial infarction)
+131300	Date I22 first reported (subsequent myocardial infarction)
+131304	Date I24 first reported (other acute ischaemic heart diseases)
+131338	Date I42 first reported (cardiomyopathy)
+131340	Date I43 first reported (cardiomyopathy in diseases classified elsewhere)
+131346	Date I46 first reported (cardiac arrest)
+131350	Date I48 first reported (atrial fibrillation and flutter)
+131354	Date I50 first reported (heart failure)
+131366	Date I63 first reported (cerebral infarction)
+131368	Date I64 first reported (stroke, not specified as haemorrhage or infarction)
+131380	Date I70 first reported (atherosclerosis)
+131386	Date I73 first reported (other peripheral vascular diseases)
+
+30510	Creatinine (enzymatic) in urine
+30515	Creatinine (enzymatic) in urine result flag
+30500	Microalbumin in urine
+30505	Microalbumin in urine result flag
+30520	Potassium in urine
+30525	Potassium in urine result flag
+30530	Sodium in urine
+30535	Sodium in urine result flag
+
+30620	Alanine aminotransferase
+30600	Albumin
+30610	Alkaline phosphatase
+30630	Apolipoprotein A
+30640	Apolipoprotein B
+30650	Aspartate aminotransferase
+30710	C-reactive protein
+30680	Calcium
+30690	Cholesterol
+30700	Creatinine
+30720	Cystatin C
+30660	Direct bilirubin
+30730	Gamma glutamyltransferase
+30740	Glucose
+30750	Glycated haemoglobin (HbA1c)
+30760	HDL cholesterol
+30770	IGF-1
+30780	LDL direct
+30790	Lipoprotein A
+30800	Oestradiol
+30810	Phosphate
+30820	Rheumatoid factor
+30830	SHBG
+30850	Testosterone
+30840	Total bilirubin
+30860	Total protein
+30870	Triglycerides
+30880	Urate
+30670	Urea
+30890	Vitamin D

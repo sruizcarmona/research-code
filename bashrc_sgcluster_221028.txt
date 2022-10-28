@@ -1,0 +1,231 @@
+# ~/.bashrc: executed by bash(1) for non-login shells.
+# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
+# for examples
+
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+# don't put duplicate lines or lines starting with space in the history.
+# See bash(1) for more options
+HISTCONTROL=ignoreboth
+
+# append to the history file, don't overwrite it
+shopt -s histappend
+
+# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
+HISTSIZE=1000
+HISTFILESIZE=2000
+
+# check the window size after each command and, if necessary,
+# update the values of LINES and COLUMNS.
+shopt -s checkwinsize
+
+# If set, the pattern "**" used in a pathname expansion context will
+# match all files and zero or more directories and subdirectories.
+#shopt -s globstar
+
+# make less more friendly for non-text input files, see lesspipe(1)
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# set variable identifying the chroot you work in (used in the prompt below)
+if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
+    debian_chroot=$(cat /etc/debian_chroot)
+fi
+
+# set a fancy prompt (non-color, unless we know we "want" color)
+case "$TERM" in
+    xterm-color|*-256color) color_prompt=yes;;
+esac
+
+# uncomment for a colored prompt, if the terminal has the capability; turned
+# off by default to not distract the user: the focus in a terminal window
+# should be on the output of commands, not on the prompt
+#force_color_prompt=yes
+
+if [ -n "$force_color_prompt" ]; then
+    if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+	# We have color support; assume it's compliant with Ecma-48
+	# (ISO/IEC-6429). (Lack of such support is extremely rare, and such
+	# a case would tend to support setf rather than setaf.)
+	color_prompt=yes
+    else
+	color_prompt=
+    fi
+fi
+
+if [ "$color_prompt" = yes ]; then
+    PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+else
+    PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+fi
+unset color_prompt force_color_prompt
+
+# If this is an xterm set the title to user@host:dir
+case "$TERM" in
+xterm*|rxvt*)
+    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+    ;;
+*)
+    ;;
+esac
+
+# enable color support of ls and also add handy aliases
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    #alias dir='dir --color=auto'
+    #alias vdir='vdir --color=auto'
+
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# colored GCC warnings and errors
+#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+
+# some more ls aliases
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+
+# Add an "alert" alias for long running commands.  Use like so:
+#   sleep 10; alert
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+
+# Alias definitions.
+# You may want to put all your additions into a separate file like
+# ~/.bash_aliases, instead of adding them here directly.
+# See /usr/share/doc/bash-doc/examples in the bash-doc package.
+
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
+# enable programmable completion features (you don't need to enable
+# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
+# sources /etc/bash.bashrc).
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
+fi
+
+##############SRUIZ CUSTOM
+#CUSTOM TERMINAL
+#export PS1="\[\033[36m\]\u\[\033[m\]@\[\033[32m\]\h:\[\033[33;1m\]\w\[\033[m\]\$ "
+#PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u\[\033[m\]@\[\033[01;33m\]\h:\[\033[0;36m\]\w\[\033[m\]\$ '
+PS1='${debian_chroot:+($debian_chroot)}\[\033[01;33m\]\u@\h:\[\033[0;36m\]\w\[\033[m\]\$ '
+export CLICOLOR=1
+#export LSCOLORS=ExFxBxDxCxegedabagacad
+export LSCOLORS=GxBxCxDxexegedabagaced
+
+#alias maria
+alias lr='ls -lrth'
+alias ll='ls -l'
+alias sourcealias='source ~/.bashrc'
+alias vialias='vi ~/.bashrc'
+alias entr='/home/sruizcarmona/SOFT/entr-4.5/entr'
+#alias ls='ls -GF --color=auto'
+alias marc='ssh -p 31415 sruiz@161.116.138.71'
+alias qstatINFO='squeue | awk '\''{print $1}'\'' | grep -vi JOBID | xargs -n 1 scontrol show jobid -dd | grep Command'
+alias qstatINFOnodes='squeue | awk '\''{print $1}'\'' | grep -vi JOBID | xargs -n 1 scontrol show jobid -dd | grep "JobId\|Nodes"'
+alias qstat='squeue | grep sruiz'
+alias qstatGPU='squeue | grep gpu'
+alias fpocket='/home/sruizcarmona/SOFT/fpocket/bin/fpocket'
+alias checkSAMsorted='for f in `ls *bam`; do echo $f; samtools view -H $f | grep SQ | cut -f 2 | awk "{ sub(/^SN:/, \"\"); print;}"; done'
+alias vcfINFO="~/miniconda3/envs/rnaseq-analysis/share/snpsift-4.3.1t-1/scripts/vcfInfoOnePerLine.pl"
+alias plip='python /home/sruizcarmona/SOFT/plip/plip/plipcmd.py'
+alias node_info='/software/useful_scripts/node_process.sh'
+alias squeue='squeue -o"%.9i %.9P %.8j %.8u %.2t %.10M %.6D %.3C %R"'
+alias sq_release='squeue --user $USER --format "scontrol release %i"'
+alias esq='printf "\n  "; squeue | head -n 1| sed -e "s/^[[:space:]]*//" ;printf " -------------------------------------------------------------------------\n" ; squeue  | sort -rk 9 | grep -v "hpcn-" | grep -v "JOBID";for i in "01" "02" "03" "04" "05" "06" "07" "08" "09" "10" "11";do printf " -------------------------------------------------------------------------\n"; squeue | sort -nk 8,9  |grep "n-$i" ; done | uniq'
+alias mdmix='/home/sruizcarmona/SOFT/pyMDmix/build/scripts-2.7/mdmix'
+alias newq='printf "\n  "; squeue -o"%.7i %.9P %.8j %.8u %.2t %.10M %.6D %.3C %m %R" | head -n 1| sed -e s/^[[:space:]]*// ;printf " --------------------------------------------------------------------------------\n" ; squeue -o"%.7i %.9P %.8j %.8u %.2t %.10M %.6D %.3C %m %R" | sort -rk 9 | grep -v "hpcn-" | grep -v "JOBID" | uniq |  numfmt --from=iec --invalid=ignore --to=iec --field 9 --padding=1 ;for i in "01" "02" "03" "04" "05" "06" "07" "08" "09" "10" "11";do squeue -o"%.7i %.9P %.8j %.8u %.2t %.10M %.6D %.3C %m %R" | sort -nk 8,9  |grep "n-$i" ; done | uniq |  numfmt --from=iec --invalid=ignore --to=iec --field 9 --padding=1'
+
+#FREESASA
+export PATH=$PATH:/home/sruizcarmona/SOFT/freesasa-2.0.3/src/
+
+#ARPEGGIO
+export PATH=$PATH:/home/sruizcarmona/SOFT/arpeggio
+#PROVEAN
+BLAST_DB="/home/sruizcarmona/SOFT/provean/nr"
+
+#CONDA
+source /home/sruizcarmona/miniconda3/etc/profile.d/conda.sh
+
+#R
+export R_LIBS_USER='/home/sruizcarmona/R-dev'
+
+#MODELLER
+export KEY_MODELLER='MODELIRANJE'
+
+#TMPDIR
+#export TMPDIR='/scratch/sruizcarmona'
+#export TMPDIR='/sysgen/workspace/users/sruizcarmona/tmp'
+
+#RDOCK
+#export RBT_ROOT=/home/sruizcarmona/SOFT/rdock/rDock_2020_RCANOVAS/
+export RBT_ROOT=/home/sruizcarmona/SOFT/GADI/rdock/rDock_2022.GADI
+export LD_LIBRARY_PATH=$RBT_ROOT/lib:$LD_LIBRARY_PATH
+export PATH=$RBT_ROOT/bin:$PATH
+
+#AMBER
+#export AMBERHOME='/home/sruizcarmona/SOFT/amber18'
+#export CUDA_HOME='/usr/local/cuda-10.1/'
+#export LD_LIBRARY_PATH="/usr/local/cuda-10.1//lib:${LD_LIBRARY_PATH}"
+#export CUDA_HOME='/usr/local/cuda-11.6/'
+#export LD_LIBRARY_PATH="/usr/local/cuda-11.6/lib64:${LD_LIBRARY_PATH}"
+#source $AMBERHOME/amber.sh
+
+#DNA2PROT
+export DNA2PROT=/home/sruizcarmona/dna2prot
+
+#EXTRA
+rsyncmarc(){
+        rsync -av -e "ssh -p 31415" $1 sruiz@161.116.138.71:$2
+}
+rsyncfrommarc(){
+        rsync -av -e "ssh -p 31415" sruiz@161.116.138.71:$1 $2
+}
+sneaky(){
+    srun -p sysgen_interactive --mem 50m -w bhri-hpcn-0${1} --pty -u ${SHELL} -i -l
+}
+sneakyLONG(){
+    srun -t 1-0:0:0 -p sysgen --mem 100m -w bhri-hpcn-0${1} --pty -u /bin/bash -i -l
+}
+sneakyLONGfullnode(){
+    srun -t 1-0:0:0 -p sysgen -c 64 --mem 100m -w bhri-hpcn-0${1} --pty -u /bin/bash -i -l
+}
+sneakySUPERLONG(){
+    srun -t 14-0:0:0 -p sysgen_long --mem 100m -w bhri-hpcn-0${1} --pty -u /bin/bash -i -l
+}
+sneakyBIO(){
+    if [ $1 -lt 10 ];
+    then
+        srun -p biosig_external --mem 50m -w bhri-hpcn-0${1} --pty -u ${SHELL} -i -l
+    else
+        srun -p biosig_external --mem 50m -w bhri-hpcn-${1} --pty -u ${SHELL} -i -l
+    fi
+
+}
+sneakyGPU(){
+    srun -p gpu --mem 50m -w bhri-hpcn-07 --pty -u ${SHELL} -i -l
+}
+set_amber_mdmix () {
+    export AMBERHOME=/home/sruizcarmona/SOFT/kk/amber12
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/sruizcarmona/SOFT/kk/amber12/lib
+    export PATH=$AMBERHOME/bin:$PATH
+}
+removeSLURMdepencency(){
+    scontrol update job=${1} dependency=""
+}
+
+function knit() {
+    R -e "rmarkdown::render('$1')"
+}
