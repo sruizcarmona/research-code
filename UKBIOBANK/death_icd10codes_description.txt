@@ -1,0 +1,1611 @@
+A02	Other Salmonella infections-
+A021	Salmonella septicaemia1
+A04	Other bacterial intestinal infections-
+A045	Campylobacter enteritis1
+A047	Enterocolitis due to Clostridium difficile15
+A08	Viral and other specified intestinal infections-
+A084	Viral intestinal infection, unspecified1
+A09	Diarrhoea and gastro-enteritis of presumed infectious origin-
+A099	Gastroenteritis and colitis of unspecified origin28
+A16	Respiratory tuberculosis, not confirmed bacteriologically or histologically-
+A162	Tuberculosis of lung, without mention of bacteriological or histological confirmation3
+A19	Miliary tuberculosis-
+A199	Miliary tuberculosis, unspecified2
+A28	Other zoonotic bacterial diseases, not elsewhere classified-
+A280	Pasteurellosis1
+A281	Cat-scratch disease1
+A31	Infection due to other mycobacteria-
+A310	Pulmonary mycobacterial infection2
+A319	Mycobacterial infection, unspecified1
+A32	Listeriosis-
+A329	Listeriosis, unspecified1
+A39	Meningococcal infection-
+A394	Meningococcaemia, unspecified4
+A40	Streptococcal septicaemia-
+A400	Septicaemia due to streptococcus, group A1
+A403	Septicaemia due to Streptococcus pneumoniae1
+A409	Streptococcal septicaemia, unspecified7
+A41	Other septicaemia-
+A410	Septicaemia due to Staphylococcus aureus1
+A412	Septicaemia due to unspecified staphylococcus4
+A414	Septicaemia due to anaerobes1
+A415	Septicaemia due to other Gram-negative organisms4
+A419	Septicaemia, unspecified68
+A48	Other bacterial diseases, not elsewhere classified-
+A481	Legionnaires' disease3
+A49	Bacterial infection of unspecified site-
+A490	Staphylococcal infection, unspecified3
+A491	Streptococcal infection, unspecified4
+A498	Other bacterial infections of unspecified site5
+A499	Bacterial infection, unspecified3
+A81	Atypical virus infections of central nervous system-
+A810	Creutzfeldt-Jakob disease36
+A812	Progressive multifocal leukoencephalopathy1
+A85	Other viral encephalitis, not elsewhere classified-
+A858	Other specified viral encephalitis2
+A86	Unspecified viral encephalitis3
+A95	Yellow fever-
+A959	Yellow fever, unspecified1
+B00	Herpesviral [herpes simplex] infections-
+B004	Herpesviral encephalitis2
+B009	Herpesviral infection, unspecified1
+B02	Zoster [herpes zoster]-
+B029	Zoster without complication2
+B15	Acute hepatitis A-
+B159	Hepatitis A without hepatic coma1
+B18	Chronic viral hepatitis-
+B182	Chronic viral hepatitis C9
+B20	Human immunodeficiency virus [HIV] disease resulting in infectious and parasitic diseases-
+B201	HIV disease resulting in other bacterial infections1
+B207	HIV disease resulting in multiple infections2
+B208	HIV disease resulting in other infectious and parasitic diseases5
+B21	Human immunodeficiency virus [HIV] disease resulting in malignant neoplasms-
+B213	HIV disease resulting in other malignant neoplasms of lymphoid, haematopoietic and related tissue1
+B23	Human immunodeficiency virus [HIV] disease resulting in other conditions-
+B232	HIV disease resulting in haematological and immunological abnormalities, not elsewhere classified1
+B238	HIV disease resulting in other specified conditions1
+B24	Unspecified human immunodeficiency virus [HIV] disease2
+B25	Cytomegaloviral disease-
+B250	Cytomegaloviral pneumonitis1
+B258	Other cytomegaloviral diseases1
+B27	Infectious mononucleosis-
+B270	Gammaherpesviral mononucleosis1
+B279	Infectious mononucleosis, unspecified1
+B34	Viral infection of unspecified site-
+B348	Other viral infections of unspecified site4
+B44	Aspergillosis-
+B441	Other pulmonary aspergillosis9
+B49	Unspecified mycosis1
+B59	Pneumocystosis8
+B91	Sequelae of poliomyelitis3
+B99	Other and unspecified infectious diseases2
+C01	Malignant neoplasm of base of tongue4
+C02	Malignant neoplasm of other and unspecified parts of tongue-
+C029	Tongue, unspecified45
+C03	Malignant neoplasm of gum-
+C030	Upper gum2
+C039	Gum, unspecified1
+C04	Malignant neoplasm of floor of mouth-
+C049	Floor of mouth, unspecified3
+C05	Malignant neoplasm of palate-
+C051	Soft palate5
+C059	Palate, unspecified1
+C06	Malignant neoplasm of other and unspecified parts of mouth-
+C060	Cheek mucosa2
+C069	Mouth, unspecified16
+C07	Malignant neoplasm of parotid gland12
+C08	Malignant neoplasm of other and unspecified major salivary glands-
+C080	Submandibular gland2
+C089	Major salivary gland, unspecified2
+C09	Malignant neoplasm of tonsil-
+C099	Tonsil, unspecified25
+C10	Malignant neoplasm of oropharynx-
+C100	Vallecula1
+C109	Oropharynx, unspecified34
+C11	Malignant neoplasm of nasopharynx-
+C111	Posterior wall of nasopharynx2
+C119	Nasopharynx, unspecified10
+C12	Malignant neoplasm of pyriform sinus10
+C13	Malignant neoplasm of hypopharynx-
+C130	Postcricoid region2
+C139	Hypopharynx, unspecified14
+C14	Malignant neoplasm of other and ill-defined sites in the lip, oral cavity and pharynx-
+C140	Pharynx, unspecified23
+C148	Overlapping lesion of lip, oral cavity and pharynx1
+C15	Malignant neoplasm of oesophagus-
+C154	Middle third of oesophagus2
+C155	Lower third of oesophagus9
+C159	Oesophagus, unspecified734
+C16	Malignant neoplasm of stomach-
+C160	Cardia72
+C163	Pyloric antrum2
+C164	Pylorus2
+C169	Stomach, unspecified320
+C17	Malignant neoplasm of small intestine-
+C170	Duodenum38
+C171	Jejunum5
+C172	Ileum2
+C179	Small intestine, unspecified13
+C18	Malignant neoplasm of colon-
+C180	Caecum132
+C181	Appendix21
+C182	Ascending colon8
+C183	Hepatic flexure2
+C184	Transverse colon9
+C185	Splenic flexure1
+C186	Descending colon2
+C187	Sigmoid colon111
+C189	Colon, unspecified561
+C19	Malignant neoplasm of rectosigmoid junction354
+C20	Malignant neoplasm of rectum305
+C21	Malignant neoplasm of anus and anal canal-
+C210	Anus, unspecified35
+C211	Anal canal5
+C218	Overlapping lesion of rectum, anus and anal canal4
+C22	Malignant neoplasm of liver and intrahepatic bile ducts-
+C220	Liver cell carcinoma184
+C221	Intrahepatic bile duct carcinoma326
+C222	Hepatoblastoma1
+C223	Angiosarcoma of liver2
+C229	Liver, unspecified17
+C23	Malignant neoplasm of gallbladder78
+C24	Malignant neoplasm of other and unspecified parts of biliary tract-
+C240	Extrahepatic bile duct13
+C241	Ampulla of Vater20
+C248	Overlapping lesion of biliary tract1
+C249	Biliary tract, unspecified10
+C25	Malignant neoplasm of pancreas-
+C250	Head of pancreas23
+C251	Body of pancreas4
+C252	Tail of pancreas2
+C253	Pancreatic duct5
+C254	Endocrine pancreas2
+C258	Overlapping lesion of pancreas2
+C259	Pancreas, unspecified1107
+C26	Malignant neoplasm of other and ill-defined digestive organs-
+C260	Intestinal tract, part unspecified215
+C269	Ill-defined sites within the digestive system36
+C30	Malignant neoplasm of nasal cavity and middle ear-
+C300	Nasal cavity2
+C31	Malignant neoplasm of accessory sinuses-
+C310	Maxillary sinus1
+C319	Accessory sinus, unspecified3
+C32	Malignant neoplasm of larynx-
+C320	Glottis2
+C321	Supraglottis9
+C322	Subglottis1
+C329	Larynx, unspecified34
+C33	Malignant neoplasm of trachea3
+C34	Malignant neoplasm of bronchus and lung-
+C340	Main bronchus2
+C341	Upper lobe, bronchus or lung24
+C342	Middle lobe, bronchus or lung2
+C343	Lower lobe, bronchus or lung8
+C349	Bronchus or lung, unspecified2740
+C37	Malignant neoplasm of thymus5
+C38	Malignant neoplasm of heart, mediastinum and pleura-
+C380	Heart3
+C382	Posterior mediastinum1
+C383	Mediastinum, part unspecified2
+C384	Pleura5
+C39	Malignant neoplasm of other and ill-defined sites in the respiratory system and intrathoracic organs-
+C390	Upper respiratory tract, part unspecified1
+C399	Ill-defined sites within the respiratory system1
+C40	Malignant neoplasm of bone and articular cartilage of limbs-
+C400	Scapula and long bones of upper limb1
+C402	Long bones of lower limb2
+C41	Malignant neoplasm of bone and articular cartilage of other and unspecified sites-
+C410	Bones of skull and face4
+C411	Mandible6
+C412	Vertebral column1
+C414	Pelvic bones, sacrum and coccyx1
+C419	Bone and articular cartilage, unspecified13
+C43	Malignant melanoma of skin-
+C433	Malignant melanoma of other and unspecified parts of face2
+C434	Malignant melanoma of scalp and neck1
+C435	Malignant melanoma of trunk2
+C436	Malignant melanoma of upper limb, including shoulder1
+C437	Malignant melanoma of lower limb, including hip1
+C439	Malignant melanoma of skin, unspecified303
+C44	Other malignant neoplasms of skin-
+C442	Skin of ear and external auricular canal5
+C443	Skin of other and unspecified parts of face1
+C444	Skin of scalp and neck14
+C445	Skin of trunk2
+C449	Malignant neoplasm of skin, unspecified26
+C45	Mesothelioma-
+C450	Mesothelioma of pleura73
+C451	Mesothelioma of peritoneum10
+C457	Mesothelioma of other sites8
+C459	Mesothelioma, unspecified271
+C46	Kaposi's sarcoma-
+C469	Kaposi's sarcoma, unspecified1
+C47	Malignant neoplasm of peripheral nerves and autonomic nervous system-
+C479	Peripheral nerves and autonomic nervous system, unspecified3
+C48	Malignant neoplasm of retroperitoneum and peritoneum-
+C480	Retroperitoneum13
+C481	Specified parts of peritoneum3
+C482	Peritoneum, unspecified73
+C49	Malignant neoplasm of other connective and soft tissue-
+C490	Connective and soft tissue of head, face and neck1
+C491	Connective and soft tissue of upper limb, including shoulder3
+C492	Connective and soft tissue of lower limb, including hip5
+C493	Connective and soft tissue of thorax5
+C494	Connective and soft tissue of abdomen7
+C495	Connective and soft tissue of pelvis3
+C499	Connective and soft tissue, unspecified100
+C50	Malignant neoplasm of breast-
+C509	Breast, unspecified1269
+C51	Malignant neoplasm of vulva-
+C519	Vulva, unspecified19
+C52	Malignant neoplasm of vagina9
+C53	Malignant neoplasm of cervix uteri-
+C530	Endocervix1
+C539	Cervix uteri, unspecified31
+C54	Malignant neoplasm of corpus uteri-
+C541	Endometrium182
+C549	Corpus uteri, unspecified3
+C55	Malignant neoplasm of uterus, part unspecified66
+C56	Malignant neoplasm of ovary557
+C57	Malignant neoplasm of other and unspecified female genital organs-
+C570	Fallopian tube18
+C578	Overlapping lesion of female genital organs4
+C579	Female genital organ, unspecified13
+C58	Malignant neoplasm of placenta1
+C60	Malignant neoplasm of penis-
+C609	Penis, unspecified10
+C61	Malignant neoplasm of prostate908
+C62	Malignant neoplasm of testis-
+C629	Testis, unspecified8
+C64	Malignant neoplasm of kidney, except renal pelvis418
+C65	Malignant neoplasm of renal pelvis5
+C66	Malignant neoplasm of ureter24
+C67	Malignant neoplasm of bladder-
+C677	Urachus1
+C678	Overlapping lesion of bladder2
+C679	Bladder, unspecified353
+C68	Malignant neoplasm of other and unspecified urinary organs-
+C680	Urethra7
+C688	Overlapping lesion of urinary organs2
+C689	Urinary organ, unspecified28
+C69	Malignant neoplasm of eye and adnexa-
+C692	Retina1
+C694	Ciliary body1
+C695	Lachrymal gland and duct1
+C696	Orbit1
+C699	Eye, unspecified8
+C70	Malignant neoplasm of meninges-
+C700	Cerebral meninges1
+C709	Meninges, unspecified2
+C71	Malignant neoplasm of brain-
+C710	Cerebrum, except lobes and ventricles23
+C711	Frontal lobe14
+C712	Temporal lobe20
+C713	Parietal lobe9
+C714	Occipital lobe3
+C717	Brain stem1
+C718	Overlapping lesion of brain6
+C719	Brain, unspecified662
+C73	Malignant neoplasm of thyroid gland31
+C74	Malignant neoplasm of adrenal gland-
+C740	Cortex of adrenal gland4
+C741	Medulla of adrenal gland3
+C749	Adrenal gland, unspecified8
+C75	Malignant neoplasm of other endocrine glands and related structures-
+C755	Aortic body and other paraganglia1
+C759	Endocrine gland, unspecified4
+C76	Malignant neoplasm of other and ill-defined sites-
+C760	Head, face and neck4
+C761	Thorax4
+C762	Abdomen5
+C763	Pelvis4
+C767	Other ill-defined sites2
+C78	Secondary malignant neoplasm of respiratory and digestive organs-
+C780	Secondary malignant neoplasm of lung2
+C786	Secondary malignant neoplasm of retroperitoneum and peritoneum11
+C787	Secondary malignant neoplasm of liver4
+C79	Secondary malignant neoplasm of other sites-
+C793	Secondary malignant neoplasm of brain and cerebral meninges2
+C795	Secondary malignant neoplasm of bone and bone marrow1
+C798	Secondary malignant neoplasm of other specified sites2
+C80	Malignant neoplasm without specification of site-
+C800	Malignant neoplasm, primary site unknown, so stated279
+C809	Malignant neoplasm, unspecified189
+C81	Hodgkin's disease-
+C810	Lymphocytic predominance1
+C819	Hodgkin's disease, unspecified27
+C82	Follicular [nodular] non-Hodgkin's lymphoma-
+C829	Follicular non-Hodgkin's lymphoma, unspecified38
+C83	Diffuse non-Hodgkin's lymphoma-
+C830	Small cell (diffuse)6
+C831	Small cleaved cell (diffuse)21
+C833	Large cell (diffuse)116
+C835	Lymphoblastic (diffuse)2
+C837	Burkitt's tumour13
+C838	Other types of diffuse non-Hodgkin's lymphoma6
+C84	Peripheral and cutaneous T-cell lymphomas-
+C840	Mycosis fungoides4
+C844	Peripheral T-cell lymphoma38
+C845	Other and unspecified T-cell lymphomas17
+C848	Cutaneous T-cell lymphoma, unspecified3
+C85	Other and unspecified types of non-Hodgkin's lymphoma-
+C851	B-cell lymphoma, unspecified83
+C857	Other specified types of non-Hodgkin's lymphoma3
+C859	Non-Hodgkin's lymphoma, unspecified type199
+C86	Other specified types of T/NK-cell lymphoma-
+C862	Enteropathy-type (intestinal) T-cell lymphoma1
+C865	Angioimmunoblastic T-cell lymphoma1
+C88	Malignant immunoproliferative diseases-
+C880	Waldenstrom's macroglobulinaemia7
+C883	Immunoproliferative small intestinal disease1
+C884	Extranodal marginal zone B-cell lymphoma of mucosa-associated lymphoid tissue [MALT-lymphoma]1
+C90	Multiple myeloma and malignant plasma cell neoplasms-
+C900	Multiple myeloma308
+C901	Plasma cell leukaemia13
+C902	Plasmacytoma, extramedullary2
+C91	Lymphoid leukaemia-
+C910	Acute lymphoblastic leukaemia23
+C911	Chronic lymphocytic leukaemia94
+C914	Hairy-cell leukaemia2
+C915	Adult T-cell leukaemia1
+C917	Other lymphoid leukaemia2
+C919	Lymphoid leukaemia, unspecified1
+C92	Myeloid leukaemia-
+C920	Acute myeloid leukaemia309
+C921	Chronic myeloid leukaemia18
+C924	Acute promyelocytic leukaemia3
+C925	Acute myelomonocytic leukaemia1
+C927	Other myeloid leukaemia5
+C929	Myeloid leukaemia, unspecified5
+C93	Monocytic leukaemia-
+C931	Chronic monocytic leukaemia19
+C939	Monocytic leukaemia, unspecified1
+C94	Other leukaemias of specified cell type-
+C944	Acute panmyelosis1
+C946	Myelodysplastic and myeloproliferative disease, not elsewhere classified1
+C95	Leukaemia of unspecified cell type-
+C950	Acute leukaemia of unspecified cell type8
+C951	Chronic leukaemia of unspecified cell type1
+C959	Leukaemia, unspecified10
+C96	Other and unspecified malignant neoplasms of lymphoid, haematopoietic and related tissue-
+C964	Sarcoma of dendritic cells (accessory cells)1
+C97	Malignant neoplasms of independent (primary) multiple sites34
+D13	Benign neoplasm of other and ill-defined parts of digestive system-
+D135	Extrahepatic bile ducts1
+D136	Pancreas1
+D15	Benign neoplasm of other and unspecified intrathoracic organs-
+D150	Thymus1
+D18	Haemangioma and lymphangioma, any site-
+D180	Haemangioma, any site3
+D25	Leiomyoma of uterus-
+D259	Leiomyoma of uterus, unspecified1
+D32	Benign neoplasm of meninges-
+D320	Cerebral meninges6
+D329	Meninges, unspecified13
+D33	Benign neoplasm of brain and other parts of central nervous system-
+D333	Cranial nerves1
+D35	Benign neoplasm of other and unspecified endocrine glands-
+D350	Adrenal gland1
+D352	Pituitary gland1
+D37	Neoplasm of uncertain or unknown behaviour of oral cavity and digestive organs-
+D371	Stomach1
+D372	Small intestine2
+D374	Colon4
+D375	Rectum3
+D376	Liver, gallbladder and bile ducts3
+D377	Other digestive organs7
+D379	Digestive organ, unspecified2
+D38	Neoplasm of uncertain or unknown behaviour of middle ear and respiratory and intrathoracic organs-
+D381	Trachea, bronchus and lung4
+D382	Pleura2
+D383	Mediastinum1
+D41	Neoplasm of uncertain or unknown behaviour of urinary organs-
+D410	Kidney2
+D412	Ureter1
+D414	Bladder1
+D43	Neoplasm of uncertain or unknown behaviour of brain and central nervous system-
+D430	Brain, supratentorial5
+D431	Brain, infratentorial2
+D432	Brain, unspecified21
+D439	Central nervous system, unspecified1
+D44	Neoplasm of uncertain or unknown behaviour of endocrine glands-
+D443	Pituitary gland1
+D444	Craniopharyngeal duct1
+D445	Pineal gland1
+D447	Aortic body and other paraganglia2
+D45	Polycythaemia vera4
+D46	Myelodysplastic syndromes-
+D462	Refractory anaemia with excess of blasts1
+D464	Refractory anaemia, unspecified3
+D469	Myelodysplastic syndrome, unspecified54
+D47	Other neoplasms of uncertain or unknown behaviour of lymphoid, haematopoietic and related tissue-
+D471	Chronic myeloproliferative disease14
+D473	Essential (haemorrhagic) thrombocythaemia1
+D474	Osteomyelofibrosis27
+D479	Neoplasm of uncertain or unknown behaviour of lymphoid, haematopoietic and related tissue, unspecified1
+D48	Neoplasm of uncertain or unknown behaviour of other and unspecified sites-
+D481	Connective and other soft tissue4
+D487	Other specified sites1
+D489	Neoplasms of uncertain or unknown behaviour, unspecified4
+D57	Sickle-cell disorders-
+D571	Sickle-cell anaemia without crisis2
+D58	Other hereditary haemolytic anaemias-
+D589	Hereditary haemolytic anaemia, unspecified3
+D59	Acquired haemolytic anaemia-
+D591	Other autoimmune haemolytic anaemias3
+D593	Haemolytic-uraemic syndrome2
+D61	Other aplastic anaemias-
+D619	Aplastic anaemia, unspecified9
+D64	Other anaemias-
+D649	Anaemia, unspecified1
+D65	Disseminated intravascular coagulation [defibrination syndrome]1
+D68	Other coagulation defects-
+D686	Other Thrombophilia1
+D689	Coagulation defect, unspecified1
+D69	Purpura and other haemorrhagic conditions-
+D693	Idiopathic thrombocytopenic purpura1
+D694	Other primary thrombocytopenia1
+D699	Haemorrhagic condition, unspecified1
+D70	Agranulocytosis11
+D75	Other diseases of blood and blood-forming organs-
+D751	Secondary polycythaemia1
+D758	Other specified diseases of blood and blood-forming organs1
+D76	Certain diseases involving lymphoreticular tissue and reticulohistiocytic system-
+D761	Haemophagocytic lymphohistiocytosis5
+D762	Haemophagocytic syndrome, infection-associated1
+D80	Immunodeficiency with predominantly antibody defects-
+D801	Nonfamilial hypogammaglobulinaemia1
+D83	Common variable immunodeficiency-
+D839	Common variable immunodeficiency, unspecified1
+D84	Other immunodeficiencies-
+D849	Immunodeficiency, unspecified1
+D86	Sarcoidosis-
+D860	Sarcoidosis of lung7
+D868	Sarcoidosis of other and combined sites1
+D869	Sarcoidosis, unspecified9
+D89	Other disorders involving the immune mechanism, not elsewhere classified-
+D891	Cryoglobulinaemia1
+D899	Disorder involving the immune mechanism, unspecified3
+E03	Other hypothyroidism-
+E039	Hypothyroidism, unspecified1
+E04	Other non-toxic goitre-
+E042	Non-toxic multinodular goitre1
+E05	Thyrotoxicosis [hyperthyroidism]-
+E059	Thyrotoxicosis, unspecified1
+E10	Insulin-dependent diabetes mellitus-
+E101	With ketoacidosis5
+E102	With renal complications2
+E105	With peripheral circulatory complications4
+E106	With other specified complications1
+E107	With multiple complications4
+E109	Without complications5
+E11	Non-insulin-dependent diabetes mellitus-
+E111	With ketoacidosis1
+E112	With renal complications25
+E115	With peripheral circulatory complications21
+E117	With multiple complications21
+E119	Without complications33
+E14	Unspecified diabetes mellitus-
+E141	With ketoacidosis27
+E142	Withrenal complications20
+E144	With neurological complications3
+E145	With peripheral circulatory complications7
+E147	With multiple complications9
+E149	Without complications26
+E16	Other disorders of pancreatic internal secretion-
+E162	Hypoglycaemia, unspecified5
+E27	Other disorders of adrenal gland-
+E271	Primary adrenocortical insufficiency2
+E274	Other and unspecified adrenocortical insufficiency1
+E34	Other endocrine disorders-
+E340	Carcinoid syndrome2
+E348	Other specified endocrine disorders1
+E46	Unspecified protein-energy malnutrition1
+E66	Obesity-
+E662	Extreme obesity with alveolar hypoventilation1
+E668	Other obesity6
+E669	Obesity, unspecified18
+E74	Other disorders of carbohydrate metabolism-
+E740	Glycogen storage disease1
+E78	Disorders of lipoprotein metabolism and other lipidaemias-
+E780	Pure hypercholesterolaemia4
+E785	Hyperlipidaemia, unspecified3
+E83	Disorders of mineral metabolism-
+E831	Disorders of iron metabolism5
+E835	Disorders of calcium metabolism1
+E84	Cystic fibrosis-
+E849	Cystic fibrosis, unspecified2
+E85	Amyloidosis-
+E854	Organ-limited amyloidosis46
+E858	Other amyloidosis2
+E859	Amyloidosis, unspecified12
+E86	Volume depletion1
+E87	Other disorders of fluid, electrolyte and acid-base balance-
+E870	Hyperosmolality and hypernatraemia1
+E871	Hypo-osmolality and hyponatraemia1
+E872	Acidosis12
+E875	Hyperkalaemia2
+E876	Hypokalaemia1
+E88	Other metabolic disorders-
+E880	Disorders of plasma-protein metabolism, not elsewhere classified7
+E888	Other specified metabolic disorders1
+E889	Metabolic disorder, unspecified2
+F01	Vascular dementia-
+F011	Multi-infarct dementia3
+F012	Subcortical vascular dementia3
+F019	Vascular dementia, unspecified154
+F03	Unspecified dementia376
+F05	Delirium, not induced by alcohol and other psychoactive substances-
+F058	Other delirium1
+F059	Delirium, unspecified2
+F10	Mental and behavioural disorders due to use of alcohol-
+F101	Harmful use4
+F102	Dependence syndrome21
+F103	Withdrawal state2
+F106	Amnesic syndrome3
+F107	Residual and late-onset psychotic disorder2
+F109	Unspecified mental and behavioural disorder1
+F20	Schizophrenia-
+F209	Schizophrenia, unspecified1
+F31	Bipolar affective disorder-
+F319	Bipolar affective disorder, unspecified3
+F50	Eating disorders-
+F500	Anorexia nervosa3
+F81	Specific developmental disorders of scholastic skills-
+F812	Specific disorder of arithmetical skills1
+G00	Bacterial meningitis, not elsewhere classified-
+G001	Pneumococcal meningitis1
+G002	Streptococcal meningitis1
+G009	Bacterial meningitis, unspecified3
+G03	Meningitis due to other and unspecified causes-
+G038	Meningitis due to other specified causes1
+G039	Meningitis, unspecified5
+G04	Encephalitis, myelitis and encephalomyelitis-
+G048	Other encephalitis, myelitis and encephalomyelitis1
+G049	Encephalitis, myelitis and encephalomyelitis, unspecified6
+G06	Intracranial and intraspinal abscess and granuloma-
+G060	Intracranial abscess and granuloma4
+G061	Intraspinal abscess and granuloma2
+G062	Extradural and subdural abscess, unspecified1
+G09	Sequelae of inflammatory diseases of central nervous system1
+G10	Huntington's disease4
+G11	Hereditary ataxia-
+G111	Early-onset cerebellar ataxia1
+G114	Hereditary spastic paraplegia1
+G119	Hereditary ataxia, unspecified8
+G12	Spinal muscular atrophy and related syndromes-
+G122	Motor neuron disease328
+G129	Spinal muscular atrophy, unspecified1
+G20	Parkinson's disease298
+G23	Other degenerative diseases of basal ganglia-
+G231	Progressive supranuclear ophthalmoplegia [Steele-Richardson-Olszewski]72
+G232	Striatonigral degeneration4
+G24	Dystonia-
+G249	Dystonia, unspecified1
+G25	Other extrapyramidal and movement disorders-
+G258	Other specified extrapyramidal and movement disorders3
+G30	Alzheimer's disease-
+G300	Alzheimer's disease with early onset6
+G301	Alzheimer's disease with late onset14
+G309	Alzheimer's disease, unspecified348
+G31	Other degenerative diseases of nervous system, not elsewhere classified-
+G310	Circumscribed brain atrophy41
+G318	Other specified degenerative diseases of nervous system113
+G319	Degenerative disease of nervous system, unspecified13
+G35	Multiple sclerosis96
+G40	Epilepsy-
+G403	Generalised idiopathic epilepsy and epileptic syndromes1
+G406	Grand mal seizures, unspecified (with or without petit mal)1
+G409	Epilepsy, unspecified27
+G41	Status epilepticus-
+G419	Status epilepticus, unspecified4
+G45	Transient cerebral ischaemic attacks and related syndromes-
+G459	Transient cerebral ischaemic attack, unspecified1
+G47	Sleep disorders-
+G473	Sleep apnoea8
+G51	Facial nerve disorders-
+G519	Disorder of facial nerve, unspecified1
+G60	Hereditary and idiopathic neuropathy-
+G603	Idiopathic progressive neuropathy1
+G61	Inflammatory polyneuropathy-
+G610	Guillain-Barre syndrome1
+G62	Other polyneuropathies-
+G628	Other specified polyneuropathies1
+G629	Polyneuropathy, unspecified2
+G70	Myasthenia gravis and other myoneural disorders-
+G700	Myasthenia gravis6
+G709	Myoneural disorder, unspecified1
+G71	Primary disorders of muscles-
+G710	Muscular dystrophy3
+G711	Myotonic disorders11
+G712	Congenital myopathies1
+G713	Mitochondrial myopathy, not elsewhere classified3
+G72	Other myopathies-
+G724	Inflammatory myopathy, not elsewhere classified1
+G729	Myopathy, unspecified3
+G80	Infantile cerebral palsy-
+G809	Infantile cerebral palsy, unspecified2
+G82	Paraplegia and tetraplegia-
+G822	Paraplegia, unspecified1
+G825	Tetraplegia, unspecified6
+G83	Other paralytic syndromes-
+G839	Paralytic syndrome, unspecified1
+G90	Disorders of autonomic nervous system-
+G903	Multisystem degeneration38
+G91	Hydrocephalus-
+G919	Hydrocephalus, unspecified1
+G92	Toxic encephalopathy1
+G93	Other disorders of brain-
+G931	Anoxic brain damage, not elsewhere classified10
+G934	Encephalopathy, unspecified1
+G936	Cerebral oedema1
+G95	Other diseases of spinal cord-
+G950	Syringomyelia and syringobulbia2
+G951	Vascular myelopathies2
+G952	Cord compression, unspecified2
+G959	Disease of spinal cord, unspecified4
+G96	Other disorders of central nervous system-
+G961	Disorders of meninges, not elsewhere classified1
+G969	Disorder of central nervous system, unspecified1
+G98	Other disorders of nervous system, not elsewhere classified2
+H70	Mastoiditis and related conditions-
+H709	Mastoiditis, unspecified2
+I05	Rheumatic mitral valve diseases-
+I050	Mitral stenosis8
+I058	Other mitral valve diseases1
+I059	Mitral valve disease, unspecified23
+I07	Rheumatic tricuspid valve diseases-
+I071	Tricuspid insufficiency2
+I08	Multiple valve diseases-
+I080	Disorders of both mitral and aortic valves3
+I081	Disorders of both mitral and tricuspid valves2
+I09	Other rheumatic heart diseases-
+I091	Rheumatic diseases of endocardium, valve unspecified2
+I099	Rheumatic heart disease, unspecified1
+I10	Essential (primary) hypertension26
+I11	Hypertensive heart disease-
+I110	Hypertensive heart disease with (congestive) heart failure62
+I119	Hypertensive heart disease without (congestive) heart failure83
+I12	Hypertensive renal disease-
+I120	Hypertensive renal disease with renal failure10
+I129	Hypertensive renal disease without renal failure2
+I13	Hypertensive heart and renal disease-
+I130	Hypertensive heart and renal disease with (congestive) heart failure2
+I131	Hypertensive heart and renal disease with renal failure2
+I132	Hypertensive heart and renal disease with both (congestive) heart failure and renal failure4
+I20	Angina pectoris-
+I209	Angina pectoris, unspecified2
+I21	Acute myocardial infarction-
+I213	Acute transmural myocardial infarction of unspecified site1
+I214	Acute subendocardial myocardial infarction2
+I219	Acute myocardial infarction, unspecified1306
+I24	Other acute ischaemic heart diseases-
+I248	Other forms of acute ischaemic heart disease2
+I249	Acute ischaemic heart disease, unspecified15
+I25	Chronic ischaemic heart disease-
+I250	Atherosclerotic cardiovascular disease, so described4
+I251	Atherosclerotic heart disease908
+I252	Old myocardial infarction1
+I253	Aneurysm of heart2
+I254	Coronary artery aneurysm2
+I255	Ischaemic cardiomyopathy47
+I258	Other forms of chronic ischaemic heart disease14
+I259	Chronic ischaemic heart disease, unspecified982
+I26	Pulmonary embolism-
+I260	Pulmonary embolism with mention of acute cor pulmonale1
+I269	Pulmonary embolism without mention of acute cor pulmonale129
+I27	Other pulmonary heart diseases-
+I270	Primary pulmonary hypertension8
+I272	Other secondary pulmonary hypertension19
+I279	Pulmonary heart disease, unspecified5
+I28	Other diseases of pulmonary vessels-
+I288	Other specified diseases of pulmonary vessels1
+I30	Acute pericarditis-
+I308	Other forms of acute pericarditis2
+I309	Acute pericarditis, unspecified4
+I31	Other diseases of pericardium-
+I311	Chronic constrictive pericarditis5
+I312	Haemopericardium, not elsewhere classified4
+I313	Pericardial effusion (noninflammatory)1
+I319	Disease of pericardium, unspecified7
+I33	Acute and subacute endocarditis-
+I330	Acute and subacute infective endocarditis27
+I34	Nonrheumatic mitral valve disorders-
+I340	Mitral (valve) insufficiency17
+I341	Mitral (valve) prolapse1
+I35	Nonrheumatic aortic valve disorders-
+I350	Aortic (valve) stenosis88
+I351	Aortic (valve) insufficiency5
+I352	Aortic (valve) stenosis with insufficiency2
+I358	Other aortic valve disorders4
+I359	Aortic valve disorder, unspecified35
+I38	Endocarditis, valve unspecified38
+I40	Acute myocarditis-
+I400	Infective myocarditis2
+I409	Acute myocarditis, unspecified2
+I42	Cardiomyopathy-
+I420	Dilated cardiomyopathy76
+I421	Obstructive hypertrophic cardiomyopathy6
+I422	Other hypertrophic cardiomyopathy12
+I424	Endocardial fibroelastosis2
+I425	Other restrictive cardiomyopathy2
+I426	Alcoholic cardiomyopathy7
+I428	Other cardiomyopathies1
+I429	Cardiomyopathy, unspecified39
+I44	Atrioventricular and left bundle-branch block-
+I442	Atrioventricular block, complete4
+I45	Other conduction disorders-
+I458	Other specified conduction disorders1
+I459	Conduction disorder, unspecified2
+I46	Cardiac arrest-
+I461	Sudden cardiac death, so described4
+I469	Cardiac arrest, unspecified2
+I47	Paroxysmal tachycardia-
+I472	Ventricular tachycardia2
+I48	Atrial fibrillation and flutter-
+I480	Paroxysmal atrial fibrillation2
+I489	Atrial fibrillation and atrial flutter, unspecified61
+I49	Other cardiac arrhythmias-
+I490	Ventricular fibrillation and flutter2
+I499	Cardiac arrhythmia, unspecified12
+I50	Heart failure-
+I500	Congestive heart failure61
+I501	Left ventricular failure15
+I509	Heart failure, unspecified27
+I51	Complications and ill-defined descriptions of heart disease-
+I513	Intracardiac thrombosis, not elsewhere classified1
+I514	Myocarditis, unspecified10
+I515	Myocardial degeneration2
+I516	Cardiovascular disease, unspecified3
+I517	Cardiomegaly50
+I518	Other ill-defined heart diseases14
+I519	Heart disease, unspecified1
+I60	Subarachnoid haemorrhage-
+I600	Subarachnoid haemorrhage from carotid siphon and bifurcation5
+I602	Subarachnoid haemorrhage from anterior communicating artery1
+I603	Subarachnoid haemorrhage from posterior communicating artery1
+I604	Subarachnoid haemorrhage from basilar artery4
+I606	Subarachnoid haemorrhage from other intracranial arteries4
+I607	Subarachnoid haemorrhage from intracranial artery, unspecified24
+I608	Other subarachnoid haemorrhage4
+I609	Subarachnoid haemorrhage, unspecified171
+I61	Intracerebral haemorrhage-
+I610	Intracerebral haemorrhage in hemisphere, subcortical1
+I611	Intracerebral haemorrhage in hemisphere, cortical4
+I612	Intracerebral haemorrhage in hemisphere, unspecified1
+I613	Intracerebral haemorrhage in brain stem12
+I614	Intracerebral haemorrhage in cerebellum10
+I615	Intracerebral haemorrhage, intraventricular11
+I616	Intracerebral haemorrhage, multiple localised1
+I618	Other intracerebral haemorrhage8
+I619	Intracerebral haemorrhage, unspecified272
+I62	Other nontraumatic intracranial haemorrhage-
+I620	Subdural haemorrhage (acute) (nontraumatic)28
+I629	Intracranial haemorrhage (nontraumatic), unspecified86
+I63	Cerebral infarction-
+I630	Cerebral infarction due to thrombosis of precerebral arteries7
+I631	Cerebral infarction due to embolism of precerebral arteries1
+I632	Cerebral infarction due to unspecified occlusion or stenosis of precerebral arteries5
+I633	Cerebral infarction due to thrombosis of cerebral arteries5
+I634	Cerebral infarction due to embolism of cerebral arteries7
+I635	Cerebral infarction due to unspecified occlusion or stenosis of cerebral arteries1
+I638	Other cerebral infarction1
+I639	Cerebral infarction, unspecified123
+I64	Stroke, not specified as haemorrhage or infarction350
+I67	Other cerebrovascular diseases-
+I671	Cerebral aneurysm, nonruptured11
+I677	Cerebral arteritis, not elsewhere classified3
+I678	Other specified cerebrovascular diseases5
+I679	Cerebrovascular disease, unspecified69
+I69	Sequelae of cerebrovascular disease-
+I690	Sequelae of subarachnoid haemorrhage2
+I691	Sequelae of intracerebral haemorrhage1
+I693	Sequelae of cerebral infarction3
+I694	Sequelae of stroke, not specified as haemorrhage or infarction7
+I698	Sequelae of other and unspecified cerebrovascular diseases13
+I70	Atherosclerosis-
+I700	Atherosclerosis of aorta2
+I709	Generalised and unspecified atherosclerosis3
+I71	Aortic aneurysm and dissection-
+I710	Dissection of aorta [any part]132
+I711	Thoracic aortic aneurysm, ruptured16
+I712	Thoracic aortic aneurysm, without mention of rupture3
+I713	Abdominal aortic aneurysm, ruptured98
+I714	Abdominal aortic aneurysm, without mention of rupture15
+I715	Thoracoabdominal aortic aneurysm, ruptured1
+I716	Thoracoabdominal aortic aneurysm, without mention of rupture4
+I718	Aortic aneurysm of unspecified site, ruptured13
+I719	Aortic aneurysm of unspecified site, without mention of rupture9
+I72	Other aneurysm-
+I720	Aneurysm of carotid artery1
+I722	Aneurysm of renal artery1
+I723	Aneurysm of iliac artery8
+I728	Aneurysm of other specified arteries2
+I729	Aneurysm of unspecified site3
+I73	Other peripheral vascular diseases-
+I739	Peripheral vascular disease, unspecified47
+I74	Arterial embolism and thrombosis-
+I741	Embolism and thrombosis of other and unspecified parts of aorta2
+I743	Embolism and thrombosis of arteries of the lower extremities1
+I748	Embolism and thrombosis of other arteries1
+I749	Embolism and thrombosis of unspecified artery2
+I77	Other disorders of arteries and arterioles-
+I772	Rupture of artery2
+I776	Arteritis, unspecified5
+I778	Other specified disorders of arteries and arterioles1
+I779	Disorder of arteries and arterioles, unspecified3
+I78	Diseases of capillaries-
+I781	Naevus, nonneoplastic1
+I80	Phlebitis and thrombophlebitis-
+I801	Phlebitis and thrombophlebitis of femoral vein1
+I802	Phlebitis and thrombophlebitis of other deep vessels of lower extremities169
+I803	Phlebitis and thrombophlebitis of lower extremities, unspecified2
+I81	Portal vein thrombosis6
+I82	Other venous embolism and thrombosis-
+I820	Budd-Chiari syndrome1
+I822	Embolism and thrombosis of vena cava2
+I828	Embolism and thrombosis of other specified veins1
+I829	Embolism and thrombosis of unspecified vein1
+I83	Varicose veins of lower extremities-
+I830	Varicose veins of lower extremities with ulcer2
+I831	Varicose veins of lower extremities with inflammation2
+I839	Varicose veins of lower extremities without ulcer or inflammation7
+I85	Oesophageal varices-
+I850	Oesophageal varices with bleeding6
+I87	Other disorders of veins-
+I872	Venous insufficiency (chronic) (peripheral)1
+I89	Other non-infective disorders of lymphatic vessels and lymph nodes-
+I891	Lymphangitis1
+J09	Influenza due to certain identified influenza virus5
+J10	Influenza due to identified influenza virus-
+J100	Influenza with pneumonia, influenza virus identified14
+J101	Influenza with other respiratory manifestations, influenza virus identified8
+J108	Influenza with other manifestations, influenza virus identified1
+J11	Influenza, virus not identified-
+J110	Influenza with pneumonia, virus not identified13
+J111	Influenza with other respiratory manifestations, virus not identified7
+J118	Influenza with other manifestations, virus not identified1
+J12	Viral pneumonia, not elsewhere classified-
+J121	Respiratory syncytial virus pneumonia1
+J123	Human metapneumovirus pneumonia1
+J129	Viral pneumonia, unspecified4
+J13	Pneumonia due to Streptococcus pneumoniae8
+J15	Bacterial pneumonia, not elsewhere classified-
+J151	Pneumonia due to Pseudomonas1
+J152	Pneumonia due to staphylococcus1
+J154	Pneumonia due to other streptococci1
+J18	Pneumonia, organism unspecified-
+J180	Bronchopneumonia, unspecified168
+J181	Lobar pneumonia, unspecified33
+J182	Hypostatic pneumonia, unspecified1
+J189	Pneumonia, unspecified276
+J20	Acute bronchitis-
+J209	Acute bronchitis, unspecified1
+J21	Acute bronchiolitis-
+J219	Acute bronchiolitis, unspecified1
+J22	Unspecified acute lower respiratory infection49
+J39	Other diseases of upper respiratory tract-
+J390	Retropharyngeal and parapharyngeal abscess1
+J40	Bronchitis, not specified as acute or chronic2
+J42	Unspecified chronic bronchitis2
+J43	Emphysema-
+J438	Other emphysema1
+J439	Emphysema, unspecified47
+J44	Other chronic obstructive pulmonary disease-
+J440	Chronic obstructive pulmonary disease with acute lower respiratory infection353
+J441	Chronic obstructive pulmonary disease with acute exacerbation, unspecified138
+J448	Other specified chronic obstructive pulmonary disease7
+J449	Chronic obstructive pulmonary disease, unspecified321
+J45	Asthma-
+J459	Asthma, unspecified40
+J47	Bronchiectasis101
+J60	Coalworker's pneumoconiosis3
+J61	Pneumoconiosis due to asbestos and other mineral fibres7
+J62	Pneumoconiosis due to dust containing silica-
+J628	Pneumoconiosis due to other dust containing silica1
+J67	Hypersensitivity pneumonitis due to organic dust-
+J672	Bird fancier's lung1
+J679	Hypersensitivity pneumonitis due to unspecified organic dust14
+J69	Pneumonitis due to solids and liquids-
+J690	Pneumonitis due to food and vomit32
+J691	Pneumonitis due to oils and essences1
+J70	Respiratory conditions due to other external agents-
+J700	Acute pulmonary manifestations due to radiation1
+J701	Chronic and other pulmonary manifestations due to radiation1
+J80	Adult respiratory distress syndrome5
+J81	Pulmonary oedema2
+J82	Pulmonary eosinophilia, not elsewhere classified1
+J84	Other interstitial pulmonary diseases-
+J840	Alveolar and parietoalveolar conditions8
+J841	Other interstitial pulmonary diseases with fibrosis391
+J849	Interstitial pulmonary disease, unspecified101
+J85	Abscess of lung and mediastinum-
+J851	Abscess of lung with pneumonia3
+J86	Pyothorax-
+J869	Pyothorax without fistula6
+J90	Pleural effusion, not elsewhere classified1
+J92	Pleural plaque-
+J920	Pleural plaque with presence of asbestos1
+J93	Pneumothorax-
+J939	Pneumothorax, unspecified1
+J94	Other pleural conditions-
+J941	Fibrothorax1
+J942	Haemothorax2
+J96	Respiratory failure, not elsewhere classified-
+J969	Respiratory failure, unspecified1
+J98	Other respiratory disorders-
+J984	Other disorders of lung9
+J988	Other specified respiratory disorders22
+J989	Respiratory disorder, unspecified1
+K20	Oesophagitis2
+K22	Other diseases of oesophagus-
+K220	Achalasia of cardia1
+K221	Ulcer of oesophagus4
+K222	Oesophageal obstruction3
+K223	Perforation of oesophagus9
+K224	Dyskinesia of oesophagus2
+K226	Gastro-oesophageal laceration-haemorrhage syndrome2
+K227	Barrett's oesophagus1
+K228	Other specified diseases of oesophagus1
+K25	Gastric ulcer-
+K250	Acute with haemorrhage1
+K254	Chronic or unspecified with haemorrhage12
+K255	Chronic or unspecified with perforation5
+K256	Chronic or unspecified with both haemorrhage and perforation1
+K26	Duodenal ulcer-
+K264	Chronic or unspecified with haemorrhage29
+K265	Chronic or unspecified with perforation15
+K266	Chronic or unspecified with both haemorrhage and perforation3
+K27	Peptic ulcer, site unspecified-
+K274	Chronic or unspecified with haemorrhage11
+K275	Chronic or unspecified with perforation1
+K279	Unspecified as acute or chronic, without haemorrhage or perforation1
+K28	Gastrojejunal ulcer-
+K284	Chronic or unspecified with haemorrhage1
+K29	Gastritis and duodenitis-
+K290	Acute haemorrhagic gastritis2
+K291	Other acute gastritis1
+K296	Other gastritis2
+K297	Gastritis, unspecified4
+K31	Other diseases of stomach and duodenum-
+K315	Obstruction of duodenum1
+K318	Other specified diseases of stomach and duodenum2
+K319	Disease of stomach and duodenum, unspecified1
+K35	Acute appendicitis-
+K351	Acute appendicitis with peritoneal abscess2
+K352	Acute appendicitis with generalized peritonitis1
+K37	Unspecified appendicitis3
+K40	Inguinal hernia-
+K403	Unilateral or unspecified inguinal hernia, with obstruction, without gangrene1
+K409	Unilateral or unspecified inguinal hernia, without obstruction or gangrene1
+K41	Femoral hernia-
+K410	Bilateral femoral hernia, with obstruction, without gangrene1
+K413	Unilateral or unspecified femoral hernia, with obstruction, without gangrene2
+K42	Umbilical hernia-
+K420	Umbilical hernia with obstruction, without gangrene2
+K43	Ventral hernia-
+K433	Parastomal hernia with obstruction, without gangrene3
+K435	Parastomal hernia without obstruction or gangrene1
+K439	Ventral hernia without obstruction or gangrene1
+K44	Diaphragmatic hernia-
+K440	Diaphragmatic hernia with obstruction, without gangrene1
+K441	Diaphragmatic hernia with gangrene2
+K449	Diaphragmatic hernia without obstruction or gangrene3
+K46	Unspecified abdominal hernia-
+K460	Unspecified abdominal hernia with obstruction, without gangrene3
+K469	Unspecified abdominal hernia without obstruction or gangrene3
+K50	Crohn's disease [regional enteritis]-
+K501	Crohn's disease of large intestine1
+K509	Crohn's disease, unspecified16
+K51	Ulcerative colitis-
+K510	Ulcerative (chronic) enterocolitis1
+K519	Ulcerative colitis, unspecified10
+K52	Other non-infective gastro-enteritis and colitis-
+K529	Non-infective gastro-enteritis and colitis, unspecified6
+K55	Vascular disorders of intestine-
+K550	Acute vascular disorders of intestine41
+K551	Chronic vascular disorders of intestine10
+K552	Angiodysplasia of colon2
+K559	Vascular disorder of intestine, unspecified74
+K56	Paralytic ileus and intestinal obstruction without hernia-
+K560	Paralytic ileus1
+K562	Volvulus18
+K564	Other impaction of intestine1
+K565	Intestinal adhesions [bands] with obstruction3
+K566	Other and unspecified intestinal obstruction30
+K567	Ileus, unspecified1
+K57	Diverticular disease of intestine-
+K572	Diverticular disease of large intestine with perforation and abscess5
+K573	Diverticular disease of large intestine without perforation or abscess1
+K578	Diverticular disease of intestine, part unspecified, with perforation and abscess32
+K579	Diverticular disease of intestine, part unspecified, without perforation or abscess12
+K59	Other functional intestinal disorders-
+K593	Megacolon, not elsewhere classified1
+K61	Abscess of anal and rectal regions-
+K610	Anal abscess1
+K613	Ischiorectal abscess1
+K62	Other diseases of anus and rectum-
+K624	Stenosis of anus and rectum1
+K63	Other diseases of intestine-
+K631	Perforation of intestine (nontraumatic)27
+K632	Fistula of intestine2
+K639	Disease of intestine, unspecified3
+K65	Peritonitis-
+K650	Acute peritonitis10
+K658	Other peritonitis1
+K659	Peritonitis, unspecified7
+K66	Other disorders of peritoneum-
+K660	Peritoneal adhesions3
+K661	Haemoperitoneum1
+K70	Alcoholic liver disease-
+K700	Alcoholic fatty liver9
+K701	Alcoholic hepatitis17
+K703	Alcoholic cirrhosis of liver70
+K704	Alcoholic hepatic failure67
+K709	Alcoholic liver disease, unspecified94
+K71	Toxic liver disease-
+K711	Toxic liver disease with hepatic necrosis1
+K72	Hepatic failure, not elsewhere classified-
+K720	Acute and subacute hepatic failure2
+K729	Hepatic failure, unspecified21
+K74	Fibrosis and cirrhosis of liver-
+K740	Hepatic fibrosis1
+K743	Primary biliary cirrhosis9
+K746	Other and unspecified cirrhosis of liver101
+K75	Other inflammatory liver diseases-
+K750	Abscess of liver3
+K751	Phlebitis of portal vein1
+K754	Autoimmune hepatitis11
+K758	Other specified inflammatory liver diseases19
+K76	Other diseases of liver-
+K760	Fatty (change of) liver, not elsewhere classified33
+K765	Hepatic veno-occlusive disease1
+K768	Other specified diseases of liver1
+K769	Liver disease, unspecified16
+K80	Cholelithiasis-
+K800	Calculus of gallbladder with acute cholecystitis1
+K801	Calculus of gallbladder with other cholecystitis2
+K802	Calculus of gallbladder without cholecystitis24
+K803	Calculus of bile duct with cholangitis1
+K805	Calculus of bile duct without cholangitis or cholecystitis5
+K81	Cholecystitis-
+K810	Acute cholecystitis7
+K819	Cholecystitis, unspecified6
+K82	Other diseases of gallbladder-
+K822	Perforation of gallbladder2
+K829	Disease of gallbladder, unspecified1
+K83	Other diseases of biliary tract-
+K830	Cholangitis35
+K831	Obstruction of bile duct1
+K85	Acute pancreatitis-
+K851	Biliary acute pancreatitis3
+K852	Alcohol-induced acute pancreatitis3
+K859	Acute pancreatitis, unspecified66
+K86	Other diseases of pancreas-
+K860	Alcohol-induced chronic pancreatitis1
+K861	Other chronic pancreatitis5
+K869	Disease of pancreas, unspecified2
+K90	Intestinal malabsorption-
+K900	Coeliac disease4
+K902	Blind loop syndrome, not elsewhere classified2
+K92	Other diseases of digestive system-
+K920	Haematemesis1
+K922	Gastro-intestinal haemorrhage, unspecified29
+K929	Disease of digestive system, unspecified1
+L03	Cellulitis-
+L031	Cellulitis of other parts of limb9
+L033	Cellulitis of trunk1
+L039	Cellulitis, unspecified16
+L08	Other local infections of skin and subcutaneous tissue-
+L089	Local infection of skin and subcutaneous tissue, unspecified5
+L12	Pemphigoid-
+L120	Bullous pemphigoid2
+L51	Erythema multiforme-
+L511	Bullous erythema multiforme1
+L512	Toxic epidermal necrolysis [Lyell]3
+L53	Other erythematous conditions-
+L539	Erythematous condition, unspecified1
+L88	Pyoderma gangrenosum2
+L89	Decubitus ulcer-
+L899	Decubitus ulcer and pressure area, unspecified1
+L92	Granulomatous disorders of skin and subcutaneous tissue-
+L929	Granulomatous disorder of skin and subcutaneous tissue, unspecified1
+L97	Ulcer of lower limb, not elsewhere classified7
+L98	Other disorders of skin and subcutaneous tissue, not elsewhere classified-
+L984	Chronic ulcer of skin, not elsewhere classified2
+M00	Pyogenic arthritis-
+M009	Pyogenic arthritis, unspecified5
+M05	Seropositive rheumatoid arthritis-
+M051	Rheumatoid lung disease3
+M053	Rheumatoid arthritis with involvement of other organs and systems2
+M06	Other rheumatoid arthritis-
+M061	Adult-onset Still's disease1
+M069	Rheumatoid arthritis, unspecified39
+M16	Coxarthrosis [arthrosis of hip]-
+M169	Coxarthrosis, unspecified1
+M19	Other arthrosis-
+M199	Arthrosis, unspecified1
+M25	Other joint disorders, not elsewhere classified-
+M259	Joint disorder, unspecified12
+M30	Polyarteritis nodosa and related conditions-
+M301	Polyarteritis with lung involvement [Churg-Strauss]2
+M31	Other necrotising vasculopathies-
+M310	Hypersensitivity angiitis1
+M313	Wegener's granulomatosis8
+M316	Other giant cell arteritis1
+M317	Microscopic polyangiitis1
+M32	Systemic lupus erythematosus-
+M321	Systemic lupus erythematosus with organ or system involvement4
+M329	Systemic lupus erythematosus, unspecified3
+M33	Dermatopolymyositis-
+M331	Other dermatomyositis1
+M34	Systemic sclerosis-
+M348	Other forms of systemic sclerosis15
+M349	Systemic sclerosis, unspecified2
+M35	Other systemic involvement of connective tissue-
+M350	Sicca syndrome [Sjogren]5
+M351	Other overlap syndromes1
+M358	Other specified systemic involvement of connective tissue2
+M359	Systemic involvement of connective tissue, unspecified10
+M40	Kyphosis and lordosis-
+M402	Other and unspecified kyphosis1
+M41	Scoliosis-
+M419	Scoliosis, unspecified3
+M43	Other deforming dorsopathies-
+M431	Spondylolisthesis1
+M45	Ankylosing spondylitis3
+M46	Other inflammatory spondylopathies-
+M462	Osteomyelitis of vertebra2
+M464	Discitis, unspecified4
+M48	Other spondylopathies-
+M480	Spinal stenosis1
+M489	Spondylopathy, unspecified1
+M60	Myositis-
+M600	Infective myositis3
+M609	Myositis, unspecified1
+M62	Other disorders of muscle-
+M622	Ischaemic infarction of muscle2
+M628	Other specified disorders of muscle1
+M72	Fibroblastic disorders-
+M725	Fasciitis, not elsewhere classified1
+M726	Necrotizing fasciitis9
+M80	Osteoporosis with pathological fracture-
+M809	Unspecified osteoporosis with pathological fracture5
+M81	Osteoporosis without pathological fracture-
+M819	Osteoporosis, unspecified2
+M84	Disorders of continuity of bone-
+M844	Pathological fracture, not elsewhere classified1
+M85	Other disorders of bone density and structure-
+M858	Other specified disorders of bone density and structure1
+M86	Osteomyelitis-
+M866	Other chronic osteomyelitis3
+M869	Osteomyelitis, unspecified10
+N00	Acute nephritic syndrome-
+N009	Unspecified1
+N02	Recurrent and persistent haematuria-
+N028	Other5
+N03	Chronic nephritic syndrome-
+N039	Unspecified2
+N04	Nephrotic syndrome-
+N049	Unspecified2
+N05	Unspecified nephritic syndrome-
+N052	Diffuse membranous glomerulonephritis1
+N055	Diffuse mesangiocapillary glomerulonephritis2
+N057	Diffuse crescentic glomerulonephritis1
+N059	Unspecified1
+N10	Acute tubulo-interstitial nephritis6
+N12	Tubulo-interstitial nephritis, not specified as acute or chronic5
+N13	Obstructive and reflux uropathy-
+N133	Other and unspecified hydronephrosis2
+N15	Other renal tubulo-interstitial diseases-
+N151	Renal and perinephric abscess1
+N17	Acute renal failure-
+N179	Acute renal failure, unspecified9
+N18	Chronic renal failure-
+N180	End-stage renal disease2
+N183	Chronic kidney disease, stage 31
+N185	Chronic kidney disease, stage 517
+N189	Chronic renal failure, unspecified18
+N19	Unspecified renal failure5
+N20	Calculus of kidney and ureter-
+N200	Calculus of kidney2
+N201	Calculus of ureter1
+N25	Disorders resulting from impaired renal tubular function-
+N251	Nephrogenic diabetes insipidus1
+N26	Unspecified contracted kidney1
+N28	Other disorders of kidney and ureter, not elsewhere classified-
+N281	Cyst of kidney, acquired2
+N289	Disorder of kidney and ureter, unspecified5
+N30	Cystitis-
+N300	Acute cystitis1
+N304	Irradiation cystitis1
+N308	Other cystitis1
+N309	Cystitis, unspecified1
+N31	Neuromuscular dysfunction of bladder, not elsewhere classified-
+N319	Neuromuscular dysfunction of bladder, unspecified2
+N32	Other disorders of bladder-
+N321	Vesicointestinal fistula5
+N329	Bladder disorder, unspecified1
+N39	Other disorders of urinary system-
+N390	Urinary tract infection, site not specified88
+N40	Hyperplasia of prostate2
+N49	Inflammatory disorders of male genital organs, not elsewhere classified-
+N498	Inflammatory disorders of other specified male genital organs1
+N50	Other disorders of male genital organs-
+N501	Vascular disorders of male genital organs1
+N61	Inflammatory disorders of breast1
+N73	Other female pelvic inflammatory diseases-
+N735	Female pelvic peritonitis, unspecified1
+N739	Female pelvic inflammatory disease, unspecified1
+N83	Noninflammatory disorders of ovary, Fallopian tube and broad ligament-
+N832	Other and unspecified ovarian cysts1
+N93	Other abnormal uterine and vaginal bleeding-
+N939	Abnormal uterine and vaginal bleeding, unspecified1
+O30	Multiple gestation-
+O300	Twin pregnancy1
+Q04	Other congenital malformations of brain-
+Q049	Congenital malformation of brain, unspecified1
+Q07	Other congenital malformations of nervous system-
+Q070	Arnold-Chiari syndrome1
+Q21	Congenital malformations of cardiac septa-
+Q210	Ventricular septal defect2
+Q211	Atrial septal defect3
+Q213	Tetralogy of Fallot1
+Q22	Congenital malformations of pulmonary and tricuspid valves-
+Q228	Other congenital malformations of tricuspid valve1
+Q23	Congenital malformations of aortic and mitral valves-
+Q231	Congenital insufficiency of aortic valve3
+Q24	Other congenital malformations of heart-
+Q245	Malformation of coronary vessels1
+Q249	Congenital malformation of the heart, unspecified7
+Q25	Congenital malformations of great arteries-
+Q251	Coarctation of aorta1
+Q27	Other congenital malformations of peripheral vascular system-
+Q273	Peripheral arteriovenous malformation1
+Q28	Other congenital malformations of circulatory system-
+Q283	Other malformations of cerebral vessels1
+Q44	Congenital malformations of gallbladder, bile ducts and liver-
+Q446	Cystic disease of liver2
+Q61	Cystic kidney disease-
+Q612	Polycystic kidney, adult type3
+Q613	Polycystic kidney, unspecified4
+Q615	Medullary cystic kidney1
+Q76	Congenital malformations of spine and bony thorax-
+Q761	Klippel-Feil syndrome1
+Q79	Congenital malformations of musculoskeletal system, not elsewhere classified-
+Q796	Ehlers-Danlos syndrome1
+Q85	Phakomatoses, not elsewhere classified-
+Q850	Neurofibromatosis (nonmalignant)1
+Q858	Other phakomatoses, not elsewhere classified1
+Q87	Other specified congenital malformation syndromes affecting multiple systems-
+Q871	Congenital malformation syndromes predominantly associated with short stature1
+Q874	Marfan's syndrome6
+Q875	Other congenital malformation syndromes with other skeletal changes1
+Q878	Other specified congenital malformation syndromes, not elsewhere classified1
+Q90	Down's syndrome-
+Q909	Down's syndrome, unspecified2
+R09	Other symptoms and signs involving the circulatory and respiratory systems-
+R092	Respiratory arrest1
+R47	Speech disturbances, not elsewhere classified-
+R470	Dysphasia and aphasia1
+R54	Senility3
+R58	Haemorrhage, not elsewhere classified2
+R68	Other general symptoms and signs-
+R680	Hypothermia, not associated with low environmental temperature1
+R688	Other specified general symptoms and signs4
+R96	Other sudden death, cause unknown-
+R960	Instantaneous death3
+R99	Other ill-defined and unspecified causes of mortality122
+V03	Pedestrian injured in collision with car, pick-up truck or van-
+V030	Nontraffic accident1
+V031	Traffic accident3
+V04	Pedestrian injured in collision with heavy transport vehicle or bus-
+V041	Traffic accident2
+V05	Pedestrian injured in collision with railway train or railway vehicle-
+V059	Unspecified whether traffic or nontraffic accident1
+V09	Pedestrian injured in other and unspecified transport accidents-
+V092	Pedestrian injured in traffic accident involving other and unspecified motor vehicles2
+V093	Pedestrian injured in unspecified traffic accident5
+V13	Pedal cyclist injured in collision with car, pick-up truck or van-
+V134	Driver injured in traffic accident2
+V14	Pedal cyclist injured in collision with heavy transport vehicle or bus-
+V140	Driver injured in nontraffic accident1
+V144	Driver injured in traffic accident1
+V17	Pedal cyclist injured in collision with fixed or stationary object-
+V174	Driver injured in traffic accident1
+V18	Pedal cyclist injured in noncollision transport accident-
+V180	Driver injured in nontraffic accident1
+V184	Driver injured in traffic accident5
+V19	Pedal cyclist injured in other and unspecified transport accidents-
+V193	Pedal cyclist [any] injured in an unspecified nontraffic accident1
+V194	Driver injured in collision with other and unspecified motor vehicles in traffic accident2
+V199	Pedal cyclist [any] injured in unspecified traffic accident4
+V20	Motorcycle rider injured in collision with pedestrian or animal-
+V204	Driver injured in traffic accident1
+V23	Motorcycle rider injured in collision with car, pick-up truck or van-
+V234	Driver injured in traffic accident1
+V27	Motorcycle rider injured in collision with fixed or stationary object-
+V274	Driver injured in traffic accident1
+V28	Motorcycle rider injured in noncollision transport accident-
+V284	Driver injured in traffic accident1
+V29	Motorcycle rider injured in other and unspecified transport accidents-
+V294	Driver injured in collision with other and unspecified motor vehicles in traffic accident3
+V295	Passenger injured in collision with other and unspecified motor vehicles in traffic accident1
+V299	Motorcycle rider [any] injured in unspecified traffic accident3
+V42	Car occupant injured in collision with two- or three-wheeled motor vehicle-
+V425	Driver injured in traffic accident1
+V43	Car occupant injured in collision with car, pick-up truck or van-
+V435	Driver injured in traffic accident2
+V436	Passenger injured in traffic accident3
+V44	Car occupant injured in collision with heavy transport vehicle or bus-
+V445	Driver injured in traffic accident3
+V446	Passenger injured in traffic accident1
+V47	Car occupant injured in collision with fixed or stationary object-
+V475	Driver injured in traffic accident1
+V476	Passenger injured in traffic accident2
+V48	Car occupant injured in noncollision transport accident-
+V484	Person injured while boarding or alighting1
+V485	Driver injured in traffic accident2
+V49	Car occupant injured in other and unspecified transport accidents-
+V495	Passenger injured in collision with other and unspecified motor vehicles in traffic accident2
+V498	Car occupant [any] injured in other specified transport accidents1
+V499	Car occupant [any] injured in unspecified traffic accident17
+V80	Animal-rider or occupant of animal-drawn vehicle injured in transport accident-
+V800	Rider or occupant injured by fall from or being thrown from animal or animal-drawn vehicle in noncollision accident2
+V89	Motor- or nonmotor-vehicle accident, type of vehicle unspecified-
+V892	Person injured in unspecified motor-vehicle accident, traffic8
+V92	Water-transport-related drowning and submersion without accident to watercraft-
+V929	Unspecified watercraft1
+V93	Accident on board watercraft without accident to watercraft, not causing drowning and submersion-
+V931	Passenger ship1
+V95	Accident to powered aircraft causing injury to occupant-
+V950	Helicopter accident injuring occupant1
+V951	Ultralight, microlight or powered-glider accident injuring occupant1
+V952	Accident to other private fixed-wing aircraft, injuring occupant1
+V958	Other aircraft accidents injuring occupant1
+V97	Other specified air transport accidents-
+V973	Person on ground injured in air transport accident1
+W00	Fall on same level involving ice and snow-
+W004	Street and highway2
+W01	Fall on same level from slipping, tripping and stumbling-
+W010	Home4
+W05	Fall involving wheelchair-
+W058	Other specified place1
+W06	Fall involving bed-
+W060	Home1
+W061	Residential institution1
+W062	School, other institution and public administrative area3
+W069	Unspecified place1
+W07	Fall involving chair-
+W071	Residential institution1
+W08	Fall involving other furniture-
+W080	Home1
+W10	Fall on and from stairs and steps-
+W100	Home35
+W101	Residential institution1
+W103	Sports and athletics area1
+W105	Trade and service area2
+W108	Other specified place2
+W109	Unspecified place5
+W11	Fall on and from ladder-
+W110	Home6
+W116	Industrial and construction area1
+W119	Unspecified place1
+W13	Fall from, out of or through building or structure-
+W130	Home5
+W138	Other specified place1
+W15	Fall from cliff-
+W158	Other specified place1
+W17	Other fall from one level to another-
+W176	Industrial and construction area1
+W19	Unspecified fall-
+W190	Home69
+W191	Residential institution9
+W192	School, other institution and public administrative area9
+W193	Sports and athletics area1
+W194	Street and highway12
+W195	Trade and service area2
+W198	Other specified place4
+W199	Unspecified place12
+W20	Struck by thrown, projected or falling object-
+W200	Home1
+W208	Other specified place1
+W22	Striking against or struck by other objects-
+W220	Home2
+W228	Other specified place1
+W55	Bitten or struck by other mammals-
+W557	Farm1
+W65	Drowning and submersion while in bath-tub-
+W650	Home2
+W67	Drowning and submersion while in swimming-pool-
+W678	Other specified place1
+W70	Drowning and submersion following fall into natural water-
+W708	Other specified place2
+W74	Unspecified drowning and submersion-
+W748	Other specified place2
+W76	Other accidental hanging and strangulation-
+W760	Home6
+W767	Farm1
+W768	Other specified place1
+W769	Unspecified place1
+W78	Inhalation of gastric contents-
+W789	Unspecified place1
+W79	Inhalation and ingestion of food causing obstruction of respiratory tract-
+W790	Home4
+W795	Trade and service area1
+W80	Inhalation and ingestion of other objects causing obstruction of respiratory tract-
+W801	Residential institution1
+W84	Unspecified threat to breathing-
+W849	Unspecified place2
+W87	Exposure to unspecified electric current-
+W870	Home1
+W94	Exposure to high and low air pressure and changes in air pressure-
+W948	Other specified place1
+X00	Exposure to uncontrolled fire in building or structure-
+X000	Home2
+X04	Exposure to ignition of highly flammable material-
+X040	Home1
+X08	Exposure to other specified smoke, fire and flames-
+X080	Home1
+X11	Contact with hot tap-water-
+
+X16	Contact with hot heating appliances, radiators and pipes-
+X160	Home1
+X23	Contact with hornets, wasps and bees-
+X239	Unspecified place1
+X31	Exposure to excessive natural cold-
+X310	Home2
+X317	Farm1
+X319	Unspecified place1
+X40	Accidental poisoning by and exposure to nonopioid analgesics, antipyretics and antirheumatics-
+X400	Home1
+X409	Unspecified place1
+X41	Accidental poisoning by and exposure to antiepileptic, sedative-hypnotic, anti-Parkinsonism and psychotropic drugs, not elsewhere classified-
+X410	Home7
+X418	Other specified place1
+X42	Accidental poisoning by and exposure to narcotics and psychodysleptics [hallucinogens], not elsewhere classified-
+X420	Home19
+X425	Trade and service area1
+X44	Accidental poisoning by and exposure to other and unspecified drugs, medicaments and biological substances-
+X440	Home4
+X448	Other specified place1
+X449	Unspecified place1
+X45	Accidental poisoning by and exposure to alcohol-
+X450	Home17
+X458	Other specified place1
+X47	Accidental poisoning by and exposure to other gases and vapours-
+X478	Other specified place1
+X49	Accidental poisoning by and exposure to other and unspecified chemicals and noxious substances-
+
+X59	Exposure to unspecified factor-
+X590	Home22
+X599	Unspecified place27
+X60	Intentional self-poisoning by and exposure to nonopioid analgesics, antipyretics and antirheumatics-
+X609	Unspecified place4
+X61	Intentional self-poisoning by and exposure to antiepileptic, sedative-hypnotic, anti-Parkinsonism and psychotropic drugs, not elsewhere classified-
+X610	Home6
+X619	Unspecified place2
+X62	Intentional self-poisoning by and exposure to narcotics and psychodysleptics [hallucinogens], not elsewhere classified-
+X620	Home7
+X628	Other specified place1
+X63	Intentional self-poisoning by and exposure to other drugs acting on the autonomic nervous system-
+X630	Home1
+X64	Intentional self-poisoning by and exposure to other and unspecified drugs, medicaments and biological substances-
+X640	Home6
+X648	Other specified place1
+X649	Unspecified place4
+X67	Intentional self-poisoning by and exposure to other gases and vapours-
+X670	Home8
+X673	Sports and athletics area1
+X674	Street and highway1
+X678	Other specified place2
+X69	Intentional self-poisoning by and exposure to other and unspecified chemicals and noxious substances-
+X699	Unspecified place1
+X70	Intentional self-harm by hanging, strangulation and suffocation-
+X700	Home107
+X702	School, other institution and public administrative area1
+X708	Other specified place16
+X709	Unspecified place4
+X71	Intentional self-harm by drowning and submersion-
+X710	Home2
+X712	School, other institution and public administrative area1
+X713	Sports and athletics area1
+X718	Other specified place5
+X719	Unspecified place3
+X73	Intentional self-harm by rifle, shotgun and larger firearm discharge-
+X730	Home2
+X74	Intentional self-harm by other and unspecified firearm discharge-
+X740	Home1
+X76	Intentional self-harm by smoke, fire and flames-
+X760	Home1
+X78	Intentional self-harm by sharp object-
+X780	Home13
+X788	Other specified place3
+X80	Intentional self-harm by jumping from a high place-
+X800	Home2
+X804	Street and highway1
+X805	Trade and service area1
+X808	Other specified place9
+X81	Intentional self-harm by jumping or lying before moving object-
+X815	Trade and service area8
+X818	Other specified place7
+X83	Intentional self-harm by other specified means-
+X830	Home1
+X84	Intentional self-harm by unspecified means-
+X840	Home6
+X844	Street and highway2
+X845	Trade and service area1
+X848	Other specified place5
+X849	Unspecified place4
+X99	Assault by sharp object-
+
+Y10	Poisoning by and exposure to nonopioid analgesics, antipyretics and antirheumatics, undetermined intent-
+
+Y11	Poisoning by and exposure to antiepileptic, sedative-hypnotic, anti-Parkinsonism and psychotropic drugs, not elsewhere classified, undetermined intent-
+Y110	Home2
+Y12	Poisoning by and exposure to narcotics and psychodysleptics [hallucinogens], not elsewhere classified, undetermined intent-
+Y120	Home2
+Y13	Poisoning by and exposure to other drugs acting on the autonomic nervous system, undetermined intent-
+Y130	Home1
+Y139	Unspecified place1
+Y14	Poisoning by and exposure to other and unspecified drugs, medicaments and biological substances, undetermined intent-
+Y140	Home2
+Y141	Residential institution1
+Y148	Other specified place1
+Y149	Unspecified place1
+Y17	Poisoning by and exposure to other gases and vapours, undetermined intent-
+
+Y20	Hanging, strangulation and suffocation, undetermined intent-
+Y200	Home7
+Y208	Other specified place2
+Y209	Unspecified place2
+Y21	Drowning and submersion, undetermined intent-
+Y218	Other specified place5
+Y28	Contact with sharp object, undetermined intent-
+Y280	Home3
+Y288	Other specified place1
+Y30	Falling, jumping or pushed from a high place, undetermined intent-
+Y300	Home1
+Y308	Other specified place1
+Y31	Falling, lying or running before or into moving object, undetermined intent-
+Y318	Other specified place1
+Y34	Unspecified event, undetermined intent-
+Y340	Home3
+Y345	Trade and service area1
+Y348	Other specified place1
+Y349	Unspecified place1
+Y40	Systemic antibiotics-
+Y408	Other systemic antibiotics1
+Y409	Systemic antibiotic, unspecified1
+Y44	Agents primarily affecting blood constituents-
+Y442	Anticoagulants1
+Y60	Unintentional cut, puncture, perforation or haemorrhage during surgical and medical care-
+Y600	During surgical operation2
+Y65	Other misadventures during surgical and medical care-
+Y658	Other specified misadventures during surgical and medical care1
+Y83	Surgical operation and other surgical procedures as the cause of abnormal reaction of the patient, or of later complication, without mention of misadventure at the time of the procedure-
+Y830	Surgical operation with transplant of whole organ4
+Y831	Surgical operation with implant of artificial internal device6
+Y832	Surgical operation with anastomosis, bypass or graft5
+Y833	Surgical operation with formation of external stoma7
+Y834	Other reconstructive surgery7
+Y835	Amputation of limb(s)1
+Y836	Removal of other organ (partial) (total)15
+Y838	Other surgical procedures6
+Y839	Surgical procedure, unspecified13
+Y84	Other medical procedures as the cause of abnormal reaction of the patient, or of later complication, without mention of misadventure at the time of the procedure-
+Y842	Radiological procedure and radiotherapy1
+Y844	Aspiration of fluid1
+Y846	Urinary catheterisation2
+Y848	Other medical procedures7
+Y85	Sequelae of transport accidents-
+Y850	Sequelae of motor-vehicle accident3
+Y859	Sequelae of other and unspecified transport accidents1
+Y86	Sequelae of other accidents2
+Y87	Sequelae of intentional self-harm, assault and events of undetermined intent-
+Y870	Sequelae of intentional self-harm1
+U07	Emergency use of U07-
+U071	COVID-19 virus identified279
+U072	COVID-19 virus not identified15
+U50	Level of care administered to neonates-
+U509	Inquest Adjourned Death34
